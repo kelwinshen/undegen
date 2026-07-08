@@ -1,0 +1,28 @@
+    Finished `release` profile [optimized] target(s) in 0.24s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (/Users/kelwin/Desktop/undegen_protocol/target/debug/deps/undegen_core-71d32fd7cffd1f30)
+   Compiling anchor-syn v1.1.2
+   Compiling anchor-attribute-error v1.1.2
+   Compiling anchor-derive-accounts v1.1.2
+   Compiling anchor-attribute-constant v1.1.2
+   Compiling anchor-attribute-program v1.1.2
+   Compiling anchor-derive-serde v1.1.2
+   Compiling anchor-attribute-account v1.1.2
+   Compiling anchor-attribute-event v1.1.2
+   Compiling anchor-lang-error v1.1.2
+   Compiling anchor-lang v1.1.2
+   Compiling anchor-spl v1.1.2
+   Compiling lottery v0.1.0 (/Users/kelwin/Desktop/undegen_protocol/programs/lottery)
+error[E0432]: unresolved import `crate`
+  --> programs/lottery/src/lib.rs:12:1
+   |
+12 | #[program]
+   | ^^^^^^^^^^
+   | |
+   | unresolved import
+   | help: a similar path exists: `initialize_lottery::__client_accounts_initialize_lottery`
+   |
+   = note: this error originates in the attribute macro `program` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `lottery` (lib) due to 1 previous error

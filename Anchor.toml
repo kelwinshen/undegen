@@ -1,0 +1,21 @@
+skip_local_validator = true
+
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+lottery = "6rFkLr16EYdTUF8fxKvg8M664RjC7RK9JNgzn4UaGiGe"
+undegen_core = "2DBPJLkzrUpgxLGwn73NQmxv7r7D5e6zTdYcKXMu8EWq"
+undegen_protocol = "2icvBp1n9eyB9nKeC5vp6tXj6UJjZHvAJcvBiyGjqvLT"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]
