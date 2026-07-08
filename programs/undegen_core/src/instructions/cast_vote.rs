@@ -9,10 +9,10 @@ pub fn cast_vote_handler(ctx: Context<CastVote>, vote_yes: bool) -> Result<()> {
     require!(!position.has_voted, CoreError::AlreadyVoted);
     require!(batch.status == BatchStatus::Locked, CoreError::NotLocked);
     let clock = Clock::get()?;
-   require!(
-    clock.unix_timestamp < batch.kickoff_timestamp.saturating_sub(3600),
-    CoreError::VotingClosed
-);
+    require!(
+        clock.unix_timestamp < batch.kickoff_timestamp.saturating_sub(3600),
+        CoreError::VotingClosed
+    );
     position.has_voted = true;
     position.vote_yes = vote_yes;
     if vote_yes {

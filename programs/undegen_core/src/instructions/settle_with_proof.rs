@@ -196,7 +196,10 @@ pub fn settle_with_proof_handler(
                     vault_config: ctx.accounts.vault_config.to_account_info(),
                     mint: ctx.accounts.mint.to_account_info(),
                     vault_token_account: ctx.accounts.vault_token_account.to_account_info(),
-                    depositor_token_account: ctx.accounts.collateral_token_account.to_account_info(),
+                    depositor_token_account: ctx
+                        .accounts
+                        .collateral_token_account
+                        .to_account_info(),
                     position: ctx.accounts.vault_position.to_account_info(),
                     token_program: ctx.accounts.token_program.to_account_info(),
                     system_program: ctx.accounts.system_program.to_account_info(),

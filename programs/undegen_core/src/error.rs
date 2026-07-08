@@ -43,5 +43,5 @@ pub enum CoreError {
     #[msg("Proof match ID does not match this batch")]
     MatchIdMismatch,
     #[msg("No yield generated yet — tick the vault before proposing a match")]
-NothingToGrow,
+    NothingToGrow,
 }

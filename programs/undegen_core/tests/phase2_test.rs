@@ -266,7 +266,10 @@ fn setup() -> TestSetup {
         &mut svm,
         Instruction::new_with_bytes(
             vault_program_id,
-            &yield_vault::instruction::FundReserve { amount: 500_000_000 }.data(),
+            &yield_vault::instruction::FundReserve {
+                amount: 500_000_000,
+            }
+            .data(),
             yield_vault::accounts::FundReserve {
                 admin: operator.pubkey(),
                 vault_config,
@@ -324,7 +327,7 @@ fn propose_match_ix(setup: &TestSetup, kickoff_timestamp: i64) -> Instruction {
         &undegen_core::instruction::ProposeMatch {
             fixture_id: 999_i64,
             kickoff_timestamp,
-            odds_numerator: 2,    // 2x odds on the yield
+            odds_numerator: 2, // 2x odds on the yield
             odds_denominator: 1,
             period: 0,
             stat_a_key: 1,
@@ -363,8 +366,14 @@ fn test_propose_match() {
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
     // win_prize = yield × 2 — yield is 5-10% of 1B so win_prize is 100M-200M range
     assert!(batch_state.win_prize > 0, "win_prize should be > 0");
-    assert!(batch_state.win_prize >= 100_000_000, "win_prize below 5% floor");
-    assert!(batch_state.win_prize <= 200_000_000, "win_prize above 10% ceiling");
+    assert!(
+        batch_state.win_prize >= 100_000_000,
+        "win_prize below 5% floor"
+    );
+    assert!(
+        batch_state.win_prize <= 200_000_000,
+        "win_prize above 10% ceiling"
+    );
     assert_eq!(batch_state.collateral_required, batch_state.win_prize);
 }
 
@@ -372,7 +381,10 @@ fn test_propose_match() {
 fn test_propose_match_non_operator_fails() {
     let mut setup = setup();
     let impostor = Keypair::new();
-    setup.svm.airdrop(&impostor.pubkey(), 1_000_000_000).unwrap();
+    setup
+        .svm
+        .airdrop(&impostor.pubkey(), 1_000_000_000)
+        .unwrap();
 
     let ix = Instruction::new_with_bytes(
         undegen_core::id(),
@@ -501,8 +513,7 @@ fn test_finalize_consensus_yes_wins() {
         Instruction::new_with_bytes(
             core_program_id,
             &undegen_core::instruction::FinalizeConsensus {}.data(),
-            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }
-                .to_account_metas(None),
+            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }.to_account_metas(None),
         ),
         &setup.operator,
         &[],
@@ -532,8 +543,7 @@ fn test_finalize_consensus_no_votes_skips() {
         Instruction::new_with_bytes(
             core_program_id,
             &undegen_core::instruction::FinalizeConsensus {}.data(),
-            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }
-                .to_account_metas(None),
+            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }.to_account_metas(None),
         ),
         &setup.operator,
         &[],
@@ -583,8 +593,7 @@ fn test_finalize_consensus_no_wins_skips() {
         Instruction::new_with_bytes(
             core_program_id,
             &undegen_core::instruction::FinalizeConsensus {}.data(),
-            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }
-                .to_account_metas(None),
+            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }.to_account_metas(None),
         ),
         &setup.operator,
         &[],

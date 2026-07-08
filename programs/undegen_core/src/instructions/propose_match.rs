@@ -17,10 +17,16 @@ pub fn propose_match_handler(
     negation: bool,
 ) -> Result<()> {
     let batch = &mut ctx.accounts.batch;
-    require!(batch.operator == ctx.accounts.operator.key(), CoreError::Unauthorized);
+    require!(
+        batch.operator == ctx.accounts.operator.key(),
+        CoreError::Unauthorized
+    );
     require!(batch.status == BatchStatus::Locked, CoreError::NotLocked);
     require!(kickoff_timestamp > 0, CoreError::InvalidAmount);
-    require!(odds_numerator > 0 && odds_denominator > 0, CoreError::InvalidAmount);
+    require!(
+        odds_numerator > 0 && odds_denominator > 0,
+        CoreError::InvalidAmount
+    );
     require!(batch.total_deposited > 0, CoreError::InvalidAmount);
 
     // Read vault state to compute current underlying for this batch's position
@@ -76,7 +82,12 @@ pub fn propose_match_handler(
 
     msg!(
         "Match proposed: fixture_id={} yield={} odds={}/{} win_prize={} kickoff={}",
-        fixture_id, yield_generated, odds_numerator, odds_denominator, win_prize, kickoff_timestamp
+        fixture_id,
+        yield_generated,
+        odds_numerator,
+        odds_denominator,
+        win_prize,
+        kickoff_timestamp
     );
     Ok(())
 }

@@ -62,7 +62,9 @@ fn set_clock(svm: &mut LiteSVM, unix_timestamp: i64) {
 
 fn token_balance(svm: &LiteSVM, token_account: &Pubkey) -> u64 {
     match svm.get_account(token_account) {
-        Some(acc) => SplTokenAccount::unpack(&acc.data).map(|a| a.amount).unwrap_or(0),
+        Some(acc) => SplTokenAccount::unpack(&acc.data)
+            .map(|a| a.amount)
+            .unwrap_or(0),
         None => 0,
     }
 }
@@ -120,18 +122,30 @@ fn setup_awaiting_collateral() -> TestSetup {
         .unwrap();
 
     let operator_ata = CreateAccount::new(&mut svm, &operator, &mint)
-        .owner(&operator.pubkey()).send().unwrap();
+        .owner(&operator.pubkey())
+        .send()
+        .unwrap();
     let user_a_ata = CreateAccount::new(&mut svm, &user_a, &mint)
-        .owner(&user_a.pubkey()).send().unwrap();
+        .owner(&user_a.pubkey())
+        .send()
+        .unwrap();
     let user_b_ata = CreateAccount::new(&mut svm, &user_b, &mint)
-        .owner(&user_b.pubkey()).send().unwrap();
+        .owner(&user_b.pubkey())
+        .send()
+        .unwrap();
 
     MintTo::new(&mut svm, &operator, &mint, &operator_ata, 2_000_000_000)
-        .owner(&operator).send().unwrap();
+        .owner(&operator)
+        .send()
+        .unwrap();
     MintTo::new(&mut svm, &operator, &mint, &user_a_ata, 1_000_000_000)
-        .owner(&operator).send().unwrap();
+        .owner(&operator)
+        .send()
+        .unwrap();
     MintTo::new(&mut svm, &operator, &mint, &user_b_ata, 1_000_000_000)
-        .owner(&operator).send().unwrap();
+        .owner(&operator)
+        .send()
+        .unwrap();
 
     let (vault_config, _) = Pubkey::find_program_address(
         &[yield_vault::constants::VAULT_CONFIG_SEED, mint.as_ref()],
@@ -143,16 +157,26 @@ fn setup_awaiting_collateral() -> TestSetup {
         &vault_program_id,
     );
 
-    send_ix(&mut svm, Instruction::new_with_bytes(
-        vault_program_id,
-        &yield_vault::instruction::InitializeVault {}.data(),
-        yield_vault::accounts::InitializeVault {
-            admin: operator.pubkey(), mint, vault_config, vault_token_account,
-            reserve_token_account, token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-            system_program: system_program::ID,
-        }.to_account_metas(None),
-    ), &operator, &[]);
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            vault_program_id,
+            &yield_vault::instruction::InitializeVault {}.data(),
+            yield_vault::accounts::InitializeVault {
+                admin: operator.pubkey(),
+                mint,
+                vault_config,
+                vault_token_account,
+                reserve_token_account,
+                token_program: TOKEN_PROGRAM_ID,
+                associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
+    );
 
     let batch_id: u64 = 1;
     let (batch, _) = Pubkey::find_program_address(
@@ -160,26 +184,47 @@ fn setup_awaiting_collateral() -> TestSetup {
         &core_program_id,
     );
 
-    send_ix(&mut svm, Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::InitializeBatch { batch_id }.data(),
-        undegen_core::accounts::InitializeBatch {
-            operator: operator.pubkey(), mint, batch,
-            token_program: TOKEN_PROGRAM_ID, system_program: system_program::ID,
-        }.to_account_metas(None),
-    ), &operator, &[]);
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::InitializeBatch { batch_id }.data(),
+            undegen_core::accounts::InitializeBatch {
+                operator: operator.pubkey(),
+                mint,
+                batch,
+                token_program: TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
+    );
 
     let batch_token_account = derive_ata(&batch, &mint);
     let (vault_position, _) = Pubkey::find_program_address(
-        &[yield_vault::constants::POSITION_SEED, vault_config.as_ref(), batch.as_ref()],
+        &[
+            yield_vault::constants::POSITION_SEED,
+            vault_config.as_ref(),
+            batch.as_ref(),
+        ],
         &vault_program_id,
     );
     let (user_position_a, _) = Pubkey::find_program_address(
-        &[undegen_core::constants::USER_POSITION_SEED, batch.as_ref(), user_a.pubkey().as_ref()],
+        &[
+            undegen_core::constants::USER_POSITION_SEED,
+            batch.as_ref(),
+            user_a.pubkey().as_ref(),
+        ],
         &core_program_id,
     );
     let (user_position_b, _) = Pubkey::find_program_address(
-        &[undegen_core::constants::USER_POSITION_SEED, batch.as_ref(), user_b.pubkey().as_ref()],
+        &[
+            undegen_core::constants::USER_POSITION_SEED,
+            batch.as_ref(),
+            user_b.pubkey().as_ref(),
+        ],
         &core_program_id,
     );
 
@@ -187,83 +232,161 @@ fn setup_awaiting_collateral() -> TestSetup {
         (&user_a, user_a_ata, user_position_a),
         (&user_b, user_b_ata, user_position_b),
     ] {
-        let amount = if user.pubkey() == user_a.pubkey() { 300_000_000u64 } else { 700_000_000u64 };
-        send_ix(&mut svm, Instruction::new_with_bytes(
-            core_program_id,
-            &undegen_core::instruction::JoinBatch { amount }.data(),
-            undegen_core::accounts::JoinBatch {
-                user: user.pubkey(), mint, batch,
-                user_token_account: user_ata, batch_token_account,
-                vault_config, vault_token_account, vault_position, user_position,
-                yield_vault_program: vault_program_id, token_program: TOKEN_PROGRAM_ID,
-                associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-                system_program: system_program::ID,
-            }.to_account_metas(None),
-        ), user, &[]);
+        let amount = if user.pubkey() == user_a.pubkey() {
+            300_000_000u64
+        } else {
+            700_000_000u64
+        };
+        send_ix(
+            &mut svm,
+            Instruction::new_with_bytes(
+                core_program_id,
+                &undegen_core::instruction::JoinBatch { amount }.data(),
+                undegen_core::accounts::JoinBatch {
+                    user: user.pubkey(),
+                    mint,
+                    batch,
+                    user_token_account: user_ata,
+                    batch_token_account,
+                    vault_config,
+                    vault_token_account,
+                    vault_position,
+                    user_position,
+                    yield_vault_program: vault_program_id,
+                    token_program: TOKEN_PROGRAM_ID,
+                    associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+                    system_program: system_program::ID,
+                }
+                .to_account_metas(None),
+            ),
+            user,
+            &[],
+        );
     }
 
-    send_ix(&mut svm, Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::StartBatch {}.data(),
-        undegen_core::accounts::StartBatch { operator: operator.pubkey(), batch }
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::StartBatch {}.data(),
+            undegen_core::accounts::StartBatch {
+                operator: operator.pubkey(),
+                batch,
+            }
             .to_account_metas(None),
-    ), &operator, &[]);
+        ),
+        &operator,
+        &[],
+    );
 
-    send_ix(&mut svm, Instruction::new_with_bytes(
-        vault_program_id,
-        &yield_vault::instruction::FundReserve { amount: 500_000_000 }.data(),
-        yield_vault::accounts::FundReserve {
-            admin: operator.pubkey(), vault_config, mint,
-            reserve_token_account, admin_token_account: operator_ata,
-            token_program: TOKEN_PROGRAM_ID,
-        }.to_account_metas(None),
-    ), &operator, &[]);
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            vault_program_id,
+            &yield_vault::instruction::FundReserve {
+                amount: 500_000_000,
+            }
+            .data(),
+            yield_vault::accounts::FundReserve {
+                admin: operator.pubkey(),
+                vault_config,
+                mint,
+                reserve_token_account,
+                admin_token_account: operator_ata,
+                token_program: TOKEN_PROGRAM_ID,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
+    );
 
-    send_ix(&mut svm, Instruction::new_with_bytes(
-        vault_program_id,
-        &yield_vault::instruction::TickYield {}.data(),
-        yield_vault::accounts::TickYield {
-            admin: operator.pubkey(), vault_config, mint,
-            vault_token_account, reserve_token_account,
-            token_program: TOKEN_PROGRAM_ID,
-        }.to_account_metas(None),
-    ), &operator, &[]);
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            vault_program_id,
+            &yield_vault::instruction::TickYield {}.data(),
+            yield_vault::accounts::TickYield {
+                admin: operator.pubkey(),
+                vault_config,
+                mint,
+                vault_token_account,
+                reserve_token_account,
+                token_program: TOKEN_PROGRAM_ID,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
+    );
 
-    send_ix(&mut svm, Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::ProposeMatch {
-            fixture_id: 999_i64, kickoff_timestamp: KICKOFF_TS,
-            odds_numerator: 2, odds_denominator: 1,
-            period: 0, stat_a_key: 1, stat_b_key: None,
-            predicate_threshold: 0, predicate_comparison: 0, negation: false,
-        }.data(),
-        undegen_core::accounts::ProposeMatch {
-            operator: operator.pubkey(), batch, vault_config, vault_position,
-        }.to_account_metas(None),
-    ), &operator, &[]);
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::ProposeMatch {
+                fixture_id: 999_i64,
+                kickoff_timestamp: KICKOFF_TS,
+                odds_numerator: 2,
+                odds_denominator: 1,
+                period: 0,
+                stat_a_key: 1,
+                stat_b_key: None,
+                predicate_threshold: 0,
+                predicate_comparison: 0,
+                negation: false,
+            }
+            .data(),
+            undegen_core::accounts::ProposeMatch {
+                operator: operator.pubkey(),
+                batch,
+                vault_config,
+                vault_position,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
+    );
 
     for (voter, position) in [(&user_a, user_position_a), (&user_b, user_position_b)] {
-        send_ix(&mut svm, Instruction::new_with_bytes(
-            core_program_id,
-            &undegen_core::instruction::CastVote { vote_yes: true }.data(),
-            undegen_core::accounts::CastVote {
-                voter: voter.pubkey(), batch, user_position: position,
-            }.to_account_metas(None),
-        ), voter, &[]);
+        send_ix(
+            &mut svm,
+            Instruction::new_with_bytes(
+                core_program_id,
+                &undegen_core::instruction::CastVote { vote_yes: true }.data(),
+                undegen_core::accounts::CastVote {
+                    voter: voter.pubkey(),
+                    batch,
+                    user_position: position,
+                }
+                .to_account_metas(None),
+            ),
+            voter,
+            &[],
+        );
     }
 
     set_clock(&mut svm, 3600);
-    send_ix(&mut svm, Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::FinalizeConsensus {}.data(),
-        undegen_core::accounts::FinalizeConsensus { batch }.to_account_metas(None),
-    ), &operator, &[]);
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::FinalizeConsensus {}.data(),
+            undegen_core::accounts::FinalizeConsensus { batch }.to_account_metas(None),
+        ),
+        &operator,
+        &[],
+    );
 
     let batch_account = svm.get_account(&batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::AwaitingCollateral,
-        "setup failed: expected AwaitingCollateral");
+    assert_eq!(
+        batch_state.status,
+        undegen_core::state::BatchStatus::AwaitingCollateral,
+        "setup failed: expected AwaitingCollateral"
+    );
     let win_prize = batch_state.win_prize;
 
     let (collateral_token_account, _) = Pubkey::find_program_address(
@@ -272,23 +395,42 @@ fn setup_awaiting_collateral() -> TestSetup {
     );
 
     TestSetup {
-        svm, operator, user_a, user_b, mint, batch,
-        vault_config, vault_token_account, vault_position,
-        batch_token_account, user_position_a, user_position_b,
-        operator_ata, reserve_token_account, collateral_token_account, win_prize,
+        svm,
+        operator,
+        user_a,
+        user_b,
+        mint,
+        batch,
+        vault_config,
+        vault_token_account,
+        vault_position,
+        batch_token_account,
+        user_position_a,
+        user_position_b,
+        operator_ata,
+        reserve_token_account,
+        collateral_token_account,
+        win_prize,
     }
 }
 
 fn deposit_collateral_ix(setup: &TestSetup) -> Instruction {
     Instruction::new_with_bytes(
         undegen_core::id(),
-        &undegen_core::instruction::DepositCollateral { amount: setup.win_prize }.data(),
+        &undegen_core::instruction::DepositCollateral {
+            amount: setup.win_prize,
+        }
+        .data(),
         undegen_core::accounts::DepositCollateral {
-            operator: setup.operator.pubkey(), mint: setup.mint, batch: setup.batch,
+            operator: setup.operator.pubkey(),
+            mint: setup.mint,
+            batch: setup.batch,
             operator_token_account: setup.operator_ata,
             collateral_token_account: setup.collateral_token_account,
-            token_program: TOKEN_PROGRAM_ID, system_program: system_program::ID,
-        }.to_account_metas(None),
+            token_program: TOKEN_PROGRAM_ID,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
     )
 }
 
@@ -309,7 +451,10 @@ fn test_deposit_collateral_success() {
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Active);
     assert_eq!(batch_state.collateral_deposited, setup.win_prize);
     assert_eq!(batch_state.proof_deadline, KICKOFF_TS + 3600);
-    assert_eq!(token_balance(&setup.svm, &setup.collateral_token_account), setup.win_prize);
+    assert_eq!(
+        token_balance(&setup.svm, &setup.collateral_token_account),
+        setup.win_prize
+    );
     assert_eq!(
         operator_balance_before - token_balance(&setup.svm, &setup.operator_ata),
         setup.win_prize
@@ -329,22 +474,46 @@ fn test_deposit_collateral_double_deposit_fails() {
 fn test_deposit_collateral_non_operator_fails() {
     let mut setup = setup_awaiting_collateral();
     let impostor = Keypair::new();
-    setup.svm.airdrop(&impostor.pubkey(), 1_000_000_000).unwrap();
+    setup
+        .svm
+        .airdrop(&impostor.pubkey(), 1_000_000_000)
+        .unwrap();
     let impostor_ata = CreateAccount::new(&mut setup.svm, &impostor, &setup.mint)
-        .owner(&impostor.pubkey()).send().unwrap();
-    MintTo::new(&mut setup.svm, &setup.operator, &setup.mint, &impostor_ata, setup.win_prize)
-        .owner(&setup.operator).send().unwrap();
+        .owner(&impostor.pubkey())
+        .send()
+        .unwrap();
+    MintTo::new(
+        &mut setup.svm,
+        &setup.operator,
+        &setup.mint,
+        &impostor_ata,
+        setup.win_prize,
+    )
+    .owner(&setup.operator)
+    .send()
+    .unwrap();
 
-    send_ix_should_fail(&mut setup.svm, Instruction::new_with_bytes(
-        undegen_core::id(),
-        &undegen_core::instruction::DepositCollateral { amount: setup.win_prize }.data(),
-        undegen_core::accounts::DepositCollateral {
-            operator: impostor.pubkey(), mint: setup.mint, batch: setup.batch,
-            operator_token_account: impostor_ata,
-            collateral_token_account: setup.collateral_token_account,
-            token_program: TOKEN_PROGRAM_ID, system_program: system_program::ID,
-        }.to_account_metas(None),
-    ), &impostor);
+    send_ix_should_fail(
+        &mut setup.svm,
+        Instruction::new_with_bytes(
+            undegen_core::id(),
+            &undegen_core::instruction::DepositCollateral {
+                amount: setup.win_prize,
+            }
+            .data(),
+            undegen_core::accounts::DepositCollateral {
+                operator: impostor.pubkey(),
+                mint: setup.mint,
+                batch: setup.batch,
+                operator_token_account: impostor_ata,
+                collateral_token_account: setup.collateral_token_account,
+                token_program: TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &impostor,
+    );
 }
 
 #[test]
@@ -352,12 +521,17 @@ fn test_penalize_missed_collateral() {
     let mut setup = setup_awaiting_collateral();
     set_clock(&mut setup.svm, KICKOFF_TS);
 
-    send_ix(&mut setup.svm, Instruction::new_with_bytes(
-        undegen_core::id(),
-        &undegen_core::instruction::PenalizeMissedCollateral {}.data(),
-        undegen_core::accounts::PenalizeMissedCollateral { batch: setup.batch }
-            .to_account_metas(None),
-    ), &setup.operator, &[]);
+    send_ix(
+        &mut setup.svm,
+        Instruction::new_with_bytes(
+            undegen_core::id(),
+            &undegen_core::instruction::PenalizeMissedCollateral {}.data(),
+            undegen_core::accounts::PenalizeMissedCollateral { batch: setup.batch }
+                .to_account_metas(None),
+        ),
+        &setup.operator,
+        &[],
+    );
 
     let batch_account = setup.svm.get_account(&setup.batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
@@ -375,10 +549,14 @@ fn test_penalize_missed_collateral() {
 #[test]
 fn test_penalize_before_deadline_fails() {
     let mut setup = setup_awaiting_collateral();
-    send_ix_should_fail(&mut setup.svm, Instruction::new_with_bytes(
-        undegen_core::id(),
-        &undegen_core::instruction::PenalizeMissedCollateral {}.data(),
-        undegen_core::accounts::PenalizeMissedCollateral { batch: setup.batch }
-            .to_account_metas(None),
-    ), &setup.operator);
+    send_ix_should_fail(
+        &mut setup.svm,
+        Instruction::new_with_bytes(
+            undegen_core::id(),
+            &undegen_core::instruction::PenalizeMissedCollateral {}.data(),
+            undegen_core::accounts::PenalizeMissedCollateral { batch: setup.batch }
+                .to_account_metas(None),
+        ),
+        &setup.operator,
+    );
 }

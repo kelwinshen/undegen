@@ -7,7 +7,7 @@ pub mod state;
 
 use instructions::*;
 
-declare_id!("AEoVG87anMu6A5ViWYcQZujEHDB2JMEKVjHViJEfmjWU");
+declare_id!("EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS");
 
 #[program]
 pub mod yield_vault {

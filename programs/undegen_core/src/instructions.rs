@@ -1,4 +1,5 @@
 pub mod cast_vote;
+pub mod claim;
 pub mod deposit_collateral;
 pub mod finalize_consensus;
 pub mod initialize_batch;
@@ -9,10 +10,9 @@ pub mod propose_match;
 pub mod settle_default;
 pub mod settle_with_proof;
 pub mod start_batch;
-pub mod claim;
-
 
 pub use cast_vote::*;
+pub use claim::*;
 pub use deposit_collateral::*;
 pub use finalize_consensus::*;
 pub use initialize_batch::*;
@@ -23,4 +23,3 @@ pub use propose_match::*;
 pub use settle_default::*;
 pub use settle_with_proof::*;
 pub use start_batch::*;
-pub use claim::*;
