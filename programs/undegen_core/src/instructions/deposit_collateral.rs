@@ -5,6 +5,10 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
 pub fn deposit_collateral_handler(ctx: Context<DepositCollateral>, amount: u64) -> Result<()> {
+
+    //cpi ke devnet txodds buat get data odds utk store ke pilihan yang menang dan jumlah deposit collateralnya
+    //harus sama kayak bet size * odds pas officially selected of the vote
+    //ketika pilihan user adalah skip kita harus deposit colateral dengan sejumlah bet size aja
     let batch = &mut ctx.accounts.batch;
     require!(
         batch.operator == ctx.accounts.operator.key(),

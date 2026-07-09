@@ -4,7 +4,7 @@ use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Tran
 use yield_vault::cpi::accounts::Deposit;
 use yield_vault::program::YieldVault;
 
-use crate::constants::{BATCH_SEED, COLLATERAL_SEED};
+use crate::constants::{BATCH_SEED, COLLATERAL_SEED, MAX_BETS};
 use crate::error::CoreError;
 use crate::state::{Batch, BatchStatus, BetTerms};
 use crate::txodds_types::*;
@@ -48,19 +48,9 @@ pub fn settle_with_proof_handler(
     require!(batch.status == BatchStatus::Active, CoreError::NotActive);
 
     let clock = Clock::get()?;
-    require!(
-        clock.unix_timestamp >= batch.kickoff_timestamp,
-        CoreError::KickoffNotReached
-    );
-    require!(
-        clock.unix_timestamp < batch.proof_deadline,
-        CoreError::ProofDeadlineNotPassed
-    );
-
-    require!(
-        fixture_summary.fixture_id == batch.bet_terms.fixture_id,
-        CoreError::MatchIdMismatch
-    );
+    require!(clock.unix_timestamp >= batch.kickoff_timestamp, CoreError::KickoffNotReached);
+    require!(clock.unix_timestamp < batch.proof_deadline, CoreError::ProofDeadlineNotPassed);
+    require!(fixture_summary.fixture_id == batch.bet_terms.fixture_id, CoreError::MatchIdMismatch);
 
     // --- TxOdds proof verification CPI ---
     let terms = bet_terms_to_market_params(&batch.bet_terms);
@@ -93,147 +83,91 @@ pub fn settle_with_proof_handler(
             ctx.accounts.operator.to_account_info(),
             ctx.accounts.daily_scores_merkle_roots.to_account_info(),
         ],
-    )
-    .map_err(|_| CoreError::InvalidOracleSignature)?;
+    ).map_err(|_| CoreError::InvalidOracleSignature)?;
 
-    // --- Proof verified — operator earns commission regardless of bet outcome ---
-    // Commission = yield × commission_bps / 10_000
-    // yield = baseline was set at start_batch, win_prize was computed from yield at propose_match
-    // We use win_prize / (odds_numerator / odds_denominator) to recover yield amount
-    let yield_amount = (batch.win_prize as u128)
-        .checked_mul(batch.odds_denominator as u128)
-        .ok_or(CoreError::MathOverflow)?
-        .checked_div(batch.odds_numerator as u128)
-        .ok_or(CoreError::MathOverflow)? as u64;
-
-    let commission_amount = (yield_amount as u128)
-        .checked_mul(batch.commission_bps as u128)
-        .ok_or(CoreError::MathOverflow)?
-        .checked_div(10_000)
-        .ok_or(CoreError::MathOverflow)? as u64;
+    // Operator submitted proof on time — operator_yield_bps unchanged
+    // Operator claims vault yield via claim_operator_yield after batch settles
+    // No commission transfer here
 
     let batch_id_bytes = batch.batch_id.to_le_bytes();
     let signer_seeds: &[&[&[u8]]] = &[&[BATCH_SEED, batch_id_bytes.as_ref(), &[batch.bump]]];
 
-    // Withdraw commission from vault to operator
-    if commission_amount > 0 {
-        msg!("Paying operator commission: {} tokens", commission_amount);
-        yield_vault::cpi::withdraw(
-            CpiContext::new_with_signer(
-                ctx.accounts.yield_vault_program.key(),
-                yield_vault::cpi::accounts::Withdraw {
-                    depositor: batch.to_account_info(),
-                    vault_config: ctx.accounts.vault_config.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                    vault_token_account: ctx.accounts.vault_token_account.to_account_info(),
-                    depositor_token_account: ctx.accounts.batch_token_account.to_account_info(),
-                    position: ctx.accounts.vault_position.to_account_info(),
-                    token_program: ctx.accounts.token_program.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            commission_amount,
-        )?;
+    // --- Handle bet outcome ---
+    batch.bets_completed = batch.bets_completed.saturating_add(1);
 
-        // batch_token_account now holds commission — forward to operator
-        ctx.accounts.batch_token_account.reload()?;
-        let received = ctx.accounts.batch_token_account.amount;
-        if received > 0 {
+    if outcome {
+        // Users won — compound operator collateral into vault
+        // Increases vault position value → users get more when they claim shares
+        msg!("Users won — compounding collateral into vault");
+        let collateral_amount = ctx.accounts.collateral_token_account.amount;
+        if collateral_amount > 0 {
+            yield_vault::cpi::deposit(
+                CpiContext::new_with_signer(
+                    ctx.accounts.yield_vault_program.key(),
+                    Deposit {
+                        depositor: batch.to_account_info(),
+                        position_payer: ctx.accounts.operator.to_account_info(),
+                        vault_config: ctx.accounts.vault_config.to_account_info(),
+                        mint: ctx.accounts.mint.to_account_info(),
+                        vault_token_account: ctx.accounts.vault_token_account.to_account_info(),
+                        depositor_token_account: ctx.accounts.collateral_token_account.to_account_info(),
+                        position: ctx.accounts.vault_position.to_account_info(),
+                        token_program: ctx.accounts.token_program.to_account_info(),
+                        system_program: ctx.accounts.system_program.to_account_info(),
+                    },
+                    signer_seeds,
+                ),
+                collateral_amount,
+            )?;
+        }
+    } else {
+        // Operator won — return collateral to operator
+        msg!("Operator won — returning collateral");
+        let collateral_amount = ctx.accounts.collateral_token_account.amount;
+        if collateral_amount > 0 {
             token_interface::transfer_checked(
                 CpiContext::new_with_signer(
                     ctx.accounts.token_program.key(),
                     TransferChecked {
                         mint: ctx.accounts.mint.to_account_info(),
-                        from: ctx.accounts.batch_token_account.to_account_info(),
+                        from: ctx.accounts.collateral_token_account.to_account_info(),
                         to: ctx.accounts.operator_token_account.to_account_info(),
                         authority: batch.to_account_info(),
                     },
                     signer_seeds,
                 ),
-                received,
+                collateral_amount,
                 ctx.accounts.mint.decimals,
             )?;
         }
     }
 
-    // Update baseline to current underlying after commission withdrawal
-    // so next bet's yield is measured from here
-    let vault_config_data = ctx.accounts.vault_config.try_borrow_data()?;
-    let mut vault_slice: &[u8] = &vault_config_data;
-    let vault_state = yield_vault::state::VaultConfig::try_deserialize(&mut vault_slice)?;
-    drop(vault_config_data);
+    // --- Reset current bet state ---
+    batch.bet_terms = BetTerms::default();
+    batch.kickoff_timestamp = 0;
+    batch.win_prize = 0;
+    batch.collateral_required = 0;
+    batch.collateral_deposited = 0;
+    batch.proof_deadline = 0;
+    batch.outcome = None;
+    batch.yes_weight = 0;
+    batch.no_weight = 0;
 
-    let vault_position_data = ctx.accounts.vault_position.try_borrow_data()?;
-    let mut pos_slice: &[u8] = &vault_position_data;
-    let position_state = yield_vault::state::Position::try_deserialize(&mut pos_slice)?;
-    drop(vault_position_data);
-
-    let new_baseline = if vault_state.total_shares > 0 {
-        (position_state.shares as u128)
-            .checked_mul(vault_state.total_underlying as u128)
-            .ok_or(CoreError::MathOverflow)?
-            .checked_div(vault_state.total_shares as u128)
-            .ok_or(CoreError::MathOverflow)? as u64
+    // Move to Settled if all bets done, otherwise back to Locked
+    if batch.bets_completed >= MAX_BETS {
+        batch.status = BatchStatus::Settled;
+        msg!(
+            "Batch {} fully settled after {} bets — operator_yield_bps={}",
+            batch.batch_id, MAX_BETS, batch.operator_yield_bps
+        );
     } else {
-        0
-    };
-    batch.baseline_underlying = new_baseline;
-
-    // --- Settle the bet outcome ---
-    batch.outcome = Some(outcome);
-    batch.status = BatchStatus::Settled;
-
-    if outcome {
-        // Users won — compound operator's collateral into vault
-        msg!("Users won — compounding collateral into yield_vault");
-        let collateral_amount = ctx.accounts.collateral_token_account.amount;
-        yield_vault::cpi::deposit(
-            CpiContext::new_with_signer(
-                ctx.accounts.yield_vault_program.key(),
-                Deposit {
-                    depositor: batch.to_account_info(),
-                    position_payer: ctx.accounts.operator.to_account_info(),
-                    vault_config: ctx.accounts.vault_config.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                    vault_token_account: ctx.accounts.vault_token_account.to_account_info(),
-                    depositor_token_account: ctx
-                        .accounts
-                        .collateral_token_account
-                        .to_account_info(),
-                    position: ctx.accounts.vault_position.to_account_info(),
-                    token_program: ctx.accounts.token_program.to_account_info(),
-                    system_program: ctx.accounts.system_program.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            collateral_amount,
-        )?;
-    } else {
-        // Operator won — return collateral to operator
-        msg!("Operator won — returning collateral");
-        let collateral_amount = ctx.accounts.collateral_token_account.amount;
-        token_interface::transfer_checked(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.key(),
-                TransferChecked {
-                    mint: ctx.accounts.mint.to_account_info(),
-                    from: ctx.accounts.collateral_token_account.to_account_info(),
-                    to: ctx.accounts.operator_token_account.to_account_info(),
-                    authority: batch.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            collateral_amount,
-            ctx.accounts.mint.decimals,
-        )?;
+        batch.status = BatchStatus::Locked;
+        msg!(
+            "Batch {} bet {}/{} settled outcome={} — back to Locked",
+            batch.batch_id, batch.bets_completed, MAX_BETS, outcome,
+        );
     }
 
-    msg!(
-        "Batch {} settled — outcome={} commission={}",
-        batch.batch_id,
-        outcome,
-        commission_amount
-    );
     Ok(())
 }
 
@@ -281,14 +215,6 @@ pub struct SettleWithProof<'info> {
     /// CHECK: yield_vault Position PDA for this batch
     #[account(mut)]
     pub vault_position: UncheckedAccount<'info>,
-
-    /// Batch's ATA — used as intermediate for commission withdrawal from vault
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = batch,
-    )]
-    pub batch_token_account: InterfaceAccount<'info, TokenAccount>,
 
     pub yield_vault_program: Program<'info, YieldVault>,
     pub token_program: Interface<'info, TokenInterface>,

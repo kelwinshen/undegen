@@ -8,15 +8,18 @@ pub mod txodds_types;
 
 use instructions::*;
 
-declare_id!("AaLEoGFpWQyZ2Vx7FT3knuTmBPPpCXCwTB7zZvVfW5g8");
+declare_id!("FLMTi3AzSvyTNsutnirzN6pdsKRDaZaVdeibBCfG8mgL");
 
 #[program]
 pub mod undegen_core {
     use super::*;
 
-    pub fn initialize_batch(ctx: Context<InitializeBatch>, batch_id: u64) -> Result<()> {
-        instructions::initialize_batch::initialize_batch_handler(ctx, batch_id)
-    }
+pub fn initialize_batch(ctx: Context<InitializeBatch>, apy_bps: u16) -> Result<()> {
+    instructions::initialize_batch::initialize_batch_handler(ctx, apy_bps)
+}
+    pub fn initialize_protocol(ctx: Context<InitializeProtocol>) -> Result<()> {
+    instructions::initialize_protocol::initialize_protocol_handler(ctx)
+}
 
     pub fn join_batch(ctx: Context<JoinBatch>, amount: u64) -> Result<()> {
         instructions::join_batch::join_batch_handler(ctx, amount)
@@ -29,34 +32,23 @@ pub mod undegen_core {
     pub fn start_batch(ctx: Context<StartBatch>) -> Result<()> {
         instructions::start_batch::start_batch_handler(ctx)
     }
-
-    pub fn propose_match(
-        ctx: Context<ProposeMatch>,
-        fixture_id: i64,
-        kickoff_timestamp: i64,
-        odds_numerator: u64,
-        odds_denominator: u64,
-        period: u16,
-        stat_a_key: u32,
-        stat_b_key: Option<u32>,
-        predicate_threshold: i32,
-        predicate_comparison: u8,
-        negation: bool,
-    ) -> Result<()> {
-        instructions::propose_match::propose_match_handler(
-            ctx,
-            fixture_id,
-            kickoff_timestamp,
-            odds_numerator,
-            odds_denominator,
-            period,
-            stat_a_key,
-            stat_b_key,
-            predicate_threshold,
-            predicate_comparison,
-            negation,
-        )
-    }
+pub fn propose_match(
+    ctx: Context<ProposeMatch>,
+    fixture_id: i64,
+    kickoff_timestamp: i64,
+    period: u16,
+    stat_a_key: u32,
+    stat_b_key: Option<u32>,
+    predicate_threshold: i32,
+    predicate_comparison: u8,
+    negation: bool,
+) -> Result<()> {
+    instructions::propose_match::propose_match_handler(
+        ctx, fixture_id, kickoff_timestamp,
+        period, stat_a_key, stat_b_key,
+        predicate_threshold, predicate_comparison, negation,
+    )
+}
     pub fn cast_vote(ctx: Context<CastVote>, vote_yes: bool) -> Result<()> {
         instructions::cast_vote::cast_vote_handler(ctx, vote_yes)
     }
@@ -102,4 +94,8 @@ pub mod undegen_core {
     pub fn settle_default(ctx: Context<SettleDefault>) -> Result<()> {
         instructions::settle_default::settle_default_handler(ctx)
     }
+
+    pub fn claim_operator_yield(ctx: Context<ClaimOperatorYield>) -> Result<()> {
+    instructions::claim_operator_yield::claim_operator_yield_handler(ctx)
+}
 }

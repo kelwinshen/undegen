@@ -10,6 +10,9 @@ pub mod propose_match;
 pub mod settle_default;
 pub mod settle_with_proof;
 pub mod start_batch;
+pub mod initialize_protocol;
+pub mod claim_operator_yield;
+
 
 pub use cast_vote::*;
 pub use claim::*;
@@ -23,3 +26,5 @@ pub use propose_match::*;
 pub use settle_default::*;
 pub use settle_with_proof::*;
 pub use start_batch::*;
+pub use initialize_protocol::*;
+pub use claim_operator_yield::*;

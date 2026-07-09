@@ -66,6 +66,8 @@ struct TestSetup {
     user_position_a: Pubkey,
     user_position_b: Pubkey,
     reserve_token_account: Pubkey,
+    protocol_config: Pubkey,
+    bet_size: u64,
 }
 
 fn setup() -> TestSetup {
@@ -98,10 +100,6 @@ fn setup() -> TestSetup {
         .send()
         .unwrap();
 
-    let operator_ata = CreateAccount::new(&mut svm, &operator, &mint)
-        .owner(&operator.pubkey())
-        .send()
-        .unwrap();
     let user_a_ata = CreateAccount::new(&mut svm, &user_a, &mint)
         .owner(&user_a.pubkey())
         .send()
@@ -111,11 +109,6 @@ fn setup() -> TestSetup {
         .send()
         .unwrap();
 
-    // Operator gets reserve funds, users get deposit funds
-    MintTo::new(&mut svm, &operator, &mint, &operator_ata, 500_000_000)
-        .owner(&operator)
-        .send()
-        .unwrap();
     MintTo::new(&mut svm, &operator, &mint, &user_a_ata, 1_000_000_000)
         .owner(&operator)
         .send()
@@ -157,7 +150,29 @@ fn setup() -> TestSetup {
         &[],
     );
 
-    // Initialize batch
+    // Initialize protocol
+    let (protocol_config, _) = Pubkey::find_program_address(
+        &[undegen_core::constants::PROTOCOL_CONFIG_SEED],
+        &core_program_id,
+    );
+
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::InitializeProtocol {}.data(),
+            undegen_core::accounts::InitializeProtocol {
+                admin: operator.pubkey(),
+                config: protocol_config,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
+    );
+
+    // Initialize batch with 5% APY
     let batch_id: u64 = 1;
     let (batch, _) = Pubkey::find_program_address(
         &[undegen_core::constants::BATCH_SEED, &batch_id.to_le_bytes()],
@@ -168,10 +183,11 @@ fn setup() -> TestSetup {
         &mut svm,
         Instruction::new_with_bytes(
             core_program_id,
-            &undegen_core::instruction::InitializeBatch { batch_id }.data(),
+            &undegen_core::instruction::InitializeBatch { apy_bps: 500 }.data(),
             undegen_core::accounts::InitializeBatch {
                 operator: operator.pubkey(),
                 mint,
+                config: protocol_config,
                 batch,
                 token_program: TOKEN_PROGRAM_ID,
                 system_program: system_program::ID,
@@ -245,7 +261,7 @@ fn setup() -> TestSetup {
         );
     }
 
-    // Start batch → Locked + baseline snapshot
+    // Start batch → Locked + bet_size computed
     send_ix(
         &mut svm,
         Instruction::new_with_bytes(
@@ -261,48 +277,12 @@ fn setup() -> TestSetup {
         &[],
     );
 
-    // Fund reserve so tick_yield can grow the vault
-    send_ix(
-        &mut svm,
-        Instruction::new_with_bytes(
-            vault_program_id,
-            &yield_vault::instruction::FundReserve {
-                amount: 500_000_000,
-            }
-            .data(),
-            yield_vault::accounts::FundReserve {
-                admin: operator.pubkey(),
-                vault_config,
-                mint,
-                reserve_token_account,
-                admin_token_account: operator_ata,
-                token_program: TOKEN_PROGRAM_ID,
-            }
-            .to_account_metas(None),
-        ),
-        &operator,
-        &[],
-    );
-
-    // Tick yield — generates 5-10% on 1_000_000_000 = 50-100M yield
-    send_ix(
-        &mut svm,
-        Instruction::new_with_bytes(
-            vault_program_id,
-            &yield_vault::instruction::TickYield {}.data(),
-            yield_vault::accounts::TickYield {
-                admin: operator.pubkey(),
-                vault_config,
-                mint,
-                vault_token_account,
-                reserve_token_account,
-                token_program: TOKEN_PROGRAM_ID,
-            }
-            .to_account_metas(None),
-        ),
-        &operator,
-        &[],
-    );
+    // Read bet_size for assertions
+    let batch_account = svm.get_account(&batch).unwrap();
+    let mut data: &[u8] = &batch_account.data;
+    let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
+    let bet_size = batch_state.bet_size;
+    assert!(bet_size > 0, "bet_size should be > 0 after start_batch");
 
     TestSetup {
         svm,
@@ -318,6 +298,8 @@ fn setup() -> TestSetup {
         user_position_a,
         user_position_b,
         reserve_token_account,
+        protocol_config,
+        bet_size,
     }
 }
 
@@ -327,8 +309,6 @@ fn propose_match_ix(setup: &TestSetup, kickoff_timestamp: i64) -> Instruction {
         &undegen_core::instruction::ProposeMatch {
             fixture_id: 999_i64,
             kickoff_timestamp,
-            odds_numerator: 2, // 2x odds on the yield
-            odds_denominator: 1,
             period: 0,
             stat_a_key: 1,
             stat_b_key: None,
@@ -340,8 +320,6 @@ fn propose_match_ix(setup: &TestSetup, kickoff_timestamp: i64) -> Instruction {
         undegen_core::accounts::ProposeMatch {
             operator: setup.operator.pubkey(),
             batch: setup.batch,
-            vault_config: setup.vault_config,
-            vault_position: setup.vault_position,
         }
         .to_account_metas(None),
     )
@@ -350,8 +328,9 @@ fn propose_match_ix(setup: &TestSetup, kickoff_timestamp: i64) -> Instruction {
 #[test]
 fn test_propose_match() {
     let mut setup = setup();
+    let kickoff_timestamp: i64 = 7200;
 
-    let ix = propose_match_ix(&setup, 7200);
+    let ix = propose_match_ix(&setup, kickoff_timestamp);
     send_ix(&mut setup.svm, ix, &setup.operator, &[]);
 
     let batch_account = setup.svm.get_account(&setup.batch).unwrap();
@@ -359,40 +338,25 @@ fn test_propose_match() {
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
 
     assert_eq!(batch_state.bet_terms.fixture_id, 999);
-    assert_eq!(batch_state.kickoff_timestamp, 7200);
-    assert_eq!(batch_state.proof_deadline, 7200 + 3600);
-    assert_eq!(batch_state.odds_numerator, 2);
-    assert_eq!(batch_state.odds_denominator, 1);
+    assert_eq!(batch_state.kickoff_timestamp, kickoff_timestamp);
+    assert_eq!(batch_state.proof_deadline, kickoff_timestamp + 3600);
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
-    // win_prize = yield × 2 — yield is 5-10% of 1B so win_prize is 100M-200M range
-    assert!(batch_state.win_prize > 0, "win_prize should be > 0");
-    assert!(
-        batch_state.win_prize >= 100_000_000,
-        "win_prize below 5% floor"
-    );
-    assert!(
-        batch_state.win_prize <= 200_000_000,
-        "win_prize above 10% ceiling"
-    );
-    assert_eq!(batch_state.collateral_required, batch_state.win_prize);
+    // win_prize always equals bet_size (fixed per batch)
+    assert_eq!(batch_state.win_prize, setup.bet_size);
+    assert_eq!(batch_state.collateral_required, setup.bet_size);
 }
 
 #[test]
 fn test_propose_match_non_operator_fails() {
     let mut setup = setup();
     let impostor = Keypair::new();
-    setup
-        .svm
-        .airdrop(&impostor.pubkey(), 1_000_000_000)
-        .unwrap();
+    setup.svm.airdrop(&impostor.pubkey(), 1_000_000_000).unwrap();
 
     let ix = Instruction::new_with_bytes(
         undegen_core::id(),
         &undegen_core::instruction::ProposeMatch {
             fixture_id: 999_i64,
             kickoff_timestamp: 7200,
-            odds_numerator: 2,
-            odds_denominator: 1,
             period: 0,
             stat_a_key: 1,
             stat_b_key: None,
@@ -404,8 +368,6 @@ fn test_propose_match_non_operator_fails() {
         undegen_core::accounts::ProposeMatch {
             operator: impostor.pubkey(),
             batch: setup.batch,
-            vault_config: setup.vault_config,
-            vault_position: setup.vault_position,
         }
         .to_account_metas(None),
     );
@@ -417,6 +379,7 @@ fn test_cast_vote_weights() {
     let mut setup = setup();
     let core_program_id = undegen_core::id();
 
+    // clock=0, kickoff=7200 → voting open (0 < 7200-3600=3600)
     let ix = propose_match_ix(&setup, 7200);
     send_ix(&mut setup.svm, ix, &setup.operator, &[]);
 
@@ -506,6 +469,7 @@ fn test_finalize_consensus_yes_wins() {
         );
     }
 
+    // Warp to finalization window
     set_clock(&mut setup.svm, 3600);
 
     send_ix(
@@ -513,7 +477,8 @@ fn test_finalize_consensus_yes_wins() {
         Instruction::new_with_bytes(
             core_program_id,
             &undegen_core::instruction::FinalizeConsensus {}.data(),
-            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }.to_account_metas(None),
+            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }
+                .to_account_metas(None),
         ),
         &setup.operator,
         &[],
@@ -543,7 +508,8 @@ fn test_finalize_consensus_no_votes_skips() {
         Instruction::new_with_bytes(
             core_program_id,
             &undegen_core::instruction::FinalizeConsensus {}.data(),
-            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }.to_account_metas(None),
+            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }
+                .to_account_metas(None),
         ),
         &setup.operator,
         &[],
@@ -593,7 +559,8 @@ fn test_finalize_consensus_no_wins_skips() {
         Instruction::new_with_bytes(
             core_program_id,
             &undegen_core::instruction::FinalizeConsensus {}.data(),
-            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }.to_account_metas(None),
+            undegen_core::accounts::FinalizeConsensus { batch: setup.batch }
+                .to_account_metas(None),
         ),
         &setup.operator,
         &[],

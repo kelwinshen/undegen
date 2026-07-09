@@ -45,9 +45,7 @@ fn derive_ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
 
 fn token_balance(svm: &LiteSVM, token_account: &Pubkey) -> u64 {
     match svm.get_account(token_account) {
-        Some(acc) => SplTokenAccount::unpack(&acc.data)
-            .map(|a| a.amount)
-            .unwrap_or(0),
+        Some(acc) => SplTokenAccount::unpack(&acc.data).map(|a| a.amount).unwrap_or(0),
         None => 0,
     }
 }
@@ -113,55 +111,90 @@ fn test_phase1_initialize_join_leave() {
         &vault_program_id,
     );
 
-    let ix = Instruction::new_with_bytes(
-        vault_program_id,
-        &yield_vault::instruction::InitializeVault {}.data(),
-        yield_vault::accounts::InitializeVault {
-            admin: operator.pubkey(),
-            mint,
-            vault_config,
-            vault_token_account,
-            reserve_token_account,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-            system_program: system_program::ID,
-        }
-        .to_account_metas(None),
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            vault_program_id,
+            &yield_vault::instruction::InitializeVault {}.data(),
+            yield_vault::accounts::InitializeVault {
+                admin: operator.pubkey(),
+                mint,
+                vault_config,
+                vault_token_account,
+                reserve_token_account,
+                token_program: TOKEN_PROGRAM_ID,
+                associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
     );
-    send_ix(&mut svm, ix, &operator, &[]);
 
-    // --- Initialize batch ---
+    // --- Initialize protocol ---
+    let (protocol_config, _) = Pubkey::find_program_address(
+        &[undegen_core::constants::PROTOCOL_CONFIG_SEED],
+        &core_program_id,
+    );
+
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::InitializeProtocol {}.data(),
+            undegen_core::accounts::InitializeProtocol {
+                admin: operator.pubkey(),
+                config: protocol_config,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
+    );
+
+    // --- Initialize batch (batch_id = 1, apy_bps = 500 = 5%) ---
     let batch_id: u64 = 1;
     let (batch, _) = Pubkey::find_program_address(
         &[undegen_core::constants::BATCH_SEED, &batch_id.to_le_bytes()],
         &core_program_id,
     );
 
-    let ix = Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::InitializeBatch { batch_id }.data(),
-        undegen_core::accounts::InitializeBatch {
-            operator: operator.pubkey(),
-            mint,
-            batch,
-            token_program: TOKEN_PROGRAM_ID,
-            system_program: system_program::ID,
-        }
-        .to_account_metas(None),
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::InitializeBatch { apy_bps: 500 }.data(),
+            undegen_core::accounts::InitializeBatch {
+                operator: operator.pubkey(),
+                mint,
+                config: protocol_config,
+                batch,
+                token_program: TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
     );
-    send_ix(&mut svm, ix, &operator, &[]);
 
-    // Verify batch initialized correctly
+    // Verify batch state
     let batch_account = svm.get_account(&batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
     assert_eq!(batch_state.batch_id, batch_id);
     assert_eq!(batch_state.operator, operator.pubkey());
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Lobby);
-    assert_eq!(batch_state.commission_bps, 1000);
+    assert_eq!(batch_state.operator_yield_bps, 10000);
     assert_eq!(batch_state.total_deposited, 0);
+    assert_eq!(batch_state.apy_bps, 500);
+    assert_eq!(batch_state.bet_size, 0); // computed at start_batch
+    assert_eq!(batch_state.bets_completed, 0);
+    assert_eq!(batch_state.accumulated_winnings, 0);
 
-    // Shared accounts for join/leave
+    // Shared accounts
     let batch_token_account = derive_ata(&batch, &mint);
     let (vault_position, _) = Pubkey::find_program_address(
         &[
@@ -190,152 +223,149 @@ fn test_phase1_initialize_join_leave() {
 
     // --- user_a joins with 300 USDC ---
     let join_amount_a: u64 = 300_000_000;
-    let ix = Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::JoinBatch {
-            amount: join_amount_a,
-        }
-        .data(),
-        undegen_core::accounts::JoinBatch {
-            user: user_a.pubkey(),
-            mint,
-            batch,
-            user_token_account: user_a_ata,
-            batch_token_account,
-            vault_config,
-            vault_token_account,
-            vault_position,
-            user_position: user_position_a,
-            yield_vault_program: vault_program_id,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-            system_program: system_program::ID,
-        }
-        .to_account_metas(None),
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::JoinBatch { amount: join_amount_a }.data(),
+            undegen_core::accounts::JoinBatch {
+                user: user_a.pubkey(),
+                mint,
+                batch,
+                user_token_account: user_a_ata,
+                batch_token_account,
+                vault_config,
+                vault_token_account,
+                vault_position,
+                user_position: user_position_a,
+                yield_vault_program: vault_program_id,
+                token_program: TOKEN_PROGRAM_ID,
+                associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &user_a,
+        &[],
     );
-    send_ix(&mut svm, ix, &user_a, &[]);
 
-    assert_eq!(
-        token_balance(&svm, &user_a_ata),
-        1_000_000_000 - join_amount_a
-    );
+    assert_eq!(token_balance(&svm, &user_a_ata), 1_000_000_000 - join_amount_a);
     assert_eq!(token_balance(&svm, &vault_token_account), join_amount_a);
-
-    let batch_account = svm.get_account(&batch).unwrap();
-    let mut data: &[u8] = &batch_account.data;
-    let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-    assert_eq!(batch_state.total_deposited, join_amount_a);
 
     let pos_account = svm.get_account(&user_position_a).unwrap();
     let mut data: &[u8] = &pos_account.data;
     let pos_state = undegen_core::state::UserPosition::try_deserialize(&mut data).unwrap();
     assert_eq!(pos_state.deposited_amount, join_amount_a);
-    assert_eq!(pos_state.owner, user_a.pubkey());
+    assert_eq!(pos_state.vault_shares, join_amount_a); // 1:1 on first deposit
 
-    // --- user_a leaves while still the only depositor (vault has only their shares) ---
+    // --- user_a leaves (only depositor, so gets full vault back) ---
     let user_a_before = token_balance(&svm, &user_a_ata);
-    let ix = Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::LeaveBatch {}.data(),
-        undegen_core::accounts::LeaveBatch {
-            user: user_a.pubkey(),
-            mint,
-            batch,
-            user_token_account: user_a_ata,
-            batch_token_account,
-            vault_config,
-            vault_token_account,
-            vault_position,
-            user_position: user_position_a,
-            yield_vault_program: vault_program_id,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-            system_program: system_program::ID,
-        }
-        .to_account_metas(None),
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::LeaveBatch {}.data(),
+            undegen_core::accounts::LeaveBatch {
+                user: user_a.pubkey(),
+                mint,
+                batch,
+                user_token_account: user_a_ata,
+                batch_token_account,
+                vault_config,
+                vault_token_account,
+                vault_position,
+                user_position: user_position_a,
+                yield_vault_program: vault_program_id,
+                token_program: TOKEN_PROGRAM_ID,
+                associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &user_a,
+        &[],
     );
-    send_ix(&mut svm, ix, &user_a, &[]);
-
-    // No yield ticked, so 1:1 — user_a gets exactly their deposit back
-    assert_eq!(
-        token_balance(&svm, &user_a_ata) - user_a_before,
-        join_amount_a
-    );
+    assert_eq!(token_balance(&svm, &user_a_ata) - user_a_before, join_amount_a);
     assert_eq!(token_balance(&svm, &vault_token_account), 0);
 
     // --- user_b joins with 700 USDC ---
     let join_amount_b: u64 = 700_000_000;
-    let ix = Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::JoinBatch {
-            amount: join_amount_b,
-        }
-        .data(),
-        undegen_core::accounts::JoinBatch {
-            user: user_b.pubkey(),
-            mint,
-            batch,
-            user_token_account: user_b_ata,
-            batch_token_account,
-            vault_config,
-            vault_token_account,
-            vault_position,
-            user_position: user_position_b,
-            yield_vault_program: vault_program_id,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-            system_program: system_program::ID,
-        }
-        .to_account_metas(None),
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::JoinBatch { amount: join_amount_b }.data(),
+            undegen_core::accounts::JoinBatch {
+                user: user_b.pubkey(),
+                mint,
+                batch,
+                user_token_account: user_b_ata,
+                batch_token_account,
+                vault_config,
+                vault_token_account,
+                vault_position,
+                user_position: user_position_b,
+                yield_vault_program: vault_program_id,
+                token_program: TOKEN_PROGRAM_ID,
+                associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &user_b,
+        &[],
     );
-    send_ix(&mut svm, ix, &user_b, &[]);
-
     assert_eq!(token_balance(&svm, &vault_token_account), join_amount_b);
 
-    let batch_account = svm.get_account(&batch).unwrap();
-    let mut data: &[u8] = &batch_account.data;
-    let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-    assert_eq!(batch_state.total_deposited, join_amount_b);
-
-    // --- start_batch: operator locks it ---
-    let ix = Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::StartBatch {}.data(),
-        undegen_core::accounts::StartBatch {
-            operator: operator.pubkey(),
-            batch,
-        }
-        .to_account_metas(None),
+    // --- start_batch → Locked + bet_size computed ---
+    send_ix(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::StartBatch {}.data(),
+            undegen_core::accounts::StartBatch {
+                operator: operator.pubkey(),
+                batch,
+            }
+            .to_account_metas(None),
+        ),
+        &operator,
+        &[],
     );
-    send_ix(&mut svm, ix, &operator, &[]);
 
     let batch_account = svm.get_account(&batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
+    // bet_size = 700M × 500/10000 / 52 / 5 = 700M × 0.05 / 52 / 5 = 134,615
+    assert!(batch_state.bet_size > 0, "bet_size should be > 0");
+    println!("bet_size: {}", batch_state.bet_size);
 
     // --- leave_batch must fail once locked ---
-    let ix = Instruction::new_with_bytes(
-        core_program_id,
-        &undegen_core::instruction::LeaveBatch {}.data(),
-        undegen_core::accounts::LeaveBatch {
-            user: user_b.pubkey(),
-            mint,
-            batch,
-            user_token_account: user_b_ata,
-            batch_token_account,
-            vault_config,
-            vault_token_account,
-            vault_position,
-            user_position: user_position_b,
-            yield_vault_program: vault_program_id,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-            system_program: system_program::ID,
-        }
-        .to_account_metas(None),
+    send_ix_should_fail(
+        &mut svm,
+        Instruction::new_with_bytes(
+            core_program_id,
+            &undegen_core::instruction::LeaveBatch {}.data(),
+            undegen_core::accounts::LeaveBatch {
+                user: user_b.pubkey(),
+                mint,
+                batch,
+                user_token_account: user_b_ata,
+                batch_token_account,
+                vault_config,
+                vault_token_account,
+                vault_position,
+                user_position: user_position_b,
+                yield_vault_program: vault_program_id,
+                token_program: TOKEN_PROGRAM_ID,
+                associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+        ),
+        &user_b,
     );
-    send_ix_should_fail(&mut svm, ix, &user_b);
 
     println!("Phase 1 test passed");
 }

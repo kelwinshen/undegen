@@ -1,4 +1,4 @@
-use crate::constants::BATCH_SEED;
+use crate::constants::{BATCH_SEED, MAX_BETS};
 use crate::error::CoreError;
 use crate::state::{Batch, BatchStatus};
 use anchor_lang::prelude::*;
@@ -10,17 +10,36 @@ pub fn start_batch_handler(ctx: Context<StartBatch>) -> Result<()> {
         CoreError::Unauthorized
     );
     require!(batch.status == BatchStatus::Lobby, CoreError::NotInLobby);
+    require!(batch.total_deposited > 0, CoreError::InvalidAmount);
 
+    // Compute fixed bet_size = total_deposited × apy_bps / 10000 / 52 / MAX_BETS
+    // This is the guaranteed prize pool per bet regardless of vault performance
+    let annual_yield = (batch.total_deposited as u128)
+        .checked_mul(batch.apy_bps as u128)
+        .ok_or(CoreError::MathOverflow)?
+        .checked_div(10_000)
+        .ok_or(CoreError::MathOverflow)?;
+
+    let weekly_yield = annual_yield
+        .checked_div(52)
+        .ok_or(CoreError::MathOverflow)?;
+
+    let bet_size = weekly_yield
+        .checked_div(MAX_BETS as u128)
+        .ok_or(CoreError::MathOverflow)? as u64;
+
+    require!(bet_size > 0, CoreError::InvalidAmount);
+
+    batch.bet_size = bet_size;
     batch.status = BatchStatus::Locked;
-    // Snapshot baseline so yield is measured from the moment the batch locks.
-    // Subsequent bets measure yield as current_underlying - baseline_underlying,
-    // and baseline is updated after each settlement (including any compounded winnings).
-    batch.baseline_underlying = batch.total_deposited;
 
     msg!(
-        "Batch {} locked, baseline_underlying={}",
+        "Batch {} locked — total_deposited={} apy_bps={} bet_size={} max_bets={}",
         batch.batch_id,
-        batch.baseline_underlying
+        batch.total_deposited,
+        batch.apy_bps,
+        bet_size,
+        MAX_BETS,
     );
     Ok(())
 }

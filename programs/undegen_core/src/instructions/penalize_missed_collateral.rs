@@ -28,6 +28,7 @@ pub fn penalize_missed_collateral_handler(ctx: Context<PenalizeMissedCollateral>
     batch.collateral_deposited = 0;
     batch.yes_weight = 0;
     batch.no_weight = 0;
+    batch.operator_yield_bps = batch.operator_yield_bps.saturating_sub(2000);
 
     msg!("Operator missed collateral deadline — bet cancelled, no commission earned");
     Ok(())

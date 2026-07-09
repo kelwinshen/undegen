@@ -9,7 +9,7 @@ pub fn finalize_consensus_handler(ctx: Context<FinalizeConsensus>) -> Result<()>
 
     let clock = Clock::get()?;
     require!(
-        clock.unix_timestamp >= batch.kickoff_timestamp - 3600,
+        clock.unix_timestamp >= batch.kickoff_timestamp.saturating_sub(3600),
         CoreError::KickoffNotReached
     );
 

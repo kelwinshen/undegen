@@ -6,13 +6,11 @@ pub enum BatchStatus {
     Locked,
     AwaitingCollateral,
     Active,
-    AwaitingProof,
     Settled,
     Cancelled,
 }
 
 // Mirrors TxOdds MarketIntentParams — stored on Batch at propose_match time
-// so we can reconstruct the exact CPI call at settlement
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, Default)]
 pub struct BetTerms {
     pub fixture_id: i64,
@@ -27,27 +25,38 @@ pub struct BetTerms {
 #[account]
 #[derive(InitSpace)]
 pub struct Batch {
-    pub forfeited_collateral: u64,
-    pub baseline_underlying: u64,
-    pub odds_numerator: u64,
-    pub odds_denominator: u64,
+    // Identity
+    pub batch_id: u64,
     pub operator: Pubkey,
     pub mint: Pubkey,
+    pub bump: u8,
+
+    // Vault connection
     pub vault_position: Pubkey,
+
+    // Lifecycle
     pub status: BatchStatus,
     pub total_deposited: u64,
-    pub commission_bps: u16,
+
+    // Guaranteed yield betting model
+    pub apy_bps: u16,              // operator-set APY in basis points (e.g. 500 = 5%)
+    pub bet_size: u64,             // fixed prize per bet, computed at start_batch
+    pub bets_completed: u8,        // how many bets have been settled
+    pub accumulated_winnings: u64, // total winnings users have earned across all bets
+
+
+  pub operator_yield_bps: u16,
+
+    // Current bet proposal (reset after each bet)
     pub bet_terms: BetTerms,
     pub kickoff_timestamp: i64,
-    pub win_prize: u64,
+    pub win_prize: u64,            // = bet_size for current bet
     pub yes_weight: u64,
     pub no_weight: u64,
     pub collateral_required: u64,
     pub collateral_deposited: u64,
     pub proof_deadline: i64,
-    pub outcome: Option<bool>,
-    pub batch_id: u64,
-    pub bump: u8,
+    pub outcome: Option<bool>,     // result of current bet
 }
 
 #[account]
@@ -60,5 +69,13 @@ pub struct UserPosition {
     pub has_voted: bool,
     pub vote_yes: bool,
     pub claimed: bool,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct ProtocolConfig {
+    pub admin: Pubkey,
+    pub next_batch_id: u64,
     pub bump: u8,
 }

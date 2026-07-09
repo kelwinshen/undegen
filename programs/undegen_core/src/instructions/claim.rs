@@ -1,32 +1,25 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
-use yield_vault::cpi::accounts::Withdraw;
 use yield_vault::program::YieldVault;
 
-use crate::constants::{BATCH_SEED, COLLATERAL_SEED, USER_POSITION_SEED};
+use crate::constants::{BATCH_SEED, USER_POSITION_SEED};
 use crate::error::CoreError;
 use crate::state::{Batch, BatchStatus, UserPosition};
 
 pub fn claim_handler(ctx: Context<Claim>) -> Result<()> {
-    let batch = &ctx.accounts.batch;
+    // 1. Change to mut so we can update total_deposited later
+    let batch = &mut ctx.accounts.batch; 
     let position = &ctx.accounts.user_position;
 
     require!(batch.status == BatchStatus::Settled, CoreError::AlreadyFinished);
     require!(!position.claimed, CoreError::AlreadyClaimed);
-    require!(position.vault_shares > 0, CoreError::InvalidAmount);
+    require!(position.deposited_amount > 0, CoreError::InvalidAmount);
 
-    let user_shares = position.vault_shares;
     let user_deposited = position.deposited_amount;
     let total_deposited = batch.total_deposited;
-    let forfeited_collateral = batch.forfeited_collateral;
     let batch_id_bytes = batch.batch_id.to_le_bytes();
     let batch_bump = batch.bump;
-
-    msg!(
-        "CLAIM: user_shares={} user_deposited={} total_deposited={} forfeited={}",
-        user_shares, user_deposited, total_deposited, forfeited_collateral
-    );
 
     let signer_seeds: &[&[&[u8]]] = &[&[
         BATCH_SEED,
@@ -34,81 +27,127 @@ pub fn claim_handler(ctx: Context<Claim>) -> Result<()> {
         &[batch_bump],
     ]];
 
-    // --- Step 1: Withdraw exact user shares from yield_vault ---
-    yield_vault::cpi::withdraw(
-        CpiContext::new_with_signer(
-            ctx.accounts.yield_vault_program.key(),
-            Withdraw {
-                depositor: ctx.accounts.batch.to_account_info(),
-                vault_config: ctx.accounts.vault_config.to_account_info(),
-                mint: ctx.accounts.mint.to_account_info(),
-                vault_token_account: ctx.accounts.vault_token_account.to_account_info(),
-                depositor_token_account: ctx.accounts.batch_token_account.to_account_info(),
-                position: ctx.accounts.vault_position.to_account_info(),
-                token_program: ctx.accounts.token_program.to_account_info(),
-            },
-            signer_seeds,
-        ),
-        user_shares,
-    )?;
+    // --- Step 1: Withdraw principal only from yield_vault ---
+    let vault_config_data = ctx.accounts.vault_config.try_borrow_data()?;
+    let mut vault_slice: &[u8] = &vault_config_data;
+    let vault_state = yield_vault::state::VaultConfig::try_deserialize(&mut vault_slice)?;
+    drop(vault_config_data);
 
-    // Forward vault payout from batch_token_account to user
-    ctx.accounts.batch_token_account.reload()?;
-    let vault_payout = ctx.accounts.batch_token_account.amount;
-    if vault_payout > 0 {
-        token_interface::transfer_checked(
+    let vault_position_data = ctx.accounts.vault_position.try_borrow_data()?;
+    let mut pos_slice: &[u8] = &vault_position_data;
+    let position_state = yield_vault::state::Position::try_deserialize(&mut pos_slice)?;
+    drop(vault_position_data);
+
+    require!(vault_state.total_shares > 0, CoreError::InvalidAmount);
+    require!(vault_state.total_underlying > 0, CoreError::InvalidAmount);
+
+    let user_shares = (position_state.shares as u128)
+        .checked_mul(user_deposited as u128)
+        .ok_or(CoreError::MathOverflow)?
+        .checked_div(total_deposited as u128)
+        .ok_or(CoreError::MathOverflow)? as u64;
+
+    let user_underlying = (user_shares as u128)
+        .checked_mul(vault_state.total_underlying as u128)
+        .ok_or(CoreError::MathOverflow)?
+        .checked_div(vault_state.total_shares as u128)
+        .ok_or(CoreError::MathOverflow)? as u64;
+
+    let withdraw_underlying = user_underlying.min(user_deposited);
+
+    let shares_to_withdraw = (withdraw_underlying as u128)
+        .checked_mul(vault_state.total_shares as u128)
+        .ok_or(CoreError::MathOverflow)?
+        .checked_div(vault_state.total_underlying as u128)
+        .ok_or(CoreError::MathOverflow)? as u64;
+
+    if shares_to_withdraw > 0 {
+        // Track the balance BEFORE the vault CPI to avoid sweeping pre-existing collateral
+        ctx.accounts.batch_token_account.reload()?;
+        let balance_before = ctx.accounts.batch_token_account.amount;
+
+        yield_vault::cpi::withdraw(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.key(),
-                TransferChecked {
+                ctx.accounts.yield_vault_program.key(),
+                yield_vault::cpi::accounts::Withdraw {
+                    depositor: batch.to_account_info(),
+                    vault_config: ctx.accounts.vault_config.to_account_info(),
                     mint: ctx.accounts.mint.to_account_info(),
-                    from: ctx.accounts.batch_token_account.to_account_info(),
-                    to: ctx.accounts.user_token_account.to_account_info(),
-                    authority: ctx.accounts.batch.to_account_info(),
+                    vault_token_account: ctx.accounts.vault_token_account.to_account_info(),
+                    depositor_token_account: ctx.accounts.batch_token_account.to_account_info(),
+                    position: ctx.accounts.vault_position.to_account_info(),
+                    token_program: ctx.accounts.token_program.to_account_info(),
                 },
                 signer_seeds,
             ),
-            vault_payout,
-            ctx.accounts.mint.decimals,
+            shares_to_withdraw,
         )?;
-    }
 
-    // --- Step 2: Proportional share of forfeited collateral (settle_default case) ---
-    if forfeited_collateral > 0 && total_deposited > 0 {
-        let user_collateral_share = (forfeited_collateral as u128)
-            .checked_mul(user_deposited as u128)
-            .ok_or(CoreError::MathOverflow)?
-            .checked_div(total_deposited as u128)
-            .ok_or(CoreError::MathOverflow)? as u64;
+        // Calculate exactly what the vault yielded from this call
+        ctx.accounts.batch_token_account.reload()?;
+        let balance_after = ctx.accounts.batch_token_account.amount;
+        let vault_payout = balance_after.checked_sub(balance_before).ok_or(CoreError::MathOverflow)?;
 
-        if user_collateral_share > 0 {
+        if vault_payout > 0 {
             token_interface::transfer_checked(
                 CpiContext::new_with_signer(
                     ctx.accounts.token_program.key(),
                     TransferChecked {
                         mint: ctx.accounts.mint.to_account_info(),
-                        from: ctx.accounts.collateral_token_account.to_account_info(),
+                        from: ctx.accounts.batch_token_account.to_account_info(),
                         to: ctx.accounts.user_token_account.to_account_info(),
-                        authority: ctx.accounts.batch.to_account_info(),
+                        authority: batch.to_account_info(),
                     },
                     signer_seeds,
                 ),
-                user_collateral_share,
+                vault_payout,
                 ctx.accounts.mint.decimals,
             )?;
         }
     }
 
-    // Mark position as claimed and reduce total_deposited
+    // --- Step 2: User's proportional share of batch_token_account balance ---
+    ctx.accounts.batch_token_account.reload()?;
+    let batch_balance = ctx.accounts.batch_token_account.amount;
+    
+    if batch_balance > 0 && total_deposited > 0 {
+        let user_batch_share = (batch_balance as u128)
+            .checked_mul(user_deposited as u128)
+            .ok_or(CoreError::MathOverflow)?
+            .checked_div(total_deposited as u128)
+            .ok_or(CoreError::MathOverflow)? as u64;
+
+        if user_batch_share > 0 {
+            token_interface::transfer_checked(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.key(),
+                    TransferChecked {
+                        mint: ctx.accounts.mint.to_account_info(),
+                        from: ctx.accounts.batch_token_account.to_account_info(),
+                        to: ctx.accounts.user_token_account.to_account_info(),
+                        authority: batch.to_account_info(),
+                    },
+                    signer_seeds,
+                ),
+                user_batch_share,
+                ctx.accounts.mint.decimals,
+            )?;
+        }
+    }
+
+    // --- Step 3: State Updates ---
+    // Fixes the ratio bug by decrementing the static pool denominator for the next claimer
+    batch.total_deposited = batch.total_deposited.checked_sub(user_deposited).ok_or(CoreError::MathOverflow)?;
+
     let position = &mut ctx.accounts.user_position;
     position.claimed = true;
 
-
     msg!(
-        "User {} claimed from batch {} — shares={} deposited={}",
+        "User {} claimed from batch {} — deposited={} shares_withdrawn={}",
         ctx.accounts.user.key(),
-        batch.batch_id,
-        user_shares,
+        ctx.accounts.batch.batch_id,
         user_deposited,
+        shares_to_withdraw,
     );
     Ok(())
 }
@@ -145,15 +184,6 @@ pub struct Claim<'info> {
         associated_token::authority = batch,
     )]
     pub batch_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    #[account(
-        mut,
-        seeds = [COLLATERAL_SEED, batch.key().as_ref()],
-        bump,
-        token::mint = mint,
-        token::authority = batch,
-    )]
-    pub collateral_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: yield_vault VaultConfig
     #[account(mut)]
