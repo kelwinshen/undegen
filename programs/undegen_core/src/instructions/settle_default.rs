@@ -21,16 +21,17 @@ pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     batch.outcome = Some(true);
     batch.bets_completed = batch.bets_completed.saturating_add(1);
 
-    // Reset current bet state
-    batch.bet_terms = BetTerms::default();
+    // --- NEW: Reset current bet state for the multi-option array model ---
+    batch.bet_terms = [BetTerms::default(); 4];
+    batch.vote_weights = [0; 5];
+    batch.winning_vote_index = None;
+    
     batch.kickoff_timestamp = 0;
     batch.win_prize = 0;
     batch.collateral_required = 0;
     batch.collateral_deposited = 0;
     batch.proof_deadline = 0;
     batch.outcome = None;
-    batch.yes_weight = 0;
-    batch.no_weight = 0;
 
     // Move to Settled if all bets done, otherwise back to Locked for next bet
     if batch.bets_completed >= MAX_BETS {

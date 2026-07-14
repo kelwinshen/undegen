@@ -21,16 +21,21 @@ pub fn penalize_missed_collateral_handler(ctx: Context<PenalizeMissedCollateral>
 
     // Cancel bet — reset match state, back to Locked so operator can propose again
     batch.status = BatchStatus::Locked;
-    batch.bet_terms = BetTerms::default();
+    
+    // --- NEW: Reset the multi-option tracking arrays ---
+    batch.bet_terms = [BetTerms::default(); 4];
+    batch.vote_weights = [0; 5];
+    batch.winning_vote_index = None;
+    
     batch.kickoff_timestamp = 0;
     batch.win_prize = 0;
     batch.collateral_required = 0;
     batch.collateral_deposited = 0;
-    batch.yes_weight = 0;
-    batch.no_weight = 0;
+    
+    // Penalize the operator by slashing their yield
     batch.operator_yield_bps = batch.operator_yield_bps.saturating_sub(2000);
 
-    msg!("Operator missed collateral deadline — bet cancelled, no commission earned");
+    msg!("Operator missed collateral deadline — bet cancelled, no commission earned. Yield slashed.");
     Ok(())
 }
 

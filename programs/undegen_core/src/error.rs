@@ -44,4 +44,6 @@ pub enum CoreError {
     MatchIdMismatch,
     #[msg("No yield generated yet — tick the vault before proposing a match")]
     NothingToGrow,
+     #[msg("Invalid Oracle Account")]
+    InvalidOracleAccount
 }

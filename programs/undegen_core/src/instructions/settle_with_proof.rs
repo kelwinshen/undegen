@@ -9,30 +9,7 @@ use crate::error::CoreError;
 use crate::state::{Batch, BatchStatus, BetTerms};
 use crate::txodds_types::*;
 
-pub const TXODDS_PROGRAM_ID: Pubkey =
-    anchor_lang::solana_program::pubkey::pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
-
-pub const AUDIT_TRADE_RESULT_DISCRIMINATOR: [u8; 8] = [50, 242, 243, 5, 209, 75, 76, 91];
-
-fn bet_terms_to_market_params(terms: &BetTerms) -> MarketIntentParams {
-    let comparison = match terms.predicate_comparison {
-        0 => Comparison::GreaterThan,
-        1 => Comparison::LessThan,
-        _ => Comparison::EqualTo,
-    };
-    MarketIntentParams {
-        fixture_id: terms.fixture_id,
-        period: terms.period,
-        stat_a_key: terms.stat_a_key,
-        stat_b_key: terms.stat_b_key,
-        predicate: TraderPredicate {
-            threshold: terms.predicate_threshold,
-            comparison,
-        },
-        op: None,
-        negation: terms.negation,
-    }
-}
+use crate::constants::TXODDS_PROGRAM_ID;
 
 pub fn settle_with_proof_handler(
     ctx: Context<SettleWithProof>,
@@ -50,40 +27,52 @@ pub fn settle_with_proof_handler(
     let clock = Clock::get()?;
     require!(clock.unix_timestamp >= batch.kickoff_timestamp, CoreError::KickoffNotReached);
     require!(clock.unix_timestamp < batch.proof_deadline, CoreError::ProofDeadlineNotPassed);
-    require!(fixture_summary.fixture_id == batch.bet_terms.fixture_id, CoreError::MatchIdMismatch);
 
-    // --- TxOdds proof verification CPI ---
-    let terms = bet_terms_to_market_params(&batch.bet_terms);
-    let args = AuditTradeResultArgs {
-        terms,
-        fixture_summary,
-        main_tree_proof,
-        fixture_proof,
-        stat_a,
-        stat_b,
-        ts,
-    };
+    // Retrieve the winning index
+    let winning_index = batch.winning_vote_index.expect("Consensus not finalized");
 
-    let mut ix_data = AUDIT_TRADE_RESULT_DISCRIMINATOR.to_vec();
-    args.serialize(&mut ix_data)
-        .map_err(|_| CoreError::InvalidOracleSignature)?;
+    // Only invoke TxOdds if a specific bet was chosen (Indices 0-3)
+    if winning_index < 4 {
+        let active_term = &batch.bet_terms[winning_index as usize];
+        require!(fixture_summary.fixture_id == active_term.fixture_id, CoreError::MatchIdMismatch);
 
-    let txodds_accounts = vec![
-        AccountMeta::new(ctx.accounts.operator.key(), true),
-        AccountMeta::new_readonly(ctx.accounts.daily_scores_merkle_roots.key(), false),
-    ];
+        // --- PHASE 4 FIX: TxOdds proof verification using validate_stat ---
+        // Pass the predicate and op directly from our IDL-compliant BetTerms
+        let args = ValidateStatArgs {
+            ts,
+            fixture_summary,
+            fixture_proof,
+            main_tree_proof,
+            predicate: active_term.predicate, // Exact match to TraderPredicate
+            stat_a,
+            stat_b,
+            op: active_term.op,               // Exact match to BinaryExpression
+        };
 
-    anchor_lang::solana_program::program::invoke(
-        &Instruction {
-            program_id: TXODDS_PROGRAM_ID,
-            accounts: txodds_accounts,
-            data: ix_data,
-        },
-        &[
-            ctx.accounts.operator.to_account_info(),
-            ctx.accounts.daily_scores_merkle_roots.to_account_info(),
-        ],
-    ).map_err(|_| CoreError::InvalidOracleSignature)?;
+        // Use the new VALIDATE_STAT_DISCRIMINATOR
+        let mut ix_data = VALIDATE_STAT_DISCRIMINATOR.to_vec();
+        args.serialize(&mut ix_data)
+            .map_err(|_| CoreError::InvalidOracleSignature)?;
+
+        // The IDL for validate_stat only expects the Merkle roots account
+        let txodds_accounts = vec![
+            AccountMeta::new_readonly(ctx.accounts.daily_scores_merkle_roots.key(), false),
+        ];
+
+        anchor_lang::solana_program::program::invoke(
+            &Instruction {
+                program_id: TXODDS_PROGRAM_ID,
+                accounts: txodds_accounts,
+                data: ix_data,
+            },
+            &[
+                ctx.accounts.daily_scores_merkle_roots.to_account_info(),
+            ],
+        ).map_err(|_| CoreError::InvalidOracleSignature)?;
+    } else {
+        // Option 4 (Skip) was selected. Bypass oracle CPI.
+        msg!("Skip option selected. Bypassing TxOdds verification.");
+    }
 
     // Operator submitted proof on time — operator_yield_bps unchanged
     // Operator claims vault yield via claim_operator_yield after batch settles
@@ -96,8 +85,7 @@ pub fn settle_with_proof_handler(
     batch.bets_completed = batch.bets_completed.saturating_add(1);
 
     if outcome {
-        // Users won — compound operator collateral into vault
-        // Increases vault position value → users get more when they claim shares
+        // Users won (or match was skipped, compounding the base bet size)
         msg!("Users won — compounding collateral into vault");
         let collateral_amount = ctx.accounts.collateral_token_account.amount;
         if collateral_amount > 0 {
@@ -143,15 +131,16 @@ pub fn settle_with_proof_handler(
     }
 
     // --- Reset current bet state ---
-    batch.bet_terms = BetTerms::default();
+    batch.bet_terms = [BetTerms::default(); 4];
+    batch.vote_weights = [0; 5];
+    batch.winning_vote_index = None;
+
     batch.kickoff_timestamp = 0;
     batch.win_prize = 0;
     batch.collateral_required = 0;
     batch.collateral_deposited = 0;
     batch.proof_deadline = 0;
     batch.outcome = None;
-    batch.yes_weight = 0;
-    batch.no_weight = 0;
 
     // Move to Settled if all bets done, otherwise back to Locked
     if batch.bets_completed >= MAX_BETS {

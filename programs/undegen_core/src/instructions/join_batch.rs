@@ -90,7 +90,10 @@ pub fn join_batch_handler(ctx: Context<JoinBatch>, amount: u64) -> Result<()> {
         position.batch = batch.key();
         position.owner = ctx.accounts.user.key();
         position.has_voted = false;
-        position.vote_yes = false;
+        
+        // --- NEW: Initialize the vote_index instead of the boolean ---
+        position.vote_index = 0; 
+        
         position.claimed = false;
         position.vault_shares = 0;
         position.bump = ctx.bumps.user_position;

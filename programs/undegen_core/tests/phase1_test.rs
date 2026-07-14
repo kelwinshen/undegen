@@ -190,9 +190,17 @@ fn test_phase1_initialize_join_leave() {
     assert_eq!(batch_state.operator_yield_bps, 10000);
     assert_eq!(batch_state.total_deposited, 0);
     assert_eq!(batch_state.apy_bps, 500);
-    assert_eq!(batch_state.bet_size, 0); // computed at start_batch
+    assert_eq!(batch_state.bet_size, 0); 
     assert_eq!(batch_state.bets_completed, 0);
     assert_eq!(batch_state.accumulated_winnings, 0);
+    
+    // NEW: Assert the new fields we added to Batch match their Default state
+    assert_eq!(batch_state.outcome, None);
+    assert_eq!(batch_state.bet_terms.len(), 4);
+    assert_eq!(batch_state.bet_terms[0].fixture_id, 0); // Verify default bet terms
+    assert_eq!(batch_state.bet_terms[0].predicate.threshold, 0); // Verify nested TxOdds struct
+    assert_eq!(batch_state.vote_weights, [0; 5]);
+    assert_eq!(batch_state.winning_vote_index, None);
 
     // Shared accounts
     let batch_token_account = derive_ata(&batch, &mint);
@@ -256,7 +264,9 @@ fn test_phase1_initialize_join_leave() {
     let mut data: &[u8] = &pos_account.data;
     let pos_state = undegen_core::state::UserPosition::try_deserialize(&mut data).unwrap();
     assert_eq!(pos_state.deposited_amount, join_amount_a);
-    assert_eq!(pos_state.vault_shares, join_amount_a); // 1:1 on first deposit
+    assert_eq!(pos_state.vault_shares, join_amount_a); 
+    assert_eq!(pos_state.has_voted, false);
+    assert_eq!(pos_state.vote_index, 0);
 
     // --- user_a leaves (only depositor, so gets full vault back) ---
     let user_a_before = token_balance(&svm, &user_a_ata);
@@ -337,9 +347,14 @@ fn test_phase1_initialize_join_leave() {
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
-    // bet_size = 700M × 500/10000 / 52 / 5 = 700M × 0.05 / 52 / 5 = 134,615
     assert!(batch_state.bet_size > 0, "bet_size should be > 0");
     println!("bet_size: {}", batch_state.bet_size);
+    
+    // NEW: Double check arrays reset successfully during the start_batch command
+    assert_eq!(batch_state.vote_weights, [0; 5]);
+    assert_eq!(batch_state.bet_terms.len(), 4);
+    assert_eq!(batch_state.winning_vote_index, None);
+    assert_eq!(batch_state.outcome, None); // Verify outcome remains None
 
     // --- leave_batch must fail once locked ---
     send_ix_should_fail(

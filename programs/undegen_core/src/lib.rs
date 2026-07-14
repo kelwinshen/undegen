@@ -8,18 +8,19 @@ pub mod txodds_types;
 
 use instructions::*;
 
-declare_id!("FLMTi3AzSvyTNsutnirzN6pdsKRDaZaVdeibBCfG8mgL");
+declare_id!("BgAM2mzfbFhcA1F3AfjfnV1nzyTJXb6bSz5BX7Wufwma");
 
 #[program]
 pub mod undegen_core {
     use super::*;
 
-pub fn initialize_batch(ctx: Context<InitializeBatch>, apy_bps: u16) -> Result<()> {
-    instructions::initialize_batch::initialize_batch_handler(ctx, apy_bps)
-}
+    pub fn initialize_batch(ctx: Context<InitializeBatch>, apy_bps: u16) -> Result<()> {
+        instructions::initialize_batch::initialize_batch_handler(ctx, apy_bps)
+    }
+
     pub fn initialize_protocol(ctx: Context<InitializeProtocol>) -> Result<()> {
-    instructions::initialize_protocol::initialize_protocol_handler(ctx)
-}
+        instructions::initialize_protocol::initialize_protocol_handler(ctx)
+    }
 
     pub fn join_batch(ctx: Context<JoinBatch>, amount: u64) -> Result<()> {
         instructions::join_batch::join_batch_handler(ctx, amount)
@@ -32,33 +33,48 @@ pub fn initialize_batch(ctx: Context<InitializeBatch>, apy_bps: u16) -> Result<(
     pub fn start_batch(ctx: Context<StartBatch>) -> Result<()> {
         instructions::start_batch::start_batch_handler(ctx)
     }
-pub fn propose_match(
-    ctx: Context<ProposeMatch>,
-    fixture_id: i64,
-    kickoff_timestamp: i64,
-    period: u16,
-    stat_a_key: u32,
-    stat_b_key: Option<u32>,
-    predicate_threshold: i32,
-    predicate_comparison: u8,
-    negation: bool,
-) -> Result<()> {
-    instructions::propose_match::propose_match_handler(
-        ctx, fixture_id, kickoff_timestamp,
-        period, stat_a_key, stat_b_key,
-        predicate_threshold, predicate_comparison, negation,
-    )
-}
-    pub fn cast_vote(ctx: Context<CastVote>, vote_yes: bool) -> Result<()> {
-        instructions::cast_vote::cast_vote_handler(ctx, vote_yes)
+
+    // UPDATED: Now accepts an array of 4 BetTerms instead of individual binary parameters
+    pub fn propose_match(
+        ctx: Context<ProposeMatch>,
+        bet_terms_array: [crate::state::BetTerms; 4],
+        kickoff_timestamp: i64,
+    ) -> Result<()> {
+        instructions::propose_match::propose_match_handler(
+            ctx, 
+            bet_terms_array, 
+            kickoff_timestamp
+        )
+    }
+
+    // UPDATED: Now takes the vote_index (0-4) instead of a boolean
+    pub fn cast_vote(ctx: Context<CastVote>, vote_index: u8) -> Result<()> {
+        instructions::cast_vote::cast_vote_handler(ctx, vote_index)
     }
 
     pub fn finalize_consensus(ctx: Context<FinalizeConsensus>) -> Result<()> {
         instructions::finalize_consensus::finalize_consensus_handler(ctx)
     }
 
-    pub fn deposit_collateral(ctx: Context<DepositCollateral>, amount: u64) -> Result<()> {
-        instructions::deposit_collateral::deposit_collateral_handler(ctx, amount)
+    // UPDATED: Now accepts the oracle_price_index and the full TxOdds validation payload
+    pub fn deposit_collateral(
+        ctx: Context<DepositCollateral>, 
+        amount: u64,
+        oracle_price_index: u8,
+        odds_snapshot: crate::txodds_types::Odds,
+        summary: crate::txodds_types::OddsBatchSummary,
+        sub_tree_proof: Vec<crate::txodds_types::ProofNode>,
+        main_tree_proof: Vec<crate::txodds_types::ProofNode>,
+    ) -> Result<()> {
+        instructions::deposit_collateral::deposit_collateral_handler(
+            ctx, 
+            amount, 
+            oracle_price_index, 
+            odds_snapshot, 
+            summary, 
+            sub_tree_proof, 
+            main_tree_proof
+        )
     }
 
     pub fn penalize_missed_collateral(ctx: Context<PenalizeMissedCollateral>) -> Result<()> {
@@ -96,6 +112,6 @@ pub fn propose_match(
     }
 
     pub fn claim_operator_yield(ctx: Context<ClaimOperatorYield>) -> Result<()> {
-    instructions::claim_operator_yield::claim_operator_yield_handler(ctx)
-}
+        instructions::claim_operator_yield::claim_operator_yield_handler(ctx)
+    }
 }

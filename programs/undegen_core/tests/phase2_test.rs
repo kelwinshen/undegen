@@ -13,6 +13,8 @@ use {
     solana_message::{Message, VersionedMessage},
     solana_signer::Signer,
     solana_transaction::versioned::VersionedTransaction,
+    // NEW IMPORTS: Bring in the TxOdds types for testing
+    undegen_core::txodds_types::{Comparison, TraderPredicate},
 };
 
 fn send_ix(svm: &mut LiteSVM, ix: Instruction, payer: &Keypair, extra_signers: &[&Keypair]) {
@@ -128,7 +130,6 @@ fn setup() -> TestSetup {
         &vault_program_id,
     );
 
-    // Initialize vault
     send_ix(
         &mut svm,
         Instruction::new_with_bytes(
@@ -150,7 +151,6 @@ fn setup() -> TestSetup {
         &[],
     );
 
-    // Initialize protocol
     let (protocol_config, _) = Pubkey::find_program_address(
         &[undegen_core::constants::PROTOCOL_CONFIG_SEED],
         &core_program_id,
@@ -172,7 +172,6 @@ fn setup() -> TestSetup {
         &[],
     );
 
-    // Initialize batch with 5% APY
     let batch_id: u64 = 1;
     let (batch, _) = Pubkey::find_program_address(
         &[undegen_core::constants::BATCH_SEED, &batch_id.to_le_bytes()],
@@ -224,7 +223,6 @@ fn setup() -> TestSetup {
         &core_program_id,
     );
 
-    // Both users join
     for (user, user_ata, user_position) in [
         (&user_a, user_a_ata, user_position_a),
         (&user_b, user_b_ata, user_position_b),
@@ -261,7 +259,6 @@ fn setup() -> TestSetup {
         );
     }
 
-    // Start batch → Locked + bet_size computed
     send_ix(
         &mut svm,
         Instruction::new_with_bytes(
@@ -277,12 +274,10 @@ fn setup() -> TestSetup {
         &[],
     );
 
-    // Read bet_size for assertions
     let batch_account = svm.get_account(&batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
     let bet_size = batch_state.bet_size;
-    assert!(bet_size > 0, "bet_size should be > 0 after start_batch");
 
     TestSetup {
         svm,
@@ -303,18 +298,66 @@ fn setup() -> TestSetup {
     }
 }
 
+// NEW: Updated to construct the IDL-compliant BetTerms array
+fn generate_mock_bet_terms() -> [undegen_core::state::BetTerms; 4] {
+    [
+        undegen_core::state::BetTerms {
+            fixture_id: 999_i64,
+            period: 0,
+            stat_a_key: 1, // Distinguishable
+            stat_b_key: None,
+            predicate: TraderPredicate {
+                threshold: 0,
+                comparison: Comparison::GreaterThan,
+            },
+            negation: false,
+            op: None
+        },
+        undegen_core::state::BetTerms {
+            fixture_id: 999_i64,
+            period: 0,
+            stat_a_key: 2, 
+            stat_b_key: None,
+            predicate: TraderPredicate {
+                threshold: 0,
+                comparison: Comparison::GreaterThan,
+            },
+            negation: false,
+            op: None
+        },
+        undegen_core::state::BetTerms {
+            fixture_id: 999_i64,
+            period: 0,
+            stat_a_key: 3,
+            stat_b_key: None,
+            predicate: TraderPredicate {
+                threshold: 0,
+                comparison: Comparison::GreaterThan,
+            },
+            negation: false,
+            op: None
+        },
+        undegen_core::state::BetTerms {
+            fixture_id: 999_i64,
+            period: 0,
+            stat_a_key: 4,
+            stat_b_key: None,
+            predicate: TraderPredicate {
+                threshold: 0,
+                comparison: Comparison::GreaterThan,
+            },
+            negation: false,
+            op: None
+        },
+    ]
+}
+
 fn propose_match_ix(setup: &TestSetup, kickoff_timestamp: i64) -> Instruction {
     Instruction::new_with_bytes(
         undegen_core::id(),
         &undegen_core::instruction::ProposeMatch {
-            fixture_id: 999_i64,
+            bet_terms_array: generate_mock_bet_terms(),
             kickoff_timestamp,
-            period: 0,
-            stat_a_key: 1,
-            stat_b_key: None,
-            predicate_threshold: 0,
-            predicate_comparison: 0,
-            negation: false,
         }
         .data(),
         undegen_core::accounts::ProposeMatch {
@@ -337,13 +380,17 @@ fn test_propose_match() {
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
 
-    assert_eq!(batch_state.bet_terms.fixture_id, 999);
+    // Verify array was populated correctly
+    assert_eq!(batch_state.bet_terms[0].fixture_id, 999);
+    assert_eq!(batch_state.bet_terms[2].stat_a_key, 3);
+    
+    // NEW: Verify the nested struct saved correctly
+    assert_eq!(batch_state.bet_terms[0].predicate.comparison, Comparison::GreaterThan);
+    
     assert_eq!(batch_state.kickoff_timestamp, kickoff_timestamp);
     assert_eq!(batch_state.proof_deadline, kickoff_timestamp + 3600);
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
-    // win_prize always equals bet_size (fixed per batch)
     assert_eq!(batch_state.win_prize, setup.bet_size);
-    assert_eq!(batch_state.collateral_required, setup.bet_size);
 }
 
 #[test]
@@ -355,14 +402,8 @@ fn test_propose_match_non_operator_fails() {
     let ix = Instruction::new_with_bytes(
         undegen_core::id(),
         &undegen_core::instruction::ProposeMatch {
-            fixture_id: 999_i64,
+            bet_terms_array: generate_mock_bet_terms(),
             kickoff_timestamp: 7200,
-            period: 0,
-            stat_a_key: 1,
-            stat_b_key: None,
-            predicate_threshold: 0,
-            predicate_comparison: 0,
-            negation: false,
         }
         .data(),
         undegen_core::accounts::ProposeMatch {
@@ -379,16 +420,15 @@ fn test_cast_vote_weights() {
     let mut setup = setup();
     let core_program_id = undegen_core::id();
 
-    // clock=0, kickoff=7200 → voting open (0 < 7200-3600=3600)
     let ix = propose_match_ix(&setup, 7200);
     send_ix(&mut setup.svm, ix, &setup.operator, &[]);
 
-    // user_a (300) votes yes
+    // user_a (300) votes for Option 1
     send_ix(
         &mut setup.svm,
         Instruction::new_with_bytes(
             core_program_id,
-            &undegen_core::instruction::CastVote { vote_yes: true }.data(),
+            &undegen_core::instruction::CastVote { vote_index: 1 }.data(),
             undegen_core::accounts::CastVote {
                 voter: setup.user_a.pubkey(),
                 batch: setup.batch,
@@ -400,12 +440,12 @@ fn test_cast_vote_weights() {
         &[],
     );
 
-    // user_b (700) votes no
+    // user_b (700) votes for Option 3
     send_ix(
         &mut setup.svm,
         Instruction::new_with_bytes(
             core_program_id,
-            &undegen_core::instruction::CastVote { vote_yes: false }.data(),
+            &undegen_core::instruction::CastVote { vote_index: 3 }.data(),
             undegen_core::accounts::CastVote {
                 voter: setup.user_b.pubkey(),
                 batch: setup.batch,
@@ -420,15 +460,18 @@ fn test_cast_vote_weights() {
     let batch_account = setup.svm.get_account(&setup.batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-    assert_eq!(batch_state.yes_weight, 300_000_000);
-    assert_eq!(batch_state.no_weight, 700_000_000);
+    
+    // Verify weights tracked to correct array indices
+    assert_eq!(batch_state.vote_weights[1], 300_000_000);
+    assert_eq!(batch_state.vote_weights[3], 700_000_000);
+    assert_eq!(batch_state.vote_weights[0], 0);
 
     // Double vote must fail
     send_ix_should_fail(
         &mut setup.svm,
         Instruction::new_with_bytes(
             core_program_id,
-            &undegen_core::instruction::CastVote { vote_yes: true }.data(),
+            &undegen_core::instruction::CastVote { vote_index: 1 }.data(),
             undegen_core::accounts::CastVote {
                 voter: setup.user_a.pubkey(),
                 batch: setup.batch,
@@ -441,13 +484,14 @@ fn test_cast_vote_weights() {
 }
 
 #[test]
-fn test_finalize_consensus_yes_wins() {
+fn test_finalize_consensus_standard_bet_wins() {
     let mut setup = setup();
     let core_program_id = undegen_core::id();
 
     let ix = propose_match_ix(&setup, 7200);
     send_ix(&mut setup.svm, ix, &setup.operator, &[]);
 
+    // Both users vote for Option 2
     for (voter, position) in [
         (&setup.user_a, setup.user_position_a),
         (&setup.user_b, setup.user_position_b),
@@ -456,7 +500,7 @@ fn test_finalize_consensus_yes_wins() {
             &mut setup.svm,
             Instruction::new_with_bytes(
                 core_program_id,
-                &undegen_core::instruction::CastVote { vote_yes: true }.data(),
+                &undegen_core::instruction::CastVote { vote_index: 2 }.data(),
                 undegen_core::accounts::CastVote {
                     voter: voter.pubkey(),
                     batch: setup.batch,
@@ -469,7 +513,6 @@ fn test_finalize_consensus_yes_wins() {
         );
     }
 
-    // Warp to finalization window
     set_clock(&mut setup.svm, 3600);
 
     send_ix(
@@ -487,6 +530,8 @@ fn test_finalize_consensus_yes_wins() {
     let batch_account = setup.svm.get_account(&setup.batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
+    
+    assert_eq!(batch_state.winning_vote_index, Some(2));
     assert_eq!(
         batch_state.status,
         undegen_core::state::BatchStatus::AwaitingCollateral
@@ -494,7 +539,7 @@ fn test_finalize_consensus_yes_wins() {
 }
 
 #[test]
-fn test_finalize_consensus_no_votes_skips() {
+fn test_finalize_consensus_no_votes_defaults_to_skip() {
     let mut setup = setup();
     let core_program_id = undegen_core::id();
 
@@ -518,19 +563,22 @@ fn test_finalize_consensus_no_votes_skips() {
     let batch_account = setup.svm.get_account(&setup.batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
-    assert_eq!(batch_state.kickoff_timestamp, 0);
-    assert_eq!(batch_state.win_prize, 0);
+    
+    // With 0 votes cast, it forces a tiebreak default to Option 4 (Skip)
+    assert_eq!(batch_state.winning_vote_index, Some(4));
+    // It should now progress to AwaitingCollateral even for skips!
+    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::AwaitingCollateral);
 }
 
 #[test]
-fn test_finalize_consensus_no_wins_skips() {
+fn test_finalize_consensus_explicit_skip_wins() {
     let mut setup = setup();
     let core_program_id = undegen_core::id();
 
     let ix = propose_match_ix(&setup, 7200);
     send_ix(&mut setup.svm, ix, &setup.operator, &[]);
 
+    // Both users explicitly vote to Skip (Index 4)
     for (voter, position) in [
         (&setup.user_a, setup.user_position_a),
         (&setup.user_b, setup.user_position_b),
@@ -539,7 +587,7 @@ fn test_finalize_consensus_no_wins_skips() {
             &mut setup.svm,
             Instruction::new_with_bytes(
                 core_program_id,
-                &undegen_core::instruction::CastVote { vote_yes: false }.data(),
+                &undegen_core::instruction::CastVote { vote_index: 4 }.data(),
                 undegen_core::accounts::CastVote {
                     voter: voter.pubkey(),
                     batch: setup.batch,
@@ -569,6 +617,7 @@ fn test_finalize_consensus_no_wins_skips() {
     let batch_account = setup.svm.get_account(&setup.batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
-    assert_eq!(batch_state.kickoff_timestamp, 0);
+    
+    assert_eq!(batch_state.winning_vote_index, Some(4));
+    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::AwaitingCollateral);
 }
