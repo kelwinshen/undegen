@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 
-const API_BASE = 'https://txline.txodds.com';
+const API_BASE = 'https://txline-dev.txodds.com';
 const TRUSTED_BOOKMAKER_ID = 10021;
-
-const dailyCache = new Map<string, any>();
 
 function getUTCDateString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -23,85 +21,71 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const fetchAll = searchParams.get('all') === '1';
   const fetchPast = searchParams.get('past') === '1';
+  const fetchYesterday = true;
 
   const headers = {
     Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
     'X-Api-Token': process.env.API_TOKEN || '',
   };
 
-  const todayKey = getUTCDateString();
-
-  if (!fetchAll && !fetchPast && dailyCache.has(todayKey)) {
-    return NextResponse.json(dailyCache.get(todayKey));
-  }
+  const now = Date.now();
+  const currentEpochDay = Math.floor(now / 86400000);
 
   try {
-    const now = Date.now();
     let allFixtures: any[] = [];
 
-    if (fetchPast) {
-      // Aggressive Lookback: Fetch the last 5 days of snapshots in parallel
-      const currentEpochDay = Math.floor(now / 86400000);
+    if (fetchYesterday) {
+      const startEpochDay = currentEpochDay - 1;
+      const url = `${API_BASE}/api/fixtures/snapshot?startEpochDay=${startEpochDay}`;
+      const res = await fetch(url, { headers, cache: "no-store" });
+      if (res.ok) {
+        allFixtures = await res.json();
+      }
+    } else if (fetchPast) {
       const targetDays = [1, 2, 3, 4, 5].map((offset) => currentEpochDay - offset);
-
       const fetchPromises = targetDays.map((epochDay) =>
-        fetch(`${API_BASE}/api/fixtures/snapshot/${epochDay}`, {
+        fetch(`${API_BASE}/api/fixtures/snapshot?startEpochDay=${epochDay}`, {
           headers,
-          next: { revalidate: 3600 },
+          cache: "no-store",
         })
           .then((res) => (res.ok ? res.json() : []))
           .catch(() => [])
       );
-
       const snapshots = await Promise.all(fetchPromises);
       allFixtures = snapshots.flat();
     } else {
-      // Standard current snapshot fetch
       const fixtureRes = await fetch(`${API_BASE}/api/fixtures/snapshot`, {
         headers,
-        next: { revalidate: 3600 },
+        cache: "no-store",
       });
       allFixtures = await fixtureRes.json();
     }
 
     if (!Array.isArray(allFixtures)) throw new Error("Invalid fixtures data received");
 
-    const batchEnd = getBatchEndTime();
-
-    // Deduplicate fixtures by FixtureId since multiple day snapshots might overlap match entries
     const uniqueFixturesMap = new Map<number, any>();
     for (const f of allFixtures) {
       if (!f.FixtureId || !f.StartTime) continue;
-      uniqueFixturesMap.set(f.FixtureId, f);
+      
+      const startTime = Number(f.StartTime);
+      if (startTime > now) {
+        uniqueFixturesMap.set(f.FixtureId, f);
+      }
     }
 
-    const batchFixtures = Array.from(uniqueFixturesMap.values()).filter((f: any) => {
-      const start = Number(f.StartTime);
-      
-      if (fetchPast) {
-        return start < now;
-      }
-      
-      if (fetchAll) {
-        return start >= now;
-      }
-      
-      return start >= now && start < batchEnd;
-    });
+    const batchFixtures = Array.from(uniqueFixturesMap.values());
 
-    // Sort: newest completed matches first when viewing past matches
-    batchFixtures.sort((a: any, b: any) => {
-      if (fetchPast) return Number(b.StartTime) - Number(a.StartTime);
-      return Number(a.StartTime) - Number(b.StartTime);
-    });
+    batchFixtures.sort((a: any, b: any) => Number(a.StartTime) - Number(b.StartTime));
 
     const options: any[] = [];
 
     for (const f of batchFixtures) {
-      const oddsRes = await fetch(
-        `${API_BASE}/api/odds/snapshot/${f.FixtureId}`,
-        { headers, next: { revalidate: 3600 } }
-      );
+      const startTime = Number(f.StartTime);
+      const oddsUrl = fetchYesterday 
+        ? `${API_BASE}/api/odds/snapshot/${f.FixtureId}?asOf=${startTime}`
+        : `${API_BASE}/api/odds/snapshot/${f.FixtureId}`;
+
+      const oddsRes = await fetch(oddsUrl, { headers, cache: "no-store" });
       const rawOddsData = await oddsRes.json();
       const oddsMarkets = Array.isArray(rawOddsData) ? rawOddsData : [rawOddsData];
 
@@ -155,18 +139,8 @@ export async function GET(request: Request) {
       }
     }
 
-    const payload = { options };
-
-    if (!fetchAll && !fetchPast) {
-      dailyCache.clear();
-      dailyCache.set(todayKey, payload);
-    }
-
-    return NextResponse.json(payload);
+    return NextResponse.json({ options });
   } catch (error: any) {
-    if (!fetchAll && !fetchPast && dailyCache.has(todayKey)) {
-      return NextResponse.json(dailyCache.get(todayKey));
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

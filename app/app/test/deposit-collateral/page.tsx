@@ -6,13 +6,19 @@ import Link from "next/link";
 import {
   Connection,
   PublicKey,
-  Transaction,
   TransactionInstruction,
   SystemProgram,
   Keypair,
   ComputeBudgetProgram,
+  VersionedTransaction,
+  TransactionMessage,
+  AddressLookupTableAccount,
 } from "@solana/web3.js";
-import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  getAssociatedTokenAddress,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
 import Header from "@/app/components/home/Header";
@@ -72,12 +78,20 @@ const BatchLayout = borsh.struct([
 
 function writeUInt64LE(value: number | bigint | string): Buffer {
   const buf = Buffer.alloc(8);
-  new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigUint64(0, BigInt(value), true);
+  new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigUint64(
+    0,
+    BigInt(value),
+    true,
+  );
   return buf;
 }
 function writeInt64LE(value: number | bigint | string): Buffer {
   const buf = Buffer.alloc(8);
-  new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigInt64(0, BigInt(value), true);
+  new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigInt64(
+    0,
+    BigInt(value),
+    true,
+  );
   return buf;
 }
 function writeUInt32LE(value: number): Buffer {
@@ -145,7 +159,7 @@ function serializeSummary(s: any): Buffer {
     ? Buffer.from(oddsRoot)
     : Buffer.from(oddsRoot, "base64");
   if (rootBuf.length !== 32) throw new Error("oddsSubTreeRoot must be 32 bytes");
-  
+
   const stats = s.updateStats ?? s.update_stats;
   const updateCount = stats.updateCount ?? stats.update_count;
   const minTs = stats.minTimestamp ?? stats.min_timestamp;
@@ -165,21 +179,49 @@ function serializeProofVec(proofs: any[]): Buffer {
   if (!proofs || proofs.length === 0) return Buffer.alloc(4, 0);
 
   const parts = proofs.map((p) => {
-    let hashBuf: Buffer = Array.isArray(p.hash) ? Buffer.from(p.hash) : Buffer.from(p.hash, "base64");
+    let hashBuf: Buffer = Array.isArray(p.hash)
+      ? Buffer.from(p.hash)
+      : Buffer.from(p.hash, "base64");
     if (hashBuf.length !== 32) throw new Error("Proof hash must be 32 bytes");
-
-    // Standard interpretation: 
-    // If the API provides 'true', send 'true'. 
-    // We removed the '!' inversion.
     const isRight = Boolean(p.isRightSibling ?? p.is_right_sibling ?? false);
-    
     return Buffer.concat([hashBuf, Buffer.from([isRight ? 1 : 0])]);
   });
 
   const lengthBuf = Buffer.alloc(4);
   lengthBuf.writeUInt32LE(proofs.length);
-  
   return Buffer.concat([lengthBuf, ...parts]);
+}
+
+function serializeEmptyOdds(): Buffer {
+  return Buffer.concat([
+    writeInt64LE(0),
+    encodeString(""),
+    writeInt64LE(0),
+    encodeString(""),
+    writeInt32LE(0),
+    encodeString(""),
+    Buffer.from([0]),
+    Buffer.from([0]),
+    Buffer.from([0]),
+    Buffer.from([0]),
+    writeUInt32LE(0),
+    writeUInt32LE(0),
+  ]);
+}
+
+function serializeEmptySummary(): Buffer {
+  const zeroRoot = Buffer.alloc(32, 0);
+  return Buffer.concat([
+    writeInt64LE(0),
+    writeUInt32LE(0),
+    writeInt64LE(0),
+    writeInt64LE(0),
+    zeroRoot,
+  ]);
+}
+
+function serializeEmptyProofVec(): Buffer {
+  return Buffer.alloc(4, 0);
 }
 
 function describeTerm(term: any): string {
@@ -211,28 +253,42 @@ export default function DepositCollateral() {
   const batchIdParam = searchParams.get("batchId") || "";
   const [batchId, setBatchId] = useState(batchIdParam);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [batchPda, setBatchPda] = useState<PublicKey | null>(null);
   const [batchData, setBatchData] = useState<any>(null);
-  const [slotsMapping, setSlotsMapping] = useState<Record<number, SlotMapping> | null>(null);
+  const [slotsMapping, setSlotsMapping] = useState<Record<
+    number,
+    SlotMapping
+  > | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [validationData, setValidationData] = useState<any>(null);
   const [depositAmount, setDepositAmount] = useState<string>("");
 
-  const addLog = (msg: string) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  const addLog = (msg: string) =>
+    setLogs((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] ${msg}`,
+    ]);
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
-    if (!secretKeyEnv) throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
+    if (!secretKeyEnv)
+      throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
-      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
+      return Keypair.fromSecretKey(
+        Uint8Array.from(JSON.parse(secretKeyEnv)),
+      );
     }
     return Keypair.fromSecretKey(bs58.decode(secretKeyEnv));
   };
 
   const computeDepositAmount = () => {
-    if (!batchData || !validationData || selectedSlot === null || !slotsMapping) return;
+    if (!batchData || !validationData || selectedSlot === null || !slotsMapping)
+      return;
     const slot = slotsMapping[selectedSlot];
     if (!slot) return;
     const odds = validationData.odds;
@@ -245,7 +301,9 @@ export default function DepositCollateral() {
       const priceBig = BigInt(price);
       const amount = (betSize * priceBig) / BigInt(1000);
       setDepositAmount(amount.toString());
-      addLog(`Computed deposit amount: ${amount.toString()} (bet_size * price / 1000)`);
+      addLog(
+        `Computed deposit amount: ${amount.toString()} (bet_size * price / 1000)`,
+      );
     } catch (e: any) {
       addLog(`Amount computation error: ${e.message}`);
     }
@@ -276,12 +334,18 @@ export default function DepositCollateral() {
       const connection = new Connection(DEVNET_RPC);
       const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
       const batchIdBuffer = writeUInt64LE(id);
-      const [pda] = PublicKey.findProgramAddressSync([Buffer.from("batch"), batchIdBuffer], programId);
+      const [pda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("batch"), batchIdBuffer],
+        programId,
+      );
       setBatchPda(pda);
       addLog(`Batch PDA: ${pda.toBase58()}`);
 
       const accountInfo = await connection.getAccountInfo(pda);
-      if (!accountInfo || !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) {
+      if (
+        !accountInfo ||
+        !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)
+      ) {
         throw new Error("Batch not found or not initialized.");
       }
 
@@ -293,7 +357,9 @@ export default function DepositCollateral() {
       if (mapRes.ok) {
         const mapData = await mapRes.json();
         setSlotsMapping(mapData.slotsMapping || {});
-        addLog(`Redis mapping loaded for ${Object.keys(mapData.slotsMapping || {}).length} slots.`);
+        addLog(
+          `Redis mapping loaded for ${Object.keys(mapData.slotsMapping || {}).length} slots.`,
+        );
       } else {
         addLog("Warning: No Redis mapping found for this batch.");
       }
@@ -305,28 +371,20 @@ export default function DepositCollateral() {
     }
   };
 
-  // Shared fetch so we can call it both from the button (to preview data)
-  // and again right before signing (so the merkle proof can't go stale
-  // between "Fetch Validation Proof" and "Deposit").
-  const fetchFreshValidationProof = async (slotIdx: number) => {
-    if (!slotsMapping) throw new Error("No slot mapping loaded.");
-    const slotData = slotsMapping[slotIdx];
-    if (!slotData) throw new Error("No slot data for the selected slot.");
-    const res = await fetch(
-      `/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`,
-    );
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(errText);
-    }
-    return res.json();
-  };
-
   const fetchValidationProof = async () => {
     if (selectedSlot === null || !slotsMapping || !batchData) return;
     addLog(`Fetching proof for slot ${selectedSlot}...`);
     try {
-      const data = await fetchFreshValidationProof(selectedSlot);
+      const slotData = slotsMapping[selectedSlot];
+      if (!slotData) throw new Error("No slot data for the selected slot.");
+      const res = await fetch(
+        `/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`,
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText);
+      }
+      const data = await res.json();
       setValidationData(data);
       addLog("Validation proof received.");
     } catch (err: any) {
@@ -335,154 +393,194 @@ export default function DepositCollateral() {
   };
 
   const handleDeposit = async () => {
-      if (!batchPda || !batchData || !validationData) {
-        setResult({ type: "error", message: "Load data first." });
-        return;
-      }
+    if (!batchPda || !batchData) {
+      setResult({ type: "error", message: "Load batch data first." });
+      return;
+    }
 
-      const FLIP_MAIN_TREE_IS_RIGHT_FLAG = false;
-      const amountRaw = depositAmount.trim();
-      let amountBigInt: bigint;
-      try {
-        amountBigInt = BigInt(amountRaw);
-      } catch {
-        setResult({ type: "error", message: "Invalid amount." });
-        return;
-      }
+    setLoading(true);
+    setResult(null);
 
-      setLoading(true);
-      setResult(null);
+    try {
+      const connection = new Connection(DEVNET_RPC);
+      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const operator = getOperatorKeypair();
+      const mint = batchData.mint;
+      const operatorTokenAccount = await getAssociatedTokenAddress(
+        mint,
+        operator.publicKey,
+      );
+      const batchTokenAccount = await getAssociatedTokenAddress(
+        mint,
+        batchPda,
+        true,
+      );
 
-      const attemptDeposit = async (freshValidationData: any) => {
-        const connection = new Connection(DEVNET_RPC);
-        const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
-        const operator = getOperatorKeypair();
-        const mint = batchData.mint;
-        const operatorTokenAccount = await getAssociatedTokenAddress(mint, operator.publicKey);
-        const batchTokenAccount = await getAssociatedTokenAddress(mint, batchPda!, true);
+      const [collateralPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from(COLLATERAL_SEED), batchPda.toBuffer()],
+        programId,
+      );
 
-        const [collateralPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from(COLLATERAL_SEED), batchPda!.toBuffer()],
-          programId,
-        );
+      const useRealProof = validationData !== null;
+      const oddsBuf = useRealProof
+        ? serializeOdds(validationData.odds)
+        : serializeEmptyOdds();
+      const summaryBuf = useRealProof
+        ? serializeSummary(validationData.summary)
+        : serializeEmptySummary();
+      const subTreeProofBuf = useRealProof
+        ? serializeProofVec(
+            validationData.subTreeProof ?? validationData.sub_tree_proof,
+          )
+        : serializeEmptyProofVec();
+      const mainTreeProofBuf = useRealProof
+        ? serializeProofVec(
+            validationData.mainTreeProof ?? validationData.main_tree_proof,
+          )
+        : serializeEmptyProofVec();
 
-        // --- ENDIANNESS DEBUGGING LOGIC ---
-        const TXODDS_PROGRAM_ID = new PublicKey("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
-        const epochDay = Math.floor(Number(freshValidationData.odds.Ts ?? freshValidationData.odds.ts * 1000) / 86400000);
-        console.log(epochDay, "kontol")
-        
-        const bufLE = Buffer.alloc(2);
-        bufLE.writeUInt16LE(epochDay);
-        const [pdaLE] = PublicKey.findProgramAddressSync([Buffer.from("daily_batch_roots"), bufLE], TXODDS_PROGRAM_ID);
+      const oraclePriceIndex = useRealProof
+        ? slotsMapping?.[selectedSlot!]?.outcomeIndex ?? 0
+        : 0; 
 
-        const bufBE = Buffer.alloc(2);
-        bufBE.writeUInt16BE(epochDay);
-        const [pdaBE] = PublicKey.findProgramAddressSync([Buffer.from("daily_batch_roots"), bufBE], TXODDS_PROGRAM_ID);
+      const amountBigInt = (() => {
+        const raw = depositAmount.trim();
+        if (raw === "") return BigInt(0); 
+        return BigInt(raw);
+      })();
 
-        addLog(`EpochDay: ${epochDay}`);
-        addLog(`PDA (Little Endian): ${pdaLE.toBase58()}`);
-        addLog(`PDA (Big Endian):    ${pdaBE.toBase58()}`);
-        
-        // Select the PDA derived via Little Endian as default. 
-        // If the program expects Big Endian, swap this to pdaBE.
-        const dailyOddsMerkleRoots = pdaLE; 
-        // ----------------------------------
+      const TXODDS_PROGRAM_ID = new PublicKey(
+        "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J",
+      );
+      const epochDay = Math.floor(
+        Number(useRealProof ? (validationData.odds.Ts ?? validationData.odds.ts) : 0) /
+          86400000,
+      );
+      const bufLE = Buffer.alloc(2);
+      bufLE.writeUInt16LE(epochDay);
+      const [dailyOddsMerkleRoots] = PublicKey.findProgramAddressSync(
+        [Buffer.from("daily_batch_roots"), bufLE],
+        TXODDS_PROGRAM_ID,
+      );
 
-        const oraclePriceIndex = slotsMapping?.[selectedSlot!]?.outcomeIndex ?? 0;
-        const oddsBuf = serializeOdds(freshValidationData.odds);
-        const summaryBuf = serializeSummary(freshValidationData.summary);
-        const subTreeProofBuf = serializeProofVec(freshValidationData.subTreeProof ?? freshValidationData.sub_tree_proof);
-        const mainTreeProofBuf = serializeProofVec(freshValidationData.mainTreeProof ?? freshValidationData.main_tree_proof);
+      const data = Buffer.concat([
+        DEPOSIT_COLLATERAL_DISCRIMINATOR,
+        writeUInt64LE(amountBigInt),
+        Buffer.from([oraclePriceIndex]),
+        oddsBuf,
+        summaryBuf,
+        subTreeProofBuf,
+        mainTreeProofBuf,
+      ]);
 
-        const data = Buffer.concat([
-          DEPOSIT_COLLATERAL_DISCRIMINATOR,
-          writeUInt64LE(amountBigInt),
-          Buffer.from([oraclePriceIndex]),
-          oddsBuf,
-          summaryBuf,
-          subTreeProofBuf,
-          mainTreeProofBuf,
-        ]);
+      console.log("========== TRANSACTION SIZE BREAKDOWN ==========");
+      console.log("Discriminator bytes:", DEPOSIT_COLLATERAL_DISCRIMINATOR.length);
+      console.log("Amount bytes:", 8);
+      console.log("Oracle Price Index bytes:", 1);
+      console.log("Odds Data bytes:", oddsBuf.length);
+      console.log("Summary Data bytes:", summaryBuf.length);
+      console.log("SubTree Proof bytes:", subTreeProofBuf.length);
+      console.log("MainTree Proof bytes:", mainTreeProofBuf.length);
+      console.log("Total Instruction Data bytes:", data.length);
+      
+      const keys = [
+        { pubkey: operator.publicKey, isSigner: true, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: batchPda, isSigner: false, isWritable: true },
+        { pubkey: operatorTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: collateralPda, isSigner: false, isWritable: true },
+        { pubkey: batchTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: dailyOddsMerkleRoots, isSigner: false, isWritable: false },
+        { pubkey: TXODDS_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ];
 
-        addLog(`Instruction Data Length: ${data.length}`);
+      console.log("--- ACCOUNT KEYS BREAKDOWN (32 bytes each uncompressed) ---");
+      keys.forEach((k, i) => {
+        console.log(`Key ${i} [${k.pubkey.toBase58()}]: 32 bytes (Signer: ${k.isSigner}, Writable: ${k.isWritable})`);
+      });
+      console.log(`Total Keys: ${keys.length} (${keys.length * 32} bytes uncompressed)`);
+      console.log("Note: Any non-signer key above can be added to an ALT to save 31 bytes each. Signer keys cannot benefit from ALT compression.");
+      console.log("================================================");
 
-        const keys = [
-          { pubkey: operator.publicKey, isSigner: true, isWritable: true },
-          { pubkey: mint, isSigner: false, isWritable: false },
-          { pubkey: batchPda!, isSigner: false, isWritable: true },
-          { pubkey: operatorTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: collateralPda, isSigner: false, isWritable: true },
-          { pubkey: batchTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: dailyOddsMerkleRoots, isSigner: false, isWritable: false },
-          { pubkey: TXODDS_PROGRAM_ID, isSigner: false, isWritable: false },
-          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-          { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        ];
+      addLog(`Data Payload Size: ${data.length} bytes (Odds: ${oddsBuf.length}, Summary: ${summaryBuf.length}, SubTree: ${subTreeProofBuf.length}, MainTree: ${mainTreeProofBuf.length})`);
+      addLog(`Accounts Size: ${keys.length * 32} bytes (${keys.length} keys total before compression)`);
 
-        const ix = new TransactionInstruction({ programId, keys, data });
-        const tx = new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })).add(ix);
+      console.log("--- DYNAMIC ACCOUNTS TO ADD TO ALT ---");
+      console.log("Batch PDA:", batchPda.toBase58());
+      console.log("Collateral PDA:", collateralPda.toBase58());
+      console.log("Batch Token:", batchTokenAccount.toBase58());
+      console.log("Daily Roots:", dailyOddsMerkleRoots.toBase58());
+      const ix = new TransactionInstruction({ programId, keys, data });
+      
+      const { blockhash } = await connection.getLatestBlockhash();
 
-        const { blockhash } = await connection.getLatestBlockhash();
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = operator.publicKey;
-        tx.sign(operator);
-
-        const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
-        await connection.confirmTransaction(sig);
-        return sig;
-      };
-
-      try {
-        addLog("Refreshing validation proof right before sending...");
-        let freshData = await fetchFreshValidationProof(selectedSlot!);
-        setValidationData(freshData);
-
-        try {
-          const sig = await attemptDeposit(freshData);
-          setResult({ type: "success", message: `Success! Tx: ${sig}` });
-        } catch (err: any) {
-          const msg = String(err?.message ?? err);
-          const isMainTreeError = msg.includes("0x1774") || msg.includes("InvalidMainTreeProof") || msg.includes("6004");
-          if (!isMainTreeError) throw err;
-
-          addLog("Got InvalidMainTreeProof (0x1774) — root may have rotated. Refetching once and retrying...");
-          freshData = await fetchFreshValidationProof(selectedSlot!);
-          setValidationData(freshData);
-          const sig = await attemptDeposit(freshData);
-          setResult({ type: "success", message: `Success on retry! Tx: ${sig}` });
+      const lookupTables: AddressLookupTableAccount[] = [];
+      if (process.env.NEXT_PUBLIC_ALT_ADDRESS) {
+        const altAddress = new PublicKey(process.env.NEXT_PUBLIC_ALT_ADDRESS);
+        const lookupTableAccount = (await connection.getAddressLookupTable(altAddress)).value;
+        if (lookupTableAccount) {
+          lookupTables.push(lookupTableAccount);
+          
+          // NEW LOGGING HERE
+          const activeAddresses = lookupTableAccount.state.addresses.length;
+          addLog(`Loaded ALT: ${altAddress.toBase58()}`);
+          addLog(`🔍 Next.js sees ${activeAddresses} addresses in this ALT.`);
+          
+        } else {
+          addLog(`Warning: Failed to load ALT at ${altAddress.toBase58()}`);
         }
-      } catch (err: any) {
-        addLog(`Error: ${err.message}`);
-        setResult({ type: "error", message: err.message });
-      } finally {
-        setLoading(false);
       }
-    };
+
+      const messageV0 = new TransactionMessage({
+        payerKey: operator.publicKey,
+        recentBlockhash: blockhash,
+        instructions: [
+          ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+          ix,
+        ],
+      }).compileToV0Message(lookupTables);
+
+      addLog(`Compiled V0 Message Size Estimate: ~${messageV0.serialize().length} bytes / 1232 limit`);
+
+      const tx = new VersionedTransaction(messageV0);
+      tx.sign([operator]);
+
+      const sig = await connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+      });
+
+      await connection.confirmTransaction(sig);
+      setResult({ type: "success", message: `Success! Tx: ${sig}` });
+    } catch (err: any) {
+      addLog(`Error: ${err.message}`);
+      setResult({ type: "error", message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (batchIdParam) fetchBatch();
   }, [batchIdParam]);
 
-  const canDeposit =
-    batchData &&
-    batchData.statusIdx === 2 &&
-    validationData &&
-    depositAmount.trim() !== "" &&
-    !isNaN(Number(depositAmount)) &&
-    BigInt(depositAmount.trim()) >= BigInt(batchData.collateral_required.toString());
-
   return (
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-3xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Deposit Collateral (Test)</h2>
           <p className="text-sm text-gray-400">
-            Load a batch, select a slot, fetch validation proof, and deposit the required collateral.
+            Load a batch, optionally select a slot and fetch proof, then deposit
+            collateral. If no proof is loaded, empty (skip) data will be used.
           </p>
 
           <div className="flex gap-2">
@@ -506,31 +604,73 @@ export default function DepositCollateral() {
           {batchData && (
             <div className="space-y-4">
               <div className="text-sm text-gray-400 p-3 bg-black/20 rounded-lg border border-border-low">
-                <span className="block mb-1"><strong>Batch ID:</strong> {batchData.batch_id.toString()}</span>
-                <span className="block"><strong>Status:</strong>{" "}
+                <span className="block mb-1">
+                  <strong>Batch ID:</strong> {batchData.batch_id.toString()}
+                </span>
+                <span className="block">
+                  <strong>Status:</strong>{" "}
                   <span className="text-emerald-300 font-semibold">
-                    {["Lobby","Locked","AwaitingCollateral","Active","Settled","Cancelled"][batchData.statusIdx]}
+                    {
+                      [
+                        "Lobby",
+                        "Locked",
+                        "AwaitingCollateral",
+                        "Active",
+                        "Settled",
+                        "Cancelled",
+                      ][batchData.statusIdx]
+                    }
                   </span>
                 </span>
-                <span className="block"><strong>Bet Size:</strong> {batchData.bet_size.toString()}</span>
-                <span className="block"><strong>Collateral Required:</strong> {batchData.collateral_required.toString()}</span>
+                <span className="block">
+                  <strong>Bet Size:</strong> {batchData.bet_size.toString()}
+                </span>
+                <span className="block">
+                  <strong>Collateral Required:</strong>{" "}
+                  {batchData.collateral_required.toString()}
+                </span>
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold mb-1">Bet Terms & Redis Mapping</h3>
+                <h3 className="text-sm font-semibold mb-1">
+                  Bet Terms &amp; Redis Mapping
+                </h3>
                 <div className="grid grid-cols-1 gap-2">
                   {batchData.bet_terms.map((term: any, idx: number) => {
                     const isEmpty = BigInt(term.fixture_id) === BigInt(0);
                     const slot = slotsMapping?.[idx];
                     return (
-                      <div key={idx} className={`p-3 bg-bg1 rounded-lg border ${selectedSlot === idx ? "border-emerald-400 bg-emerald-500/10" : "border-border-low"} ${isEmpty ? "opacity-50" : ""}`}>
+                      <div
+                        key={idx}
+                        className={`p-3 bg-bg1 rounded-lg border ${
+                          selectedSlot === idx
+                            ? "border-emerald-400 bg-emerald-500/10"
+                            : "border-border-low"
+                        } ${isEmpty ? "opacity-50" : ""}`}
+                      >
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-gray-200">Slot {idx+1} {isEmpty ? "(empty)" : ""}</span>
-                          <button disabled={isEmpty || !slot} onClick={() => { setSelectedSlot(idx); setValidationData(null); }} className="text-xs px-2 py-1 bg-blue-600 rounded hover:bg-blue-500 disabled:opacity-40">Select</button>
+                          <span className="text-sm font-semibold text-gray-200">
+                            Slot {idx + 1} {isEmpty ? "(empty)" : ""}
+                          </span>
+                          <button
+                            disabled={isEmpty || !slot}
+                            onClick={() => {
+                              setSelectedSlot(idx);
+                              setValidationData(null);
+                            }}
+                            className="text-xs px-2 py-1 bg-blue-600 rounded hover:bg-blue-500 disabled:opacity-40"
+                          >
+                            Select
+                          </button>
                         </div>
-                        <p className="text-xs text-gray-400 mt-1">{describeTerm(term)}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {describeTerm(term)}
+                        </p>
                         {!isEmpty && slot && (
-                          <p className="text-xs text-gray-500 mt-1">Redis: msgId={slot.messageId}, ts={slot.ts}, idx={slot.outcomeIndex}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Redis: msgId={slot.messageId}, ts={slot.ts}, idx=
+                            {slot.outcomeIndex}
+                          </p>
                         )}
                       </div>
                     );
@@ -539,10 +679,23 @@ export default function DepositCollateral() {
               </div>
 
               <div className="flex gap-2 items-end">
-                <button onClick={fetchValidationProof} disabled={selectedSlot === null || !slotsMapping} className="px-4 py-2 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-400 transition disabled:opacity-50">
+                <button
+                  onClick={fetchValidationProof}
+                  disabled={selectedSlot === null || !slotsMapping}
+                  className="px-4 py-2 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-400 transition disabled:opacity-50"
+                >
                   Fetch Validation Proof
                 </button>
-                {validationData && <span className="text-xs text-green-400">Proof ready – deposit enabled</span>}
+                {validationData && (
+                  <span className="text-xs text-green-400">
+                    Real proof loaded – will be used
+                  </span>
+                )}
+                {!validationData && (
+                  <span className="text-xs text-yellow-300">
+                    No proof loaded → empty (skip) data
+                  </span>
+                )}
               </div>
 
               {validationData && (
@@ -554,29 +707,60 @@ export default function DepositCollateral() {
               )}
 
               <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400">Deposit Amount (raw):</label>
-                <input type="text" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="Amount" className="flex-1 bg-bg1 border border-border-low rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400" disabled={loading} />
-                <span className="text-xs text-gray-500">Min: {batchData.collateral_required.toString()}</span>
+                <label className="text-sm text-gray-400">
+                  Deposit Amount (raw):
+                </label>
+                <input
+                  type="text"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="Amount"
+                  className="flex-1 bg-bg1 border border-border-low rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400"
+                  disabled={loading}
+                />
               </div>
 
-              <button onClick={handleDeposit} disabled={!canDeposit || loading} className="w-full mt-4 px-6 py-3 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50">
-                {loading ? "Depositing..." : `Deposit ${depositAmount || "0"} Collateral`}
+              <button
+                onClick={handleDeposit}
+                disabled={!batchData || loading}
+                className="w-full mt-4 px-6 py-3 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50"
+              >
+                {loading
+                  ? "Depositing..."
+                  : `Deposit ${depositAmount || "0"} Collateral`}
               </button>
             </div>
           )}
 
           {result && (
-            <div className={`p-3 rounded-lg text-sm ${result.type === "success" ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}>
+            <div
+              className={`p-3 rounded-lg text-sm ${
+                result.type === "success"
+                  ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+                  : "bg-red-500/10 border border-red-500/30 text-red-300"
+              }`}
+            >
               {result.message}
             </div>
           )}
 
           {logs.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-sm font-semibold mb-2 text-gray-400">Execution Log</h3>
+              <h3 className="text-sm font-semibold mb-2 text-gray-400">
+                Execution Log
+              </h3>
               <div className="bg-black/40 rounded-lg p-4 max-h-64 overflow-y-auto space-y-1 text-xs font-mono border border-border-low">
                 {logs.map((msg, i) => (
-                  <div key={i} className={msg.includes("Error") || msg.includes("Failed") ? "text-red-400" : msg.includes("Success") || msg.includes("success") ? "text-emerald-300" : "text-gray-400"}>
+                  <div
+                    key={i}
+                    className={
+                      msg.includes("Error") || msg.includes("Failed")
+                        ? "text-red-400"
+                        : msg.includes("Success") || msg.includes("success")
+                          ? "text-emerald-300"
+                          : "text-gray-400"
+                    }
+                  >
                     {msg}
                   </div>
                 ))}

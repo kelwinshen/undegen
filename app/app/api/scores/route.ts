@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const API_BASE = 'https://txline.txodds.com';
+const API_BASE = 'https://txline-dev.txodds.com';
 
 const STATUS_MAP: Record<string, string> = {
   NS: 'Not Started',   NS2: 'Not Started',
