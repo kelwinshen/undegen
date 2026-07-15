@@ -35,7 +35,7 @@ const STAT_KEY_PART1_GOALS = 1002;
 const STAT_KEY_PART2_GOALS = 1003;
 
 type OddsOption = {
-  id: string; // This holds the TxODDS MessageId
+  id: string; 
   messageId: string;
   ts: number;
   outcomeIndex: number;
@@ -134,7 +134,7 @@ function getBetTermsBuffer(option: OddsOption): { data: Buffer; label: string; d
       writeU16LE(period),
       writeU32LE(STAT_KEY_PART1_GOALS),
       writeOptionU32(STAT_KEY_PART2_GOALS),
-      writeOptionBinaryOp(null),
+      writeOptionBinaryOp(BINARY_OP.Subtract), // <-- CORRECTED: Must compare P1 and P2 using Subtract
       writeI32LE(0),
       Buffer.from([comparison]),
       Buffer.from([0]),
@@ -156,9 +156,9 @@ function getBetTermsBuffer(option: OddsOption): { data: Buffer; label: string; d
       const data = Buffer.concat([
         writeInt64LE(option.fixtureId),
         writeU16LE(period),
-        writeU32LE(1004),
-        writeOptionU32(null),
-        writeOptionBinaryOp(null),
+        writeU32LE(STAT_KEY_PART1_GOALS),       // <-- CORRECTED: Use P1 Goals
+        writeOptionU32(STAT_KEY_PART2_GOALS),   // <-- CORRECTED: Include P2 Goals
+        writeOptionBinaryOp(BINARY_OP.Add),     // <-- CORRECTED: Combine them using Add
         writeI32LE(threshold),
         Buffer.from([comparison]),
         Buffer.from([0]),

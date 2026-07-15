@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 function mapProofNode(node: any) {
   return { hash: node?.hash, is_right_sibling: node?.isRightSibling };
 }
@@ -9,7 +11,6 @@ function mapScoreStat(stat: any) {
   return { key: stat.key, value: stat.value, period: stat.period };
 }
 
-// Safely handles the API returning a Nil object {} instead of an array
 function safeMapProofs(proofList: any) {
   if (Array.isArray(proofList)) {
     return proofList.map(mapProofNode);
@@ -18,7 +19,6 @@ function safeMapProofs(proofList: any) {
 }
 
 function normalizeValidationResponse(raw: any, seq: number) {
-  // Safely fallback to empty objects to prevent 'Cannot read properties of undefined'
   const summary = raw.summary || {};
   const updateStats = summary.updateStats || {};
 
@@ -61,6 +61,32 @@ function normalizeValidationResponse(raw: any, seq: number) {
   };
 }
 
+// Helper to detect specific match states in a snapshot's events or properties
+function hasMatchState(snapshot: any, stateName: string) {
+  // 1. Check direct properties on the snapshot (this handles the "Action": "game_finalised" structure)
+  if (
+    snapshot.Action === stateName || snapshot.action === stateName ||
+    snapshot.status === stateName || snapshot.Status === stateName ||
+    snapshot.match_state === stateName || snapshot.MatchState === stateName
+  ) {
+    return true;
+  }
+
+  // 2. Check inside game events arrays just in case it's nested differently in other responses
+  const events = snapshot.events || snapshot.Events || snapshot.game_events || snapshot.GameEvents || [];
+  if (Array.isArray(events)) {
+    const hasEvent = events.some((e: any) =>
+      e.type === stateName || e.Type === stateName ||
+      e.code === stateName || e.Code === stateName ||
+      e.event === stateName || e.Event === stateName ||
+      e.action === stateName || e.Action === stateName
+    );
+    if (hasEvent) return true;
+  }
+
+  return false;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const fixtureId = searchParams.get('fixtureId');
@@ -78,14 +104,21 @@ export async function GET(request: NextRequest) {
   const headers = {
     Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
     'X-Api-Token': process.env.API_TOKEN || '',
+    'Accept': 'application/json',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'User-Agent': 'PostmanRuntime/7.32.3' 
   };
 
   try {
-    // 1. Fetch all snapshots
-    const snapRes = await fetch(
-      `https://txline-dev.txodds.com/api/scores/snapshot/${encodeURIComponent(fixtureId)}`,
-      { headers }
-    );
+    const cacheBuster = Date.now();
+    const snapUrl = `https://txline-dev.txodds.com/api/scores/snapshot/${encodeURIComponent(fixtureId)}?_cb=${cacheBuster}`;
+    
+    const snapRes = await fetch(snapUrl, { 
+      headers,
+      cache: 'no-store' 
+    });
+    
     if (!snapRes.ok) {
       const text = await snapRes.text();
       return NextResponse.json(
@@ -93,6 +126,7 @@ export async function GET(request: NextRequest) {
         { status: 502 }
       );
     }
+    
     const snapshots: any[] = await snapRes.json();
     if (!snapshots || snapshots.length === 0) {
       return NextResponse.json(
@@ -101,34 +135,34 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 2. Determine the correct snapshot based on period
     const period = periodStr ? parseInt(periodStr) : 0;
-    let targetSnapshot = snapshots[snapshots.length - 1]; // fallback
+    let targetSnapshot = snapshots[snapshots.length - 1]; 
 
-    // StatusId mapping (soccer):
-    // 1=not started, 2=first half, 3=half time, 4=second half, 7=full time
-    const fullTimeStatus = 7;
-    const halfTimeStatus = 3;
+    let isMatchFinished = false;
+    let isHalfTime = false;
 
     if (period === 0) {
-      const finished = snapshots.find(s => s.StatusId === fullTimeStatus);
-      if (finished) targetSnapshot = finished;
+      const finished = snapshots.find(s => hasMatchState(s, 'game_finalised'));
+      if (finished) {
+        targetSnapshot = finished;
+        isMatchFinished = true;
+      }
     } else if (period === 1) {
-      const htSnap = snapshots.find(s => s.StatusId === halfTimeStatus);
+      const htSnap = snapshots.find(s => hasMatchState(s, 'halftime_finalised'));
       if (htSnap) {
         targetSnapshot = htSnap;
+        isHalfTime = true;
       } else {
-        // fallback: the last snapshot before second half started
         for (let i = snapshots.length - 1; i >= 0; i--) {
           const s = snapshots[i];
           if (s.Score?.Participant1?.HT && !s.Score?.Participant1?.H2) {
             targetSnapshot = s;
+            isHalfTime = true;
             break;
           }
         }
       }
     }
-
 
     const seq = targetSnapshot.Seq;
     if (seq === undefined || seq === null) {
@@ -138,11 +172,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 3. Fetch the stat validation proof
-    let proofUrl = `https://txline-dev.txodds.com/api/scores/stat-validation?fixtureId=${encodeURIComponent(fixtureId)}&seq=${encodeURIComponent(seq)}&statKey=${encodeURIComponent(statKey)}`;
+    let proofUrl = `https://txline-dev.txodds.com/api/scores/stat-validation?fixtureId=${encodeURIComponent(fixtureId)}&seq=${encodeURIComponent(seq)}&statKey=${encodeURIComponent(statKey)}&_cb=${cacheBuster}`;
     if (statKey2) proofUrl += `&statKey2=${encodeURIComponent(statKey2)}`;
 
-    const proofRes = await fetch(proofUrl, { headers });
+    const proofRes = await fetch(proofUrl, { 
+      headers,
+      cache: 'no-store' 
+    });
+    
     if (!proofRes.ok) {
       const text = await proofRes.text();
       return NextResponse.json(
@@ -155,14 +192,13 @@ export async function GET(request: NextRequest) {
     proofData.seq = seq;
     const normalized = normalizeValidationResponse(proofData, seq);
 
-    // Attach a warning if the match isn't finished
-    if (period === 0 && targetSnapshot.StatusId !== fullTimeStatus) {
+    if (period === 0 && !isMatchFinished) {
       return NextResponse.json({
         ...normalized,
         warning: 'Match is not finished yet; using the latest snapshot.',
       });
     }
-    if (period === 1 && targetSnapshot.StatusId !== halfTimeStatus) {
+    if (period === 1 && !isHalfTime) {
       return NextResponse.json({
         ...normalized,
         warning: 'Half-time snapshot not confirmed; using closest available.',

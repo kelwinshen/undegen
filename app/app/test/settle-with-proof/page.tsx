@@ -144,7 +144,6 @@ export default function SettleWithProofPage() {
   const [batchPda, setBatchPda] = useState<PublicKey | null>(null);
   const [batchData, setBatchData] = useState<any>(null);
   const [scoresProof, setScoresProof] = useState<any>(null);
-  const [tsOverride, setTsOverride] = useState<string>("");
   const [vaultConfigOverride, setVaultConfigOverride] = useState<string>("");
   const [vaultTokenAccountOverride, setVaultTokenAccountOverride] = useState<string>("");
 
@@ -165,7 +164,6 @@ export default function SettleWithProofPage() {
     setBatchData(null);
     setScoresProof(null);
     setResult(null);
-    setTsOverride("");
     const id = parseInt(batchId);
     if (isNaN(id) || id < 0) {
       setResult({ type: "error", message: "Invalid batch ID" });
@@ -205,7 +203,7 @@ export default function SettleWithProofPage() {
     const fixtureId = betTerm.fixture_id.toString();
     const statKey = betTerm.stat_a_key;
     const statKey2 = betTerm.stat_b_key;
-    const period = betTerm.period;   // 0=full-time, 1=first half, etc.
+    const period = betTerm.period;
 
     let url = `/api/scores/validation?fixtureId=${encodeURIComponent(fixtureId)}&statKey=${statKey}&period=${period}`;
     if (statKey2 !== null && statKey2 !== undefined) {
@@ -221,9 +219,6 @@ export default function SettleWithProofPage() {
       }
       const data = await res.json();
       setScoresProof(data);
-      if (data.ts && !tsOverride) {
-        setTsOverride(data.ts.toString());
-      }
       if (data.warning) {
         addLog(`Warning: ${data.warning}`);
       }
@@ -252,7 +247,9 @@ export default function SettleWithProofPage() {
       setResult({ type: "error", message: "Load batch and proof first." });
       return;
     }
-    const ts = tsOverride ? parseInt(tsOverride) : scoresProof.ts;
+
+    const ts = scoresProof.fixtureSummary.update_stats.min_timestamp;
+
     if (isNaN(ts)) {
       setResult({ type: "error", message: "Invalid timestamp." });
       return;
@@ -278,7 +275,7 @@ export default function SettleWithProofPage() {
         vaultConfig = new PublicKey(vaultConfigOverride.trim());
       } else {
         const [pda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("vault"), mint.toBuffer()],
+          [Buffer.from("vault_config"), mint.toBuffer()],
           YIELD_VAULT_PROGRAM_ID,
         );
         vaultConfig = pda;
@@ -296,7 +293,6 @@ export default function SettleWithProofPage() {
       const vaultPosition = batchData.vault_position;
       addLog(`Using vault_position: ${vaultPosition.toBase58()}`);
 
-      // Serialise arguments (NO outcome byte)
       const fixtureSummaryBuf = serializeScoresBatchSummary(scoresProof.fixtureSummary);
       const mainTreeProofBuf = serializeProofVec(scoresProof.mainTreeProof);
       const fixtureProofBuf = serializeProofVec(scoresProof.fixtureProof);
@@ -415,18 +411,6 @@ export default function SettleWithProofPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400">Timestamp override (ms, optional):</label>
-                <input
-                  type="text"
-                  value={tsOverride}
-                  onChange={(e) => setTsOverride(e.target.value)}
-                  className="w-40 bg-bg1 border border-border-low rounded-lg px-3 py-1 text-sm text-white focus:outline-none focus:border-emerald-400"
-                  placeholder="Auto from proof"
-                  disabled={loading}
-                />
-              </div>
-
               <button
                 onClick={fetchScoresProof}
                 disabled={loading || !batchData || winningIdx === null}
@@ -466,7 +450,7 @@ export default function SettleWithProofPage() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-500">
-                    * Auto‑derived vault_config uses seed <code>["vault", mint]</code> from the yield program.
+                    * Auto‑derived vault_config uses seed <code>["vault_config", mint]</code> from the yield program.
                   </p>
 
                   <button
