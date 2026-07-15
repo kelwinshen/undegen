@@ -13,6 +13,8 @@ pub enum CoreError {
     #[msg("Batch is not active")]
     NotActive,
     #[msg("Batch is not awaiting proof")]
+    NotActiveOrNotWaitingCollateral,
+    #[msg("Batch is not awaiting proof or awaiting collateral")]
     NotAwaitingProof,
     #[msg("Batch is already settled or cancelled")]
     AlreadyFinished,
@@ -45,5 +47,9 @@ pub enum CoreError {
     #[msg("No yield generated yet — tick the vault before proposing a match")]
     NothingToGrow,
      #[msg("Invalid Oracle Account")]
-    InvalidOracleAccount
+    InvalidOracleAccount,
+    #[msg("Oracle Return Data Missing")]
+    OracleReturnDataMissing,
+    #[msg("Lobby has expired — batch was not started within 24h of creation")]
+    LobbyExpired,
 }

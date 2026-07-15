@@ -1,59 +1,59 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useWalletConnection } from "@solana/react-hooks";
-import Header from "../components/home/Header";
+import React, { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import LobbyPhase from "../components/home/LobbyPhase";
 import SyndicateSidebar from "../components/home/SyndicateSidebar";
 import HowItWorks from "../components/home/HowItWorks";
 import FAQ from "../components/home/FAQ";
-import {
-  fetchBatchState,
-  depositToLobby,
-  withdrawFromLobby,
-  BatchState,
-} from "../services/undegenProgram";
+import { useUndegenProgram } from "../context/UndegenProgramContext";
 import { WEEKLY_YIELD_RATE, GLOBAL_TVL } from "../lib/dummyData";
 
-const LOBBY_BATCH_ID = 2;
+const LOBBY_BATCH_ID = 6;
 
 export default function LobbyPage() {
-  const { status, wallet } = useWalletConnection();
-  const isConnected = status === "connected";
-  const address = wallet?.account.address?.toString() ?? null;
-
-  const [batchState, setBatchState] = useState<BatchState | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    async function init() {
-      try {
-        const batch = await fetchBatchState(LOBBY_BATCH_ID, isConnected ? address : null);
-        setBatchState(batch);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    init();
-  }, [isConnected, address]);
+  const router = useRouter();
+  const {
+    batches,
+    isLoading,
+    isConnected,
+    deposit,
+    withdraw,
+  } = useUndegenProgram();
 
   const handleDeposit = async (amount: number) => {
-    await depositToLobby(LOBBY_BATCH_ID, amount);
-    if (batchState) {
-      const updated = await fetchBatchState(LOBBY_BATCH_ID, address);
-      setBatchState(updated);
-    }
+    await deposit(amount);
   };
 
   const handleWithdraw = async () => {
-    await withdrawFromLobby(LOBBY_BATCH_ID);
-    if (batchState) {
-      const updated = await fetchBatchState(LOBBY_BATCH_ID, address);
-      setBatchState(updated);
-    }
+    await withdraw();
   };
+
+  const batchState = useMemo(() => {
+    return batches.find((b) => b.batchId === LOBBY_BATCH_ID) || null;
+  }, [batches]);
+
+  const weeklyYieldPool =
+    batchState?.weeklyYieldPool ?? GLOBAL_TVL * WEEKLY_YIELD_RATE;
+
+  // User's deposits in each batch
+  const joinedBatches = useMemo(() => {
+    return batches.map((b) => {
+      const userDeposited = isConnected ? b.userDeposited : 0;
+      const poolShare = b.totalDeposited > 0 ? userDeposited / b.totalDeposited : 0;
+      const weeklyYield = poolShare * b.weeklyYieldPool;
+
+      return {
+        batchId: b.batchId,
+        phase: b.phase,
+        userDeposited,
+        poolShare,
+        weeklyYield,
+        weeklyYieldPool: b.weeklyYieldPool,
+        totalDeposited: b.totalDeposited,
+      };
+    });
+  }, [isConnected, batches]);
 
   if (isLoading || !batchState) {
     return (
@@ -63,13 +63,16 @@ export default function LobbyPage() {
     );
   }
 
-  const weeklyYieldPool = batchState.weeklyYieldPool ?? GLOBAL_TVL * WEEKLY_YIELD_RATE;
   const dailyYieldProjection = weeklyYieldPool / 7;
+  const userPoolShare =
+    batchState.totalDeposited > 0
+      ? batchState.userDeposited / batchState.totalDeposited
+      : 0;
+  const userWeeklyYield = userPoolShare * weeklyYieldPool;
 
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
-      <main className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col gap-8 border-x border-border-low px-6 py-12">
-        <Header />
+    <div className="relative min-h-screen overflow-x-clip bg-transparent text-foreground">
+      <main className="relative z-10 max-w-6xl mx-auto flex min-h-screen  flex-col gap-8  border-border-low px-6 pt-28 pb-28 md:pb-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <LobbyPhase
@@ -93,12 +96,17 @@ export default function LobbyPage() {
               acceptedBetsCount={0}
               skippedMatchesCount={0}
               remainingBets={5}
-              userPoolShare={0}
-              userWeeklyYield={0}
+              userPoolShare={userPoolShare}
+              userWeeklyYield={userWeeklyYield}
               userLockedAmount={batchState.userDeposited}
               isConnected={isConnected}
               phase="Lobby"
               batchRecord={{ wins: 0, losses: 0, pending: 0 }}
+              joinedBatches={joinedBatches}
+              currentBatchId={LOBBY_BATCH_ID}
+              onNavigateToBatch={(batchId) =>
+                router.push(batchId === 5 ? "/" : `/?batch=${batchId}`)
+              }
             />
           </div>
         </div>

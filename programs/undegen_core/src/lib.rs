@@ -26,8 +26,8 @@ pub mod undegen_core {
         instructions::join_batch::join_batch_handler(ctx, amount)
     }
 
-    pub fn leave_batch(ctx: Context<LeaveBatch>) -> Result<()> {
-        instructions::leave_batch::leave_batch_handler(ctx)
+    pub fn leave_batch(ctx: Context<LeaveBatch>, amount: u64) -> Result<()> {
+        instructions::leave_batch::leave_batch_handler(ctx, amount)
     }
 
     pub fn start_batch(ctx: Context<StartBatch>) -> Result<()> {
@@ -92,8 +92,7 @@ pub mod undegen_core {
         fixture_proof: Vec<crate::txodds_types::ProofNode>,
         stat_a: crate::txodds_types::StatTerm,
         stat_b: Option<crate::txodds_types::StatTerm>,
-        ts: i64,
-        outcome: bool,
+        ts: i64
     ) -> Result<()> {
         instructions::settle_with_proof::settle_with_proof_handler(
             ctx,
@@ -102,8 +101,7 @@ pub mod undegen_core {
             fixture_proof,
             stat_a,
             stat_b,
-            ts,
-            outcome,
+            ts
         )
     }
 

@@ -44,6 +44,8 @@ pub fn initialize_batch_handler(ctx: Context<InitializeBatch>, apy_bps: u16) -> 
     batch.collateral_deposited = 0;
     batch.proof_deadline = 0;
     batch.outcome = None;
+    batch.participant_count = 0;
+    batch.created_at = Clock::get()?.unix_timestamp;
 
     msg!(
         "Batch {} initialized by {} with apy_bps={}",

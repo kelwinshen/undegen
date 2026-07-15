@@ -1,34 +1,40 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
-use crate::constants::{MAX_YIELD_BPS, MIN_YIELD_BPS, VAULT_CONFIG_SEED};
+use crate::constants::VAULT_CONFIG_SEED;
 use crate::error::VaultError;
 use crate::state::VaultConfig;
 
-/// Admin-only. Pulls real tokens from the pre-funded reserve into the vault
-/// to simulate 5-10% APY growth. Uses clock-derived pseudo-randomness -
-/// predictable/manipulable, fine for a demo, not for anything with real
-/// value at stake long-term.
+/// DEMO MOCK: flat growth per tick.
+/// Each call adds a fixed amount of underlying (pulled from the reserve),
+/// regardless of how small the vault principal is. This avoids the
+/// percentage-rounding trap where `total_underlying * bps / 10_000` truncates
+/// to 0 for small deposits. Tune MOCK_GROWTH_PER_TICK to taste.
+///
+/// NOTE: value is in BASE UNITS (raw token amount, i.e. already scaled by the
+/// mint's decimals). For a 6-decimal token, 1_000_000 == 1.0 token per tick.
+const MOCK_GROWTH_PER_TICK: u64 = 1_000_000;
+
 pub fn tick_yield_handler(ctx: Context<TickYield>) -> Result<()> {
     let vault = &mut ctx.accounts.vault_config;
     require!(ctx.accounts.admin.key() == vault.admin, VaultError::Unauthorized);
     require!(vault.total_underlying > 0, VaultError::NothingToGrow);
 
-    let clock = Clock::get()?;
-    let seed = (clock.slot as u128) ^ ((clock.unix_timestamp as u128) << 32);
-    let range = (MAX_YIELD_BPS - MIN_YIELD_BPS) + 1;
-    let growth_bps = MIN_YIELD_BPS + ((seed % range as u128) as u64);
-
-    let mut growth_amount = (vault.total_underlying as u128)
-        .checked_mul(growth_bps as u128)
-        .ok_or(VaultError::MathOverflow)?
-        .checked_div(10_000)
-        .ok_or(VaultError::MathOverflow)? as u64;
-
     let reserve_balance = ctx.accounts.reserve_token_account.amount;
+
+    // Flat mock: add a fixed chunk, but never more than what the reserve holds.
+    let mut growth_amount = MOCK_GROWTH_PER_TICK;
     if growth_amount > reserve_balance {
         growth_amount = reserve_balance;
     }
+
+    msg!(
+        "DBG mock_flat={} reserve_balance={} total_underlying={} reserve_key={}",
+        MOCK_GROWTH_PER_TICK, reserve_balance, vault.total_underlying,
+        ctx.accounts.reserve_token_account.key()
+    );
+
+    // Only fails if the reserve is genuinely empty now.
     require!(growth_amount > 0, VaultError::ReserveDepleted);
 
     let mint_key = vault.mint;
@@ -40,12 +46,19 @@ pub fn tick_yield_handler(ctx: Context<TickYield>) -> Result<()> {
         to: ctx.accounts.vault_token_account.to_account_info(),
         authority: vault.to_account_info(),
     };
-    let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.key(), cpi_accounts, signer_seeds);
+    let cpi_ctx =
+        CpiContext::new_with_signer(ctx.accounts.token_program.key(), cpi_accounts, signer_seeds);
     token_interface::transfer_checked(cpi_ctx, growth_amount, ctx.accounts.mint.decimals)?;
 
-    vault.total_underlying = vault.total_underlying.checked_add(growth_amount).ok_or(VaultError::MathOverflow)?;
+    vault.total_underlying = vault
+        .total_underlying
+        .checked_add(growth_amount)
+        .ok_or(VaultError::MathOverflow)?;
 
-    msg!("Tick: +{} bps, +{} underlying (new total: {})", growth_bps, growth_amount, vault.total_underlying);
+    msg!(
+        "Tick (flat mock): +{} underlying (new total: {})",
+        growth_amount, vault.total_underlying
+    );
     Ok(())
 }
 

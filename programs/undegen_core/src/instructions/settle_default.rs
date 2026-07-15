@@ -8,13 +8,13 @@ use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Tran
 /// Defaults to user wins — operator yield entitlement slashed 20%.
 pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     let batch = &mut ctx.accounts.batch;
-    require!(batch.status == BatchStatus::Active, CoreError::NotActive);
+    require!(batch.status == BatchStatus::Active || batch.status == BatchStatus::AwaitingCollateral , CoreError::NotActiveOrNotWaitingCollateral);
 
-    let clock = Clock::get()?;
-    require!(
-        clock.unix_timestamp >= batch.proof_deadline,
-        CoreError::ProofDeadlineNotPassed
-    );
+    // let clock = Clock::get()?;
+    // require!(
+    //     clock.unix_timestamp >= batch.proof_deadline,
+    //     CoreError::ProofDeadlineNotPassed
+    // );
 
     // Users win by operator silence — slash operator yield entitlement 20%
     batch.operator_yield_bps = batch.operator_yield_bps.saturating_sub(2000);

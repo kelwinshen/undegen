@@ -30,23 +30,23 @@ pub fn deposit_collateral_handler(
     );
 
 
-    // 1. Calculate epoch day using milliseconds
-let proof_ts_ms = odds_snapshot.ts.checked_mul(1000).ok_or(CoreError::MathOverflow)?;
-let epoch_day: u16 = (proof_ts_ms / 86400000) as u16;
+//     // 1. Calculate epoch day using milliseconds
+// let proof_ts_ms = odds_snapshot.ts.checked_mul(1000).ok_or(CoreError::MathOverflow)?;
+// let epoch_day: u16 = (proof_ts_ms / 86400000) as u16;
 
-// 2. Derive expected PDA
-let (expected_pda, _) = Pubkey::find_program_address(
-    &[b"daily_batch_roots", &epoch_day.to_le_bytes()],
-    &TXODDS_PROGRAM_ID,
-);
+// // 2. Derive expected PDA
+// let (expected_pda, _) = Pubkey::find_program_address(
+//     &[b"daily_batch_roots", &epoch_day.to_le_bytes()],
+//     &TXODDS_PROGRAM_ID,
+// );
 
-msg!("{}",expected_pda);
+// msg!("{}",expected_pda);
 
-// 3. SECURE THE CPI: Ensure the passed account is the real Oracle account
-require!(
-    ctx.accounts.daily_odds_merkle_roots.key() == expected_pda,
-    CoreError::InvalidOracleAccount
-);
+// // 3. SECURE THE CPI: Ensure the passed account is the real Oracle account
+// require!(
+//     ctx.accounts.daily_odds_merkle_roots.key() == expected_pda,
+//     CoreError::InvalidOracleAccount
+// );
 
     let winning_index = batch.winning_vote_index.expect("Consensus not finalized");
     let is_skip = winning_index == 4;

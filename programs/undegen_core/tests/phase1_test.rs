@@ -274,7 +274,7 @@ fn test_phase1_initialize_join_leave() {
         &mut svm,
         Instruction::new_with_bytes(
             core_program_id,
-            &undegen_core::instruction::LeaveBatch {}.data(),
+            &undegen_core::instruction::LeaveBatch { amount: join_amount_a }.data(),
             undegen_core::accounts::LeaveBatch {
                 user: user_a.pubkey(),
                 mint,
@@ -361,7 +361,7 @@ fn test_phase1_initialize_join_leave() {
         &mut svm,
         Instruction::new_with_bytes(
             core_program_id,
-            &undegen_core::instruction::LeaveBatch {}.data(),
+            &undegen_core::instruction::LeaveBatch { amount: join_amount_b }.data(),
             undegen_core::accounts::LeaveBatch {
                 user: user_b.pubkey(),
                 mint,

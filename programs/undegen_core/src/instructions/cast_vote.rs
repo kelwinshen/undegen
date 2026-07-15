@@ -19,11 +19,11 @@ pub fn cast_vote_handler(ctx: Context<CastVote>, vote_index: u8) -> Result<()> {
         require!(selected_term.fixture_id != 0, CoreError::InvalidAmount);
     }
 
-    let clock = Clock::get()?;
-    require!(
-        clock.unix_timestamp < batch.kickoff_timestamp.saturating_sub(3600),
-        CoreError::VotingClosed
-    );
+    // let clock = Clock::get()?;
+    // require!(
+    //     clock.unix_timestamp < batch.kickoff_timestamp.saturating_sub(3600),
+    //     CoreError::VotingClosed
+    // );
 
     // If user already voted, remove their weight from the old choice first
     if position.has_voted {

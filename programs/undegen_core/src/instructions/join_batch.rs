@@ -3,7 +3,7 @@ use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Tran
 use yield_vault::cpi::accounts::Deposit;
 use yield_vault::program::YieldVault;
 
-use crate::constants::{BATCH_SEED, USER_POSITION_SEED};
+use crate::constants::{BATCH_SEED, LOBBY_EXPIRY_SECONDS, USER_POSITION_SEED};
 use crate::error::CoreError;
 use crate::state::{Batch, BatchStatus, UserPosition};
 
@@ -12,6 +12,10 @@ pub fn join_batch_handler(ctx: Context<JoinBatch>, amount: u64) -> Result<()> {
     require!(
         ctx.accounts.batch.status == BatchStatus::Lobby,
         CoreError::NotInLobby
+    );
+    require!(
+        Clock::get()?.unix_timestamp <= ctx.accounts.batch.created_at + LOBBY_EXPIRY_SECONDS,
+        CoreError::LobbyExpired
     );
 
     // Read vault position shares BEFORE deposit to compute delta
@@ -90,13 +94,21 @@ pub fn join_batch_handler(ctx: Context<JoinBatch>, amount: u64) -> Result<()> {
         position.batch = batch.key();
         position.owner = ctx.accounts.user.key();
         position.has_voted = false;
-        
+
         // --- NEW: Initialize the vote_index instead of the boolean ---
-        position.vote_index = 0; 
-        
+        position.vote_index = 0;
+
         position.claimed = false;
         position.vault_shares = 0;
         position.bump = ctx.bumps.user_position;
+
+        // First-ever deposit into this batch for this user — count them once.
+        // Topping up an existing position (deposited_amount > 0) does not
+        // increment again.
+        batch.participant_count = batch
+            .participant_count
+            .checked_add(1)
+            .ok_or(CoreError::MathOverflow)?;
     }
     position.deposited_amount = position
         .deposited_amount

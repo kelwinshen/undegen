@@ -63,6 +63,17 @@ pub struct Batch {
     pub collateral_deposited: u64,
     pub proof_deadline: i64,
     pub outcome: Option<bool>,     // result of current bet
+
+    // Appended field — only batches initialized after this field was added
+    // will have it; batches from before this change are not migrated, and
+    // will fail to deserialize under this program build. Keep this last.
+    pub participant_count: u32,    // unique depositors currently in this batch
+
+    // Appended field, same caveat as participant_count above — only batches
+    // initialized after this was added will have it. Unix timestamp set once
+    // at initialize_batch; start_batch/join_batch reject once
+    // now > created_at + LOBBY_EXPIRY_SECONDS (see constants.rs).
+    pub created_at: i64,
 }
 
 #[account]
