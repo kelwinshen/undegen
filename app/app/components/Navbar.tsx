@@ -9,6 +9,10 @@ import logoWithText from "../assets/logo-with-text.png";
 import logoWithTextDark from "../assets/logo-with-text-dark.png";
 import ConnectWalletModal from "./ConnectWalletModal";
 import { useUndegenProgram } from "../context/UndegenProgramContext";
+import { SOLANA_CONFIG } from "../lib/solanaConfig";
+
+// USDC's on-chain precision — shown in full rather than rounded.
+const AMOUNT_DECIMALS = SOLANA_CONFIG.TOKEN_DECIMALS;
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -24,6 +28,7 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false);
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [addressCopied, setAddressCopied] = useState(false);
 
   // Refs for click outside
   const menuRef = useRef<HTMLDivElement>(null);
@@ -33,6 +38,13 @@ export default function Navbar() {
   const formattedAddress = address
     ? `${address.slice(0, 4)}...${address.slice(-4)}`
     : "";
+
+  const handleCopyAddress = async () => {
+    if (!address) return;
+    await navigator.clipboard.writeText(address);
+    setAddressCopied(true);
+    setTimeout(() => setAddressCopied(false), 1500);
+  };
 
   // Handle click outside to close dropdowns
   useEffect(() => {
@@ -197,10 +209,7 @@ export default function Navbar() {
                   onClick={() => setIsWalletDropdownOpen(!isWalletDropdownOpen)}
                   className="px-5 py-2.5 rounded-full border border-border-low bg-card hover:bg-foreground/5 text-sm font-semibold tracking-wide transition-all duration-200 flex items-center gap-2 cursor-pointer shadow-sm"
                 >
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="font-mono text-emerald-500">
-                    ${usdcBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </span>
+                  <span className="h-2 w-2 rounded-full bg-foreground animate-pulse" />
                   <span className="text-muted">{formattedAddress}</span>
                   <svg
                     className={`w-4 h-4 text-muted transition-transform duration-200 ${
@@ -226,14 +235,45 @@ export default function Navbar() {
                       <p className="text-[10px] text-muted font-bold tracking-wider uppercase">
                         Wallet Connected
                       </p>
-                      <p className="text-xs font-mono text-foreground break-all mt-0.5">
-                        {address}
-                      </p>
+                      <button
+                        onClick={handleCopyAddress}
+                        className="w-full flex items-center justify-between gap-2 mt-0.5 group cursor-pointer"
+                        title="Copy address"
+                      >
+                        <span className="text-xs font-mono text-foreground break-all text-left">
+                          {address}
+                        </span>
+                        <svg
+                          className="w-3.5 h-3.5 text-muted group-hover:text-foreground shrink-0 transition-colors"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          {addressCopied ? (
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2.5"
+                              d="M4.5 12.75l6 6 9-13.5"
+                            />
+                          ) : (
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M8.25 7.5V6.108c0-1.135.845-2.098 1.976-2.192.373-.03.748-.057 1.123-.08M15.75 18H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08M15.75 18.75v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5A3.375 3.375 0 006.375 7.5H5.25m11.9-3.664A2.251 2.251 0 0015 2.25h-1.5a2.251 2.251 0 00-2.15 1.586m5.8 0c.065.21.1.433.1.664v.75h-6V4.5c0-.231.035-.454.1-.664M6.75 7.5H4.875c-.621 0-1.125.504-1.125 1.125v12.75c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V16.5a9 9 0 00-9-9z"
+                            />
+                          )}
+                        </svg>
+                      </button>
+                      {addressCopied && (
+                        <p className="text-[10px] text-foreground mt-1">Copied!</p>
+                      )}
                       <p className="text-[10px] text-muted font-bold tracking-wider uppercase mt-2">
                         USDC Balance
                       </p>
-                      <p className="text-sm font-mono text-emerald-500 mt-0.5">
-                        ${usdcBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      <p className="text-sm font-mono text-foreground mt-0.5">
+                        {usdcBalance.toFixed(AMOUNT_DECIMALS)} USDC
                       </p>
                     </div>
                     <button

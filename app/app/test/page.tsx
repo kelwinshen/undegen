@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/live/Header";
 
 export default function TestHub() {
   return (

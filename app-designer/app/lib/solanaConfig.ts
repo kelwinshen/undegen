@@ -10,7 +10,7 @@ export const SOLANA_CONFIG = {
   MOCK_MODE: true,
 
   // Deployed Anchor Program ID (undegen_core, devnet)
-  PROGRAM_ID: "BgAM2mzfbFhcA1F3AfjfnV1nzyTJXb6bSz5BX7Wufwma",
+  PROGRAM_ID: "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY",
 
   // Deployed yield_vault Program ID (devnet)
   YIELD_VAULT_PROGRAM_ID: "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS",

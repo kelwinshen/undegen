@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const API_BASE = "https://txline.txodds.com";
+const API_BASE = "https://txline-dev.txodds.com";
 const TRUSTED_BOOKMAKER_ID = 10021;
 
 const dailyCache = new Map<string, any>();

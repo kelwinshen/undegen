@@ -160,7 +160,7 @@ export default function MiniCalendar({
               {/* Indicators */}
               <div className="flex items-center justify-center gap-1 mt-1.5 h-1.5">
                 {isLive ? (
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-foreground animate-pulse shadow-[0_0_8px_rgba(0,0,0,0.3)] dark:shadow-[0_0_8px_rgba(255,255,255,0.5)]" />
                 ) : hasMatches ? (
                   <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 dark:bg-neutral-600" />
                 ) : null}

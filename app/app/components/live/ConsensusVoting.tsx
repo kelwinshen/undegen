@@ -31,6 +31,25 @@ export interface ScoreInfo {
   p2Goals: number;
 }
 
+export interface BetTermProposal {
+  slotIndex: number;
+  term: {
+    fixtureId: number;
+    period: number;
+    statAKey: number;
+    statBKey: number | null;
+    op: "Add" | "Subtract" | null;
+    predicateThreshold: number;
+    predicateComparison: number;
+    negation: boolean;
+  };
+  matchText: string;
+  kickoff: string;
+  predicate: string;
+  multiplier: string;
+  oddsLabel: string;
+}
+
 interface ConsensusVotingProps {
   isLoading: boolean;
   fixtures: Fixture[];
@@ -43,6 +62,19 @@ interface ConsensusVotingProps {
   batchWeek?: string;
   overrideLiveScores?: Record<number, ScoreInfo>;
   isEnded?: boolean;
+  canVote?: boolean;
+  // Human-readable version of this batch's raw bet_terms — shown when there's
+  // no resolved fixture yet, so a real proposed match is never silently
+  // invisible, and never shown as bare on-chain numbers either.
+  betTermProposals?: BetTermProposal[];
+  // Casts a vote directly by on-chain slot index (0-3) — used for
+  // betTermProposals, which already know their slot and don't need the
+  // fixtureId/optionId -> index resolution the main voting flow uses.
+  onVoteSlot?: (slotIndex: number) => Promise<void>;
+  // Real on-chain UserPosition.vote_index (0-3 = a bet_terms slot, 4 = skip,
+  // null if they haven't voted) — so "already voted" reflects the chain, not
+  // just this browser session.
+  userVotedIndex?: number | null;
 }
 
 const MAX_WEEKLY_BETS = 5;
@@ -120,12 +152,9 @@ function getFlagEmoji(name: string): string {
 
 function confidenceLabel(ratio: number): { text: string; color: string } {
   if (ratio >= 0.7)
-    return {
-      text: "Very High",
-      color: "text-emerald-600 dark:text-emerald-400",
-    };
+    return { text: "Very High", color: "text-foreground font-semibold" };
   if (ratio >= 0.5)
-    return { text: "High", color: "text-green-600 dark:text-green-400" };
+    return { text: "High", color: "text-foreground" };
   if (ratio >= 0.3)
     return { text: "Medium", color: "text-amber-600 dark:text-yellow-400" };
   return { text: "Low", color: "text-red-600 dark:text-red-400" };
@@ -143,12 +172,32 @@ export default function ConsensusVoting({
   batchWeek = "Current Week",
   overrideLiveScores,
   isEnded = false,
+  canVote = true,
+  betTermProposals = [],
+  onVoteSlot,
+  userVotedIndex = null,
 }: ConsensusVotingProps) {
   const [now, setNow] = useState(() => Date.now());
   const [expandedFixtureIds, setExpandedFixtureIds] = useState<Set<number>>(
     new Set()
   );
   const [chosenVotes, setChosenVotes] = useState<Record<number, string>>({});
+  const [chosenSlot, setChosenSlot] = useState<number | null>(null);
+  const [votingSlot, setVotingSlot] = useState<number | null>(null);
+  // Single value, not a Set — vote_index on-chain only ever holds one slot at
+  // a time (cast_vote switches it, it doesn't accumulate), so tracking it as
+  // a growing set here would leave every option you've ever picked stuck
+  // "Voted" and permanently unselectable instead of just your current choice.
+  const [votedSlot, setVotedSlot] = useState<number | null>(null);
+  const [slotVoteError, setSlotVoteError] = useState<string | null>(null);
+
+  // Seed from the real on-chain vote, not just this session's local state —
+  // otherwise a reload forgets you already voted and lets you "vote" again
+  // (harmless on-chain since cast_vote allows switching, but confusing UI).
+  useEffect(() => {
+    setVotedSlot(userVotedIndex);
+    setChosenSlot(userVotedIndex);
+  }, [userVotedIndex]);
   const [fetchedScores, setFetchedScores] = useState<Record<number, ScoreInfo>>(
     {}
   );
@@ -229,17 +278,31 @@ export default function ConsensusVoting({
   }, [displayFixtures, selectedDate]);
 
   const handleVote = (fixtureId: number, optionId: string) => {
-    if (isEnded) return;
+    if (isEnded || !canVote) return;
     const fixture = fixtures.find((f) => f.fixtureId === fixtureId);
     if (fixture && fixture.startTime <= now) return;
     setUserVotes({ ...userVotes, [fixtureId]: optionId });
   };
 
   const handleChoose = (fixtureId: number, optionId: string) => {
-    if (isEnded) return;
+    if (isEnded || !canVote) return;
     const fixture = fixtures.find((f) => f.fixtureId === fixtureId);
     if (fixture && fixture.startTime <= now) return;
     setChosenVotes((prev) => ({ ...prev, [fixtureId]: optionId }));
+  };
+
+  const handleVoteSlot = async (slotIndex: number) => {
+    if (isEnded || !canVote || !onVoteSlot || votingSlot !== null) return;
+    setSlotVoteError(null);
+    setVotingSlot(slotIndex);
+    try {
+      await onVoteSlot(slotIndex);
+      setVotedSlot(slotIndex);
+    } catch (e: any) {
+      setSlotVoteError(e?.message || "Vote failed.");
+    } finally {
+      setVotingSlot(null);
+    }
   };
 
   const toggleExpanded = (fixtureId: number) => {
@@ -267,13 +330,84 @@ export default function ConsensusVoting({
 
   if (!fixtures.length) {
     return (
-      <div className="p-6 rounded-2xl backdrop-blur-sm border border-border-low text-center">
-        <h2 className="text-lg font-bold mb-2">
-          No upcoming voting opportunities
-        </h2>
-        <p className="text-gray-400">
-          The syndicate is waiting for the next TXODDS fixture batch.
-        </p>
+      <div className="p-6 rounded-2xl backdrop-blur-sm border border-border-low text-center space-y-4">
+        <div>
+          <h2 className="text-lg font-bold mb-2">
+            {betTermProposals.length > 0 ? "Match proposed — odds not resolved yet" : "No upcoming voting opportunities"}
+          </h2>
+          <p className="text-gray-400">
+            {betTermProposals.length > 0
+              ? "This batch has a real on-chain proposal — pick one to vote:"
+              : "The syndicate is waiting for the next TXODDS fixture batch."}
+          </p>
+        </div>
+
+        {!canVote && betTermProposals.length > 0 && (
+          <div className="p-3 bg-foreground/5 border border-border-low rounded-lg text-sm text-muted text-left">
+            You haven&apos;t joined this batch — viewing only. Stake during a
+            batch&apos;s Lobby phase to vote.
+          </div>
+        )}
+
+        {betTermProposals.length > 0 && (
+          <div className="space-y-2 text-left">
+            {betTermProposals.map((proposal) => {
+              const isVoted = votedSlot === proposal.slotIndex;
+              const isChosen = chosenSlot === proposal.slotIndex;
+              const disabled = isEnded || !canVote || isVoted || !onVoteSlot;
+              return (
+                <button
+                  key={proposal.slotIndex}
+                  onClick={() => !disabled && setChosenSlot(isChosen ? null : proposal.slotIndex)}
+                  disabled={disabled}
+                  className={`w-full text-left p-3 rounded-lg border transition ${
+                    disabled
+                      ? "border-border-low bg-foreground/[0.01] cursor-not-allowed opacity-70"
+                      : isChosen
+                        ? "border-foreground bg-foreground/5 cursor-pointer"
+                        : "border-border-low hover:border-gray-500 cursor-pointer"
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-foreground">{proposal.matchText}</span>
+                    <div className="flex items-center gap-2">
+                      {isVoted && (
+                        <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
+                          Voted
+                        </span>
+                      )}
+                      {proposal.multiplier !== "—" && (
+                        <span className="text-sm font-bold text-foreground">{proposal.multiplier}</span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted mt-1">{proposal.predicate}</p>
+                  {proposal.kickoff && <p className="text-xs text-muted">Kickoff: {proposal.kickoff}</p>}
+                </button>
+              );
+            })}
+
+            {chosenSlot !== null && (
+              <button
+                onClick={() => handleVoteSlot(chosenSlot)}
+                disabled={votingSlot !== null}
+                className="w-full py-2.5 px-4 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 cursor-pointer bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {votingSlot === chosenSlot
+                  ? "Casting vote..."
+                  : votedSlot !== null
+                    ? "Change Vote"
+                    : "Vote"}
+              </button>
+            )}
+
+            {slotVoteError && (
+              <div className="p-2.5 rounded-lg text-xs text-center bg-red-500/10 border border-red-500/30 text-red-500">
+                {slotVoteError}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -326,7 +460,7 @@ export default function ConsensusVoting({
             <div className="flex justify-between text-xs text-muted mb-1">
               <span>Weekly Treasury Budget</span>
               <span className="font-mono">
-                ${weeklyYieldPool.toLocaleString()}
+                {weeklyYieldPool.toLocaleString()} USDC
               </span>
             </div>
             <div className="w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-2">
@@ -338,14 +472,21 @@ export default function ConsensusVoting({
               />
             </div>
             <div className="flex justify-between text-xs text-muted mt-1">
-              <span>Allocated: ${allocatedBudget.toFixed(0)}</span>
-              <span>Remaining: ${remainingBudget.toFixed(0)}</span>
+              <span>Allocated: {allocatedBudget.toFixed(0)} USDC</span>
+              <span>Remaining: {remainingBudget.toFixed(0)} USDC</span>
             </div>
           </div>
         </div>
       </div>
 
-      {remainingBets === 0 && (
+      {!canVote && (
+        <div className="p-3 bg-foreground/5 border border-border-low rounded-lg text-sm text-muted">
+          You haven&apos;t joined this batch — viewing consensus only. Stake
+          during a batch&apos;s Lobby phase to vote.
+        </div>
+      )}
+
+      {canVote && remainingBets === 0 && (
         <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-sm text-amber-600 dark:text-yellow-300">
           Weekly prediction budget exhausted. Remaining fixtures are
           automatically skipped.
@@ -499,7 +640,7 @@ export default function ConsensusVoting({
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           stateBadge === "Live"
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 animate-pulse"
+                            ? "bg-neutral-200 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-200 animate-pulse"
                             : stateBadge === "Finished"
                               ? "bg-neutral-100 text-neutral-800 dark:bg-gray-700 dark:text-gray-300"
                               : "bg-neutral-100 text-neutral-600 dark:bg-gray-800 dark:text-gray-400"
@@ -529,7 +670,7 @@ export default function ConsensusVoting({
                         className={`px-2 py-0.5 rounded ${
                           score.status === "Finished"
                             ? "bg-neutral-100 text-neutral-800 dark:bg-gray-700 dark:text-gray-300"
-                            : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 animate-pulse"
+                            : "bg-neutral-200 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-200 animate-pulse"
                         }`}
                       >
                         {score.status}
@@ -592,8 +733,8 @@ export default function ConsensusVoting({
                               {outcomeText}
                             </span>
                             <span className="font-mono">
-                              {treasuryChange >= 0 ? "+" : ""}$
-                              {treasuryChange.toFixed(2)}
+                              {treasuryChange >= 0 ? "+" : ""}
+                              {treasuryChange.toFixed(2)} USDC
                             </span>
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
@@ -622,6 +763,7 @@ export default function ConsensusVoting({
                     {fixture.options.map((opt) => {
                       const disabled =
                         isVotingClosed ||
+                        !canVote ||
                         (remainingBets === 0 &&
                           !isVotingClosed &&
                           !userVoteForMatch);
@@ -675,7 +817,7 @@ export default function ConsensusVoting({
                                 </span>
                               )}
                               {userVoteForMatch === opt.id && (
-                                <span className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full font-semibold border border-emerald-500/20">
+                                <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
                                   Your Vote
                                 </span>
                               )}
@@ -706,12 +848,14 @@ export default function ConsensusVoting({
                       onClick={() => handleChoose(fixture.fixtureId, skipId)}
                       disabled={
                         isVotingClosed ||
+                        !canVote ||
                         (remainingBets === 0 &&
                           !isVotingClosed &&
                           !userVoteForMatch)
                       }
                       className={`w-full text-left p-3 rounded-lg border transition ${
                         isVotingClosed ||
+                        !canVote ||
                         (remainingBets === 0 &&
                           !isVotingClosed &&
                           !userVoteForMatch)
@@ -733,7 +877,7 @@ export default function ConsensusVoting({
                             </span>
                           )}
                           {userVoteForMatch === skipId && (
-                            <span className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full font-semibold border border-emerald-500/20">
+                            <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
                               Your Vote
                             </span>
                           )}

@@ -38,7 +38,7 @@ export default function Header() {
               </button>
             ) : (
               <div className="flex items-center gap-2 bg-card border border-border-low px-3 py-1.5 rounded-xl text-xs font-mono">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-foreground animate-pulse" />
                 <span>
                   {address
                     ? `${address.slice(0, 6)}...${address.slice(-4)}`

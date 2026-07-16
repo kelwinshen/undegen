@@ -12,7 +12,7 @@ import {
 } from "@solana/web3.js";
 import bs58 from "bs58";
 import * as borsh from "@coral-xyz/borsh";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/live/Header";
 
 const YIELD_VAULT_PROGRAM_ID_STR = "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
 const DEVNET_RPC = "https://api.devnet.solana.com";

@@ -8,7 +8,7 @@ pub mod txodds_types;
 
 use instructions::*;
 
-declare_id!("BgAM2mzfbFhcA1F3AfjfnV1nzyTJXb6bSz5BX7Wufwma");
+declare_id!("4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY");
 
 #[program]
 pub mod undegen_core {

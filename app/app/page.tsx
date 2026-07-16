@@ -1,16 +1,20 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import ConsensusVoting from "./components/home/ConsensusVoting";
-import SyndicateSidebar from "./components/home/SyndicateSidebar";
-import BatchTimer from "./components/home/BatchTimer";
-import HowItWorks from "./components/home/HowItWorks";
-import FAQ from "./components/home/FAQ";
+import React, { useState, useMemo, useEffect } from "react";
+import ConsensusVoting from "./components/live/ConsensusVoting";
+import SyndicateSidebar from "./components/live/SyndicateSidebar";
+import BatchTimer from "./components/live/BatchTimer";
+import HowItWorks from "./components/live/HowItWorks";
+import FAQ from "./components/live/FAQ";
 import { useUndegenProgram } from "./context/UndegenProgramContext";
+import { fetchLiveMatchForBatch, describeBatchBetTerms, BetTermProposal } from "./services/undegenProgram";
 
-export default function Home() {
+type BatchVoteStatus = "voting" | "voted" | "ongoing" | "waiting";
+
+export default function Live() {
   const {
     batches,
+    options,
     fixtures,
     votes,
     matchDecisions,
@@ -18,9 +22,42 @@ export default function Home() {
     selectedBatchId,
     setSelectedBatchId,
     isConnected,
+    voteBySlotIndex,
   } = useUndegenProgram();
 
   const [userVotes, setUserVotes] = useState<Record<number, string>>({});
+  // Per-batch voting/match status for the sidebar's Live Batches list — each
+  // Active batch's fixture mapping is fetched independently of whichever
+  // batch is currently selected/focused, since that only drives `fixtures`.
+  const [batchVoteStatus, setBatchVoteStatus] = useState<Record<number, BatchVoteStatus>>({});
+  // Human-readable version of the focused batch's raw bet_terms, for when
+  // fixtures hasn't resolved a real match yet (still shows something a user
+  // can actually read instead of bare on-chain numbers).
+  const [betTermProposals, setBetTermProposals] = useState<BetTermProposal[]>([]);
+
+  useEffect(() => {
+    const activeBatches = batches.filter((b) => b.phase === "Active");
+    if (activeBatches.length === 0 || options.length === 0) return;
+    let cancelled = false;
+
+    Promise.all(
+      activeBatches.map(async (b) => {
+        const { fixture } = await fetchLiveMatchForBatch(b.batchId, b, options);
+        let status: BatchVoteStatus;
+        if (!fixture) status = "waiting";
+        else if (b.userHasVoted) status = "voted";
+        else if (fixture.startTime > Date.now()) status = "voting";
+        else status = "ongoing";
+        return [b.batchId, status] as const;
+      })
+    ).then((results) => {
+      if (!cancelled) setBatchVoteStatus(Object.fromEntries(results));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [batches, options]);
 
   // The live page only ever shows the batch currently in consensus voting —
   // Lobby (joinable) batches live in /upcoming, Ended ones in /history.
@@ -32,12 +69,50 @@ export default function Home() {
     return activeBatches.reduce((a, b) => (b.batchId > a.batchId ? b : a));
   }, [batches, selectedBatchId]);
 
+  useEffect(() => {
+    if (!liveBatchState || fixtures.length > 0) {
+      setBetTermProposals([]);
+      return;
+    }
+    let cancelled = false;
+    describeBatchBetTerms(liveBatchState, options).then((proposals) => {
+      if (!cancelled) setBetTermProposals(proposals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [liveBatchState, fixtures, options]);
+
   const weeklyYieldPool = liveBatchState?.weeklyYieldPool ?? 0;
+  const apyBps = liveBatchState?.apyBps ?? 0;
+  const betSize = liveBatchState?.betSize ?? 0;
   const maxPredictions = liveBatchState?.maxPredictions ?? 5;
   const acceptedBetsCount = liveBatchState?.acceptedPredictions ?? 0;
   const remainingBets = maxPredictions - acceptedBetsCount;
-  const allocatedBudget = (acceptedBetsCount / maxPredictions) * weeklyYieldPool;
-  const remainingBudget = weeklyYieldPool - allocatedBudget;
+  // "Allocated" is the whole weekly yield pool committed to this batch's
+  // betting — real data, same figure as Total Bet Capital. "Remaining" is
+  // what's left after completed bets have each drawn their fixed bet_size.
+  const allocatedBudget = weeklyYieldPool;
+  const remainingBudget = allocatedBudget - acceptedBetsCount * betSize;
+
+  // createdAt is the only real whole-batch timestamp on-chain — kickoff_timestamp
+  // is per-match and resets to 0 after every settlement, so it can't anchor a
+  // 7-day batch countdown.
+  const batchEndTime =
+    liveBatchState?.createdAt != null ? liveBatchState.createdAt + 7 * 24 * 60 * 60 * 1000 : null;
+
+  // Real on-chain result for whichever match is currently decided on this
+  // batch — winningVoteIndex === 4 is a "skip" (no bet placed, so it's
+  // neither a win nor a loss). Only one decision is ever visible at a time
+  // (past matches within the same batch aren't retained), so this reflects
+  // the latest resolved bet, not a full history.
+  const isSkipDecision = liveBatchState?.winningVoteIndex === 4;
+  const hasDecidedBet = liveBatchState?.winningVoteIndex != null && !isSkipDecision;
+  const batchRecord = {
+    wins: hasDecidedBet && liveBatchState?.outcome === true ? 1 : 0,
+    losses: hasDecidedBet && liveBatchState?.outcome === false ? 1 : 0,
+    pending: remainingBets,
+  };
 
   const userLockedAmount = liveBatchState?.userDeposited ?? 0;
   const userPoolShare =
@@ -46,6 +121,10 @@ export default function Home() {
       : 0;
 
   const userWeeklyYield = userPoolShare * weeklyYieldPool;
+
+  // Only participants who deposited during this batch's Lobby phase can vote —
+  // spectating other syndicate batches is fine, but voting requires skin in the game.
+  const canVote = isConnected && userLockedAmount > 0;
 
   // User's deposits across every batch (for the sidebar's portfolio list)
   const joinedBatches = useMemo(() => {
@@ -62,9 +141,10 @@ export default function Home() {
         weeklyYield,
         weeklyYieldPool: b.weeklyYieldPool,
         totalDeposited: b.totalDeposited,
+        voteStatus: batchVoteStatus[b.batchId],
       };
     });
-  }, [isConnected, batches]);
+  }, [isConnected, batches, batchVoteStatus]);
 
   if (isLoading) {
     return (
@@ -97,6 +177,7 @@ export default function Home() {
               remainingBets={remainingBets}
               phase={liveBatchState.phase}
               batchWeek={`Active Batch #${liveBatchState.batchId}`}
+              batchEndTime={batchEndTime}
             />
             <ConsensusVoting
               isLoading={isLoading}
@@ -109,12 +190,20 @@ export default function Home() {
               weeklyYieldPool={weeklyYieldPool}
               batchWeek={`Active Batch #${liveBatchState.batchId}`}
               isEnded={false}
+              canVote={canVote}
+              betTermProposals={betTermProposals}
+              onVoteSlot={voteBySlotIndex}
+              userVotedIndex={liveBatchState.userVotedIndex}
             />
           </div>
           <div className="space-y-6">
             <SyndicateSidebar
               isLoading={isLoading}
               weeklyYieldPool={weeklyYieldPool}
+              apyBps={apyBps}
+              betSize={betSize}
+              totalDeposited={liveBatchState.totalDeposited}
+              participantCount={liveBatchState.participantCount}
               allocatedBudget={allocatedBudget}
               remainingBudget={remainingBudget}
               acceptedBetsCount={acceptedBetsCount}
@@ -125,6 +214,7 @@ export default function Home() {
               userLockedAmount={userLockedAmount}
               isConnected={isConnected}
               phase={liveBatchState.phase}
+              batchRecord={batchRecord}
               joinedBatches={joinedBatches}
               currentBatchId={liveBatchState.batchId}
               onNavigateToBatch={(batchId) => setSelectedBatchId(batchId)}

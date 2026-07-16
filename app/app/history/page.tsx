@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import HowItWorks from "../components/home/HowItWorks";
-import FAQ from "../components/home/FAQ";
+import HowItWorks from "../components/live/HowItWorks";
+import FAQ from "../components/live/FAQ";
 import { useUndegenProgram } from "../context/UndegenProgramContext";
 
 export default function HistoryPage() {
@@ -26,11 +26,11 @@ export default function HistoryPage() {
     try {
       await withdraw(amount, batchId);
       setToastMessage(
-        `Successfully withdrew $${amount.toLocaleString()} USDC from Batch #${batchId}!`
+        `Successfully unstaked ${amount.toLocaleString()} USDC from Batch #${batchId}!`
       );
     } catch (e) {
       console.error(e);
-      setToastMessage(`Failed to withdraw from Batch #${batchId}`);
+      setToastMessage(`Failed to unstake from Batch #${batchId}`);
     }
   };
 
@@ -46,7 +46,7 @@ export default function HistoryPage() {
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               className="bg-card/95 dark:bg-[#111218]/95 border border-border-strong text-foreground text-xs font-bold tracking-wider py-3 px-6 rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 pointer-events-auto"
             >
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="h-2 w-2 rounded-full bg-foreground animate-pulse" />
               {toastMessage}
             </motion.div>
           </div>
@@ -104,22 +104,22 @@ export default function HistoryPage() {
                             Weekly Treasury Pool
                           </p>
                           <p className="text-3xl font-black text-foreground font-mono">
-                            $
                             {batch.weeklyYieldPool.toLocaleString(undefined, {
                               maximumFractionDigits: 2,
-                            })}
+                            })}{" "}
+                            USDC
                           </p>
                         </div>
 
                         {/* User Deposit Info */}
                         {isConnected && hasDeposit && (
-                          <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex justify-between items-center">
+                          <div className="p-3.5 rounded-xl bg-foreground/5 border border-foreground/20 flex justify-between items-center">
                             <div>
-                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">
-                                Your Deposit
+                              <p className="text-[10px] text-foreground font-bold uppercase tracking-wider">
+                                Your Stake
                               </p>
                               <p className="text-sm font-bold text-foreground font-mono mt-0.5">
-                                ${batch.userDeposited.toLocaleString()} USDC
+                                {batch.userDeposited.toLocaleString()} USDC
                               </p>
                             </div>
                             <span
@@ -129,7 +129,7 @@ export default function HistoryPage() {
                                   : "bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-500/20"
                               }`}
                             >
-                              {isWithdrawn ? "Withdrawn" : "Claimable"}
+                              {isWithdrawn ? "Unstaked" : "Claimable"}
                             </span>
                           </div>
                         )}
@@ -139,7 +139,7 @@ export default function HistoryPage() {
                           <div>
                             <p className="text-xs text-muted">Total Staked</p>
                             <p className="font-semibold text-foreground font-mono mt-0.5">
-                              ${batch.totalDeposited.toLocaleString()} USDC
+                              {batch.totalDeposited.toLocaleString()} USDC
                             </p>
                           </div>
                           <div>
@@ -173,9 +173,9 @@ export default function HistoryPage() {
                                     batch.userDeposited
                                   )
                                 }
-                                className="flex-1 py-3 rounded-xl font-bold transition text-sm cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-white"
+                                className="flex-1 py-3 rounded-xl font-bold transition text-sm cursor-pointer bg-foreground hover:bg-foreground/90 text-background"
                               >
-                                Withdraw ${batch.userDeposited} USDC
+                                {`Unstake ${batch.userDeposited.toLocaleString()} USDC`}
                               </button>
                             ) : (
                               <div className="flex-1 py-3 rounded-xl font-bold text-sm bg-neutral-100 text-neutral-400 border border-neutral-200 dark:bg-neutral-800/40 dark:text-neutral-500 dark:border-neutral-800 text-center flex items-center justify-center gap-1.5 select-none">
@@ -192,7 +192,7 @@ export default function HistoryPage() {
                                     d="M4.5 12.75l6 6 9-13.5"
                                   />
                                 </svg>
-                                Withdrawn
+                                Unstaked
                               </div>
                             )}
                           </>

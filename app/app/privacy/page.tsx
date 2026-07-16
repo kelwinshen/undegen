@@ -49,7 +49,7 @@ export default function PrivacyPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-bold text-foreground">2. How We Use Information</h2>
             <p>
-              Your public key is used to authenticate sessions, sync vote statuses with the smart contracts, compile consensus results, and verify deposit eligibility. Any technical metadata (such as IP or device information) is utilized solely for security verification and denial-of-service prevention.
+              Your public key is used to authenticate sessions, sync vote statuses with the smart contracts, compile consensus results, and verify stake eligibility. Any technical metadata (such as IP or device information) is utilized solely for security verification and denial-of-service prevention.
             </p>
           </section>
 

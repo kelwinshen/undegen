@@ -186,7 +186,7 @@ export default function SyndicateSidebar({
 
         {isConnected && (
           <div className="pt-2 border-t border-border-low flex justify-between items-center">
-            <span className="text-xs font-bold text-muted">Total Deposit</span>
+            <span className="text-xs font-bold text-muted">Total Stake</span>
             <span className="text-xs font-bold text-foreground font-mono">
               $
               {joinedBatches

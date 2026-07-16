@@ -48,7 +48,7 @@ export default function WithdrawSection({
             Settlement Complete
           </h2>
           <p className="text-xs text-muted max-w-xl leading-relaxed">
-            Your principal is now unlocked and available. Choose to withdraw to
+            Your principal is now unlocked and available. Choose to unstake to
             your wallet or roll it over into the weekly yield lottery.
           </p>
         </div>
@@ -59,7 +59,7 @@ export default function WithdrawSection({
               Staked Amount
             </span>
             <span className="text-2xl font-light font-mono text-foreground mt-0.5">
-              ${userDeposited.toLocaleString()}
+              {userDeposited.toLocaleString()}
               <span className="text-xs font-sans text-muted ml-1">USDC</span>
             </span>
           </div>
@@ -80,9 +80,9 @@ export default function WithdrawSection({
             </p>
           </div>
         ) : userWithdrawn ? (
-          <div className="p-4 text-center border border-emerald-500/20 bg-emerald-500/[0.02] rounded-xl flex items-center justify-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          <div className="p-4 text-center border border-foreground/20 bg-foreground/[0.02] rounded-xl flex items-center justify-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground" />
+            <span className="text-xs font-medium text-foreground">
               Funds Settled (Capital Reclaimed / Lottery Joined)
             </span>
           </div>
@@ -95,9 +95,9 @@ export default function WithdrawSection({
               className="py-3 px-6 border border-border hover:border-foreground/50 hover:bg-foreground/5 dark:hover:bg-white/5 active:scale-[0.99] font-medium rounded-xl text-xs tracking-wider uppercase transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 text-foreground"
             >
               {isWithdrawing ? (
-                <span className="inline-block animate-pulse">Releasing...</span>
+                <span className="inline-block animate-pulse">Unstaking...</span>
               ) : (
-                <span>Withdraw Funds</span>
+                <span>Unstake Funds</span>
               )}
             </button>
 

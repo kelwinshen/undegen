@@ -12,9 +12,9 @@ import {
 } from "@solana/web3.js";
 import bs58 from "bs58";
 import * as borsh from "@coral-xyz/borsh";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/live/Header";
 
-const UNDEGEN_PROGRAM_ID_STR = "BgAM2mzfbFhcA1F3AfjfnV1nzyTJXb6bSz5BX7Wufwma";
+const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
 const INIT_PROTOCOL_DISCRIMINATOR = Buffer.from([188, 233, 252, 106, 134, 146, 202, 91]);

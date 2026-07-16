@@ -6,28 +6,31 @@ interface BatchTimerProps {
   remainingBets?: number;
   phase?: string;
   batchWeek?: string;
+  // ms epoch — batch's real created_at + 7 days. Null when created_at is
+  // unavailable (pre-migration batches); shown as "Unknown" rather than
+  // fabricating a countdown to an arbitrary date.
+  batchEndTime?: number | null;
 }
 
 export default function BatchTimer({
   remainingBets,
   phase = "Active",
   batchWeek = "Active Batch (1)",
+  batchEndTime = null,
 }: BatchTimerProps) {
   const [timeLeft, setTimeLeft] = useState("");
 
   useEffect(() => {
+    if (batchEndTime === null) {
+      setTimeLeft("Unknown");
+      return;
+    }
     const update = () => {
-      const now = new Date();
-      const dayOfWeek = now.getUTCDay();
-      const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
-      const nextMonday = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate() + daysUntilMonday
-        )
-      );
-      const diff = nextMonday.getTime() - now.getTime();
+      const diff = batchEndTime - Date.now();
+      if (diff <= 0) {
+        setTimeLeft("Ending soon");
+        return;
+      }
       const days = Math.floor(diff / 86400000);
       const hours = Math.floor((diff % 86400000) / 3600000);
       const minutes = Math.floor((diff % 3600000) / 60000);
@@ -37,7 +40,7 @@ export default function BatchTimer({
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [batchEndTime]);
 
   const label =
     phase === "Lobby"

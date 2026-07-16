@@ -39,6 +39,9 @@ interface UndegenProgramContextType {
   deposit: (amount: number, batchId?: number) => Promise<void>;
   withdraw: (amount?: number, batchId?: number) => Promise<void>;
   vote: (fixtureId: number, optionId: string) => Promise<void>;
+  // For proposals recovered straight from bet_terms (describeBatchBetTerms) —
+  // the slot index (0-3) is already known, so there's no optionId to resolve.
+  voteBySlotIndex: (index: number) => Promise<void>;
   refreshState: () => Promise<void>;
 }
 
@@ -144,7 +147,7 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
     const targetBatchId = batchId ?? selectedBatchId;
     if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
     const targetAmount = amount ?? batches.find((b) => b.batchId === targetBatchId)?.userDeposited ?? 0;
-    if (targetAmount <= 0) throw new Error("Nothing to withdraw from this batch.");
+    if (targetAmount <= 0) throw new Error("Nothing to unstake from this batch.");
     const sig = await leaveBatchOnChain(targetBatchId, targetAmount, wallet);
     console.log(`[leave_batch] Withdrew ${targetAmount} from Batch ${targetBatchId}. Tx: ${sig}`);
     await refreshState();
@@ -152,9 +155,17 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
 
   const vote = async (fixtureId: number, optionId: string) => {
     if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
-    const index = await resolveVoteIndex(selectedBatchId, fixtureId, optionId);
+    const batchState = batches.find((b) => b.batchId === selectedBatchId);
+    const index = await resolveVoteIndex(selectedBatchId, fixtureId, optionId, batchState, options);
     const sig = await castVoteOnChain(selectedBatchId, index, wallet);
     console.log(`[cast_vote] Voted index ${index} on fixture ${fixtureId}. Tx: ${sig}`);
+    await refreshState();
+  };
+
+  const voteBySlotIndex = async (index: number) => {
+    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    const sig = await castVoteOnChain(selectedBatchId, index, wallet);
+    console.log(`[cast_vote] Voted index ${index} directly on Batch ${selectedBatchId}. Tx: ${sig}`);
     await refreshState();
   };
 
@@ -180,6 +191,7 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
       deposit,
       withdraw,
       vote,
+      voteBySlotIndex,
       refreshState,
     }),
     [batches, options, fixtures, votes, matchDecisions, isLoading, selectedBatchId, isConnected, walletAddress, status, usdcBalance]

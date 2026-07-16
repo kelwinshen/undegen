@@ -222,10 +222,10 @@ export default function LobbyPhase({
           <div className="flex justify-between items-center relative">
             <div className="relative group">
               <span className="text-muted border-b border-dashed border-neutral-700/50 pb-0.5 cursor-help">
-                Total Deposit
+                Total Stake
               </span>
               <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
-                Total amount deposited by all users in this batch.
+                Total amount staked by all users in this batch.
               </div>
             </div>
             <span className="font-bold text-foreground">

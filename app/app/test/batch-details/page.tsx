@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Connection, PublicKey } from "@solana/web3.js";
 import * as borsh from "@coral-xyz/borsh";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/live/Header";
 
-const UNDEGEN_PROGRAM_ID_STR = "BgAM2mzfbFhcA1F3AfjfnV1nzyTJXb6bSz5BX7Wufwma";
+const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
@@ -97,6 +97,112 @@ const OldBatchLayout = borsh.struct([
 
 const BATCH_STATUS_NAMES = ["Lobby", "Locked", "AwaitingCollateral", "Active", "Settled", "Cancelled"];
 
+const COMPARISON = { GreaterThan: 0, LessThan: 1, EqualTo: 2 };
+const STAT_KEY_PART1_GOALS = 1002;
+const STAT_KEY_PART2_GOALS = 1003;
+
+type OddsInfo = { matchText: string; multiplier: string; oddsLabel: string };
+
+// Mirrors test/cast-vote's getBetTermsFromOdds — reconstructs the on-chain
+// predicate a TxODDS option would produce, so it can be matched against a
+// decoded bet_terms slot to resolve the odds multiplier for that slot.
+function getBetTermsFromOdds(option: any) {
+  const type = option.marketType;
+  const outcome = option.outcome;
+  const period = option.period ?? 0;
+
+  if (type === "1X2_PARTICIPANT_RESULT") {
+    let comparison = COMPARISON.GreaterThan;
+    if (outcome === "part1") comparison = COMPARISON.GreaterThan;
+    else if (outcome === "part2") comparison = COMPARISON.LessThan;
+    else if (outcome === "draw") comparison = COMPARISON.EqualTo;
+
+    return {
+      fixture_id: BigInt(option.fixtureId),
+      period,
+      stat_a_key: STAT_KEY_PART1_GOALS,
+      stat_b_key: STAT_KEY_PART2_GOALS,
+      op: null as string | null,
+      predicate_threshold: 0,
+      predicate_comparison: comparison,
+      negation: false,
+    };
+  }
+
+  if (type === "OVERUNDER_PARTICIPANT_GOALS") {
+    const match = option.label.match(/([\d.]+)/);
+    if (match) {
+      const rawLine = parseFloat(match[0]);
+      if (rawLine % 0.5 !== 0) return null;
+
+      const isOver = outcome === "over";
+      const comparison = isOver ? COMPARISON.GreaterThan : COMPARISON.LessThan;
+      const threshold = isOver ? Math.floor(rawLine) : Math.ceil(rawLine);
+
+      return {
+        fixture_id: BigInt(option.fixtureId),
+        period,
+        stat_a_key: 1004,
+        stat_b_key: null as number | null,
+        op: null as string | null,
+        predicate_threshold: threshold,
+        predicate_comparison: comparison,
+        negation: false,
+      };
+    }
+  }
+
+  if (type === "ASIANHANDICAP_PARTICIPANT_GOALS") {
+    const match = option.label.match(/Handicap ([+-]?\d+(\.\d+)?)/);
+    if (!match) return null;
+
+    const line = parseFloat(match[1]);
+    if (line % 0.5 !== 0) return null;
+
+    let comparison: number;
+    let threshold: number;
+
+    if (outcome === "part1") {
+      threshold = Math.floor(-line);
+      comparison = COMPARISON.GreaterThan;
+    } else {
+      threshold = Math.ceil(-line);
+      comparison = COMPARISON.LessThan;
+    }
+
+    return {
+      fixture_id: BigInt(option.fixtureId),
+      period,
+      stat_a_key: STAT_KEY_PART1_GOALS,
+      stat_b_key: STAT_KEY_PART2_GOALS,
+      op: "Subtract" as string | null,
+      predicate_threshold: threshold,
+      predicate_comparison: comparison,
+      negation: false,
+    };
+  }
+
+  return null;
+}
+
+// Compares a candidate predicate (bigint/number fields, straight off
+// getBetTermsFromOdds) against a decoded bet_terms slot — decodeBatch below
+// stringifies fixture_id/stat_a_key/stat_b_key/predicate_threshold/negation
+// for display, so both sides are normalized to strings here.
+function rawTermsEqual(term: any, candidate: ReturnType<typeof getBetTermsFromOdds>): boolean {
+  if (!term || !candidate) return false;
+  return (
+    term.fixture_id === candidate.fixture_id.toString() &&
+    term.period === candidate.period &&
+    term.stat_a_key === candidate.stat_a_key.toString() &&
+    (term.stat_b_key ?? null) === (candidate.stat_b_key !== null ? candidate.stat_b_key.toString() : null) &&
+    (term.op ?? null) === candidate.op &&
+    term.predicate_threshold === candidate.predicate_threshold.toString() &&
+    term.predicate_comparison === candidate.predicate_comparison &&
+    term.negation === candidate.negation.toString()
+  );
+}
+
 function decodeBatch(data: Buffer): any {
   let decoded;
   
@@ -145,6 +251,7 @@ export default function BatchDetailsTest() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [batchData, setBatchData] = useState<any>(null);
+  const [oddsInfo, setOddsInfo] = useState<Record<number, OddsInfo>>({});
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const addLog = (type: LogEntry["type"], message: string) => {
@@ -154,6 +261,7 @@ export default function BatchDetailsTest() {
   const handleFetch = async () => {
     setLogs([]);
     setBatchData(null);
+    setOddsInfo({});
     const id = parseInt(batchId);
     if (isNaN(id) || id < 0) {
       setResult({ type: "error", message: "Invalid batch ID" });
@@ -191,6 +299,89 @@ export default function BatchDetailsTest() {
       setBatchData(decoded);
 
       addLog("success", `Batch decoded successfully via Borsh (${data.length === 319 ? "Old Layout" : "New Layout"}).`);
+
+      try {
+        // `all=1` only returns fixtures that haven't started yet (start >=
+        // now); `past=1` does an aggressive 5-day lookback and still queries
+        // each fixture's *current* odds snapshot. Together they cover a
+        // proposed match whether it's still upcoming, already live, or
+        // recently finished.
+        const [allRes, pastRes] = await Promise.all([
+          fetch("/api/txodds?all=1"),
+          fetch("/api/txodds?past=1"),
+        ]);
+        const [allData, pastData] = await Promise.all([allRes.json(), pastRes.json()]);
+        const options: any[] = [...(allData.options || []), ...(pastData.options || [])];
+
+        // Redis batch-mapping already records exactly which TxOdds option
+        // (messageId + outcomeIndex) each slot was proposed from — the same
+        // (messageId, outcomeIndex) key used by resolveVoteIndex/
+        // fetchLiveMatchForBatch in undegenProgram.ts. Looking that up
+        // directly survives the odds line moving since propose time, unlike
+        // re-deriving the predicate from current odds and comparing structurally.
+        const optionsByKey = new Map(options.map((o: any) => [`${o.messageId}-${o.outcomeIndex}`, o]));
+        const matchMap = new Map<number, { participant1: string; participant2: string }>();
+        options.forEach((opt: any) => {
+          if (!matchMap.has(opt.fixtureId)) {
+            matchMap.set(opt.fixtureId, { participant1: opt.participant1, participant2: opt.participant2 });
+          }
+        });
+
+        const mappingRes = await fetch(`/api/batch-mapping?batchId=${id}`);
+        const slotsMapping: Record<string, { messageId: string; outcomeIndex: number }> = mappingRes.ok
+          ? (await mappingRes.json()).slotsMapping || {}
+          : {};
+        if (!mappingRes.ok) {
+          addLog("warning", "No Redis batch-mapping found for this batch — falling back to live odds matching.");
+        }
+
+        const info: Record<number, OddsInfo> = {};
+        const unresolvedSlots: number[] = [];
+
+        decoded.bet_terms.forEach((term: any, i: number) => {
+          if (term.fixture_id === "0") return;
+          const slot = slotsMapping[i];
+          const matched = slot ? optionsByKey.get(`${slot.messageId}-${slot.outcomeIndex}`) : undefined;
+          if (matched) {
+            info[i] = {
+              matchText: `${matched.participant1} vs ${matched.participant2}`,
+              multiplier: matched.odds.toFixed(1) + "x",
+              oddsLabel: matched.label,
+            };
+          } else {
+            unresolvedSlots.push(i);
+          }
+        });
+
+        // Fall back to structural predicate matching for any slot Redis
+        // couldn't resolve (mapping missing, or the recorded messageId has
+        // aged out of TxOdds's snapshot windows).
+        for (const i of unresolvedSlots) {
+          const term = decoded.bet_terms[i];
+          const fixtureIdNum = Number(term.fixture_id);
+          const match = matchMap.get(fixtureIdNum);
+          const matchText = match ? `${match.participant1} vs ${match.participant2}` : `Fixture ${term.fixture_id}`;
+
+          let multiplier = "—";
+          let oddsLabel = "";
+          const fixtureOptions = options.filter((o: any) => o.fixtureId === fixtureIdNum);
+          for (const opt of fixtureOptions) {
+            const candidate = getBetTermsFromOdds(opt);
+            if (candidate && rawTermsEqual(term, candidate)) {
+              multiplier = opt.odds.toFixed(1) + "x";
+              oddsLabel = opt.label;
+              break;
+            }
+          }
+
+          info[i] = { matchText, multiplier, oddsLabel };
+        }
+
+        setOddsInfo(info);
+      } catch (e: any) {
+        addLog("warning", `Failed to resolve odds: ${e.message}`);
+      }
+
       setResult({ type: "success", message: "Data fetched." });
     } catch (err: any) {
       addLog("error", err.message);
@@ -260,6 +451,15 @@ export default function BatchDetailsTest() {
                           <span className="text-emerald-300">, thresh: {terms.predicate_threshold}</span>
                           <span className="text-emerald-300">, comp: {terms.predicate_comparison}</span>
                           <span className="text-emerald-300">, neg: {terms.negation}</span>
+                          {oddsInfo[i] && (
+                            <div className="ml-4 mt-0.5 flex items-center gap-2">
+                              <span className="text-gray-400">{oddsInfo[i].matchText}</span>
+                              {oddsInfo[i].oddsLabel && (
+                                <span className="text-gray-400">— {oddsInfo[i].oddsLabel}</span>
+                              )}
+                              <span className="font-bold text-white">{oddsInfo[i].multiplier}</span>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

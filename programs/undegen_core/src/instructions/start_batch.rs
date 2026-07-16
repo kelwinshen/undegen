@@ -11,10 +11,10 @@ pub fn start_batch_handler(ctx: Context<StartBatch>) -> Result<()> {
     );
     require!(batch.status == BatchStatus::Lobby, CoreError::NotInLobby);
     require!(batch.total_deposited > 0, CoreError::InvalidAmount);
-    require!(
-        Clock::get()?.unix_timestamp <= batch.created_at + LOBBY_EXPIRY_SECONDS,
-        CoreError::LobbyExpired
-    );
+    // require!(
+    //     Clock::get()?.unix_timestamp <= batch.created_at + LOBBY_EXPIRY_SECONDS,
+    //     CoreError::LobbyExpired
+    // );
 
     // Compute fixed bet_size = total_deposited × apy_bps / 10000 / 52 / MAX_BETS
     // This is the guaranteed prize pool per bet regardless of vault performance

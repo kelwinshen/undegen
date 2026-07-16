@@ -92,7 +92,7 @@ function ArticleCard({ article }: { article: NewsArticle }) {
         {/* Source badge */}
         <div className="absolute top-3 left-3">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-background/80 dark:bg-black/70 backdrop-blur-sm border border-border-low text-foreground">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground" />
             {article.source.name}
           </span>
         </div>

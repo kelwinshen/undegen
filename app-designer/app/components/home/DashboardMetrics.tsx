@@ -22,6 +22,9 @@ export default function DashboardMetrics({
   phase = "Active",
 }: DashboardMetricsProps) {
   const isLobby = phase === "Lobby";
+  // Annualized from the daily yield rate (simple, non-compounding):
+  // daily $ / TVL gives the daily rate, times 365 days, as a percentage.
+  const apy = globalTVL > 0 ? (globalDailyYield / globalTVL) * 365 * 100 : 0;
 
   return (
     <div className="p-6 rounded-2xl backdrop-blur-sm border border-border-low space-y-4">
@@ -50,10 +53,8 @@ export default function DashboardMetrics({
         {!isLobby && (
           <>
             <div className="p-3  rounded-lg text-center">
-              <p className="text-xs text-muted">Daily Yield Pool</p>
-              <p className="text-lg font-bold">
-                ${globalDailyYield.toFixed(2)}
-              </p>
+              <p className="text-xs text-muted">Pool APY</p>
+              <p className="text-3xl font-black text-foreground">{apy.toFixed(2)}%</p>
             </div>
             {isConnected && (
               <div className="p-3  rounded-lg text-center">
@@ -68,8 +69,8 @@ export default function DashboardMetrics({
 
         {isLobby && (
           <div className="p-3  rounded-lg text-center">
-            <p className="text-xs text-muted">Projected Daily Yield</p>
-            <p className="text-lg font-bold">${globalDailyYield.toFixed(2)}</p>
+            <p className="text-xs text-muted">Projected APY</p>
+            <p className="text-3xl font-black text-foreground">{apy.toFixed(2)}%</p>
           </div>
         )}
 

@@ -64,7 +64,6 @@ const hashStringToColor = (str: string) => {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
   const colors = [
-    "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
     "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
     "text-amber-400 bg-amber-500/10 border-amber-500/20",
     "text-rose-400 bg-rose-500/10 border-rose-500/20",
@@ -278,7 +277,7 @@ export default function StickyChat() {
                     Syndicate Chat
                   </h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="h-2 w-2 rounded-full bg-foreground animate-pulse" />
                     <span className="text-xs text-muted font-semibold">
                       142 degens connected
                     </span>

@@ -15,10 +15,10 @@ export default function HowItWorks() {
           <div className="flex flex-col sm:flex-row gap-4 max-w-md backdrop-blur-lg border border-border-low rounded-xl p-4">
             <div className="flex-1">
               <span className="text-xs text-neutral-400 block font-medium uppercase tracking-wider">
-                You Deposit
+                You Stake
               </span>
               <span className="text-xl font-bold text-foreground">
-                $1,000 USDC
+                1,000 USDC
               </span>
             </div>
             <div className="w-px bg-border-low hidden sm:block" />
@@ -26,8 +26,8 @@ export default function HowItWorks() {
               <span className="text-xs text-neutral-400 block font-medium uppercase tracking-wider">
                 Weekly Yield Pool
               </span>
-              <span className="text-xl font-bold text-emerald-500">
-                +$0.96 / week
+              <span className="text-xl font-bold text-foreground">
+                +0.96 USDC / week
               </span>
             </div>
           </div>
@@ -94,7 +94,7 @@ export default function HowItWorks() {
                 Yield Pool Allocation
               </span>
               <span className="font-semibold text-foreground">
-                Daily Yield: $1,200
+                Daily Yield: 1,200 USDC
               </span>
             </div>
             <div className="space-y-2">
@@ -103,7 +103,7 @@ export default function HowItWorks() {
                   Argentina to win (82% votes)
                 </span>
                 <span className="text-neutral-400 font-medium">
-                  $984 Allocated
+                  984 USDC Allocated
                 </span>
               </div>
               <div className="w-full bg-border-low h-2 rounded-full overflow-hidden">
@@ -128,15 +128,15 @@ export default function HowItWorks() {
             yield is lost — your principal stays 100% safe.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
-            <div className="p-4 border border-emerald-500/20 bg-emerald-500/5 rounded-xl space-y-1">
-              <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">
+            <div className="p-4 border border-foreground/20 bg-foreground/5 rounded-xl space-y-1">
+              <span className="text-[10px] text-foreground font-bold uppercase tracking-wider">
                 Scenario A: Win
               </span>
               <p className="text-xs text-neutral-600 dark:text-neutral-400">
                 Receive yield rewards scaled up by winning fixture odds.
               </p>
-              <span className="text-sm font-bold text-emerald-500 block pt-1">
-                +$5.04 Daily Reward
+              <span className="text-sm font-bold text-foreground block pt-1">
+                +5.04 USDC Daily Reward
               </span>
             </div>
             <div className="p-4 border border-border-low rounded-xl space-y-1">
@@ -147,7 +147,7 @@ export default function HowItWorks() {
                 Daily yield is lost, but your principal is fully returned.
               </p>
               <span className="text-sm font-bold text-foreground block pt-1">
-                $1,000 Safe
+                1,000 USDC Safe
               </span>
             </div>
           </div>

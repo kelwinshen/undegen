@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     'X-Api-Token': process.env.API_TOKEN || '',
   };
 
-  const url = `https://txline.txodds.com/api/odds/validation?messageId=${encodeURIComponent(messageId)}&ts=${ts}`;
+  const url = `https://txline-dev.txodds.com/api/odds/validation?messageId=${encodeURIComponent(messageId)}&ts=${ts}`;
 
   try {
     const res = await fetch(url, { headers });

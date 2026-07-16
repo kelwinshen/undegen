@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 const items = [
   {
     q: "What happens if the community prediction loses?",
-    a: "Only that week's yield is lost. Your original deposit remains safe and continues generating yield for future weeks.",
+    a: "Only that week's yield is lost. Your original stake remains safe and continues generating yield for future weeks.",
   },
   {
     q: "How are the predictions chosen?",
@@ -17,8 +17,8 @@ const items = [
     a: "The protocol treasury covers the payout. Undegen acts as a prediction market, not a bookmaker. The treasury is funded by protocol fees.",
   },
   {
-    q: "Can I withdraw my principal anytime?",
-    a: "Yes, after the 7‑day lock period. You can withdraw your full original deposit plus any unspent yield.",
+    q: "Can I unstake my principal anytime?",
+    a: "Yes, after the 7‑day lock period. You can unstake your full original stake plus any unspent yield.",
   },
   {
     q: "What makes Undegen different from sports betting?",

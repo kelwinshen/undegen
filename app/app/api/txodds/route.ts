@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server';
 
-const API_BASE = 'https://txline.txodds.com';
+const API_BASE = 'https://txline-dev.txodds.com';
 const TRUSTED_BOOKMAKER_ID = 10021;
-
-const dailyCache = new Map<string, any>();
-
-function getUTCDateString(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function getBatchEndTime(): number {
   const now = new Date();
@@ -24,16 +18,11 @@ export async function GET(request: Request) {
   const fetchAll = searchParams.get('all') === '1';
   const fetchPast = searchParams.get('past') === '1';
 
+
   const headers = {
     Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
     'X-Api-Token': process.env.API_TOKEN || '',
   };
-
-  const todayKey = getUTCDateString();
-
-  if (!fetchAll && !fetchPast && dailyCache.has(todayKey)) {
-    return NextResponse.json(dailyCache.get(todayKey));
-  }
 
   try {
     const now = Date.now();
@@ -47,7 +36,7 @@ export async function GET(request: Request) {
       const fetchPromises = targetDays.map((epochDay) =>
         fetch(`${API_BASE}/api/fixtures/snapshot/${epochDay}`, {
           headers,
-          next: { revalidate: 3600 },
+          cache: 'no-store',
         })
           .then((res) => (res.ok ? res.json() : []))
           .catch(() => [])
@@ -59,8 +48,11 @@ export async function GET(request: Request) {
       // Standard current snapshot fetch
       const fixtureRes = await fetch(`${API_BASE}/api/fixtures/snapshot`, {
         headers,
-        next: { revalidate: 3600 },
+        cache: 'no-store',
       });
+      if (!fixtureRes.ok) {
+        throw new Error(`TxOdds fixtures request failed: ${fixtureRes.status} ${fixtureRes.statusText}`);
+      }
       allFixtures = await fixtureRes.json();
     }
 
@@ -100,8 +92,11 @@ export async function GET(request: Request) {
     for (const f of batchFixtures) {
       const oddsRes = await fetch(
         `${API_BASE}/api/odds/snapshot/${f.FixtureId}`,
-        { headers, next: { revalidate: 3600 } }
+        { headers, cache: 'no-store' }
       );
+      if (!oddsRes.ok) {
+        throw new Error(`TxOdds odds request failed for fixture ${f.FixtureId}: ${oddsRes.status} ${oddsRes.statusText}`);
+      }
       const rawOddsData = await oddsRes.json();
       const oddsMarkets = Array.isArray(rawOddsData) ? rawOddsData : [rawOddsData];
 
@@ -157,16 +152,8 @@ export async function GET(request: Request) {
 
     const payload = { options };
 
-    if (!fetchAll && !fetchPast) {
-      dailyCache.clear();
-      dailyCache.set(todayKey, payload);
-    }
-
     return NextResponse.json(payload);
   } catch (error: any) {
-    if (!fetchAll && !fetchPast && dailyCache.has(todayKey)) {
-      return NextResponse.json(dailyCache.get(todayKey));
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

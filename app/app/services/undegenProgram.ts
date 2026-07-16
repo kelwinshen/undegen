@@ -13,15 +13,41 @@ import { Option, Fixture } from "../lib/dummyData";
 
 export type BatchPhase = "Lobby" | "Locked" | "Active" | "Ended";
 
+// Mirrors on-chain BetTerms (state.rs) — an unused slot has fixtureId 0.
+export interface RawBetTerm {
+  fixtureId: number;
+  period: number;
+  statAKey: number;
+  statBKey: number | null;
+  op: "Add" | "Subtract" | null;
+  predicateThreshold: number;
+  predicateComparison: number;
+  negation: boolean;
+}
+
 export interface BatchState {
   batchId: number;
   phase: BatchPhase;
   totalDeposited: number;
   weeklyYieldPool: number;
+  // Basis points (1% = 100 bps) — the operator-proposed APY set when this
+  // batch was initialized on-chain; weeklyYieldPool is derived from it.
+  apyBps: number;
+  // Fixed guaranteed payout per bet, set on-chain at start_batch (bet_size in
+  // start_batch.rs = weekly yield ÷ MAX_BETS at lock time) — not recomputed
+  // client-side, so it stays correct even if this getter's totalDeposited read
+  // ever raced a deposit.
+  betSize: number;
   acceptedPredictions: number;
   maxPredictions: number;
   operatorAddress: string;
   userDeposited: number;
+  userHasVoted: boolean;
+  // Real on-chain vote_index (0-3 = a bet_terms slot, 4 = skip) from
+  // UserPosition — null when userHasVoted is false. cast_vote allows
+  // switching votes (subtracts old weight, applies to new index), so this
+  // always reflects the current choice, not just "did they ever vote."
+  userVotedIndex: number | null;
   batchStartTime: number;
   participantCount: number;
   minimumDeposit: number;
@@ -30,6 +56,10 @@ export interface BatchState {
   voteWeights: number[]; // [bet0, bet1, bet2, bet3, skip]
   winningVoteIndex: number | null;
   outcome: boolean | null;
+  // Real on-chain bet terms (propose_match) — used to reconstruct this
+  // batch's match/options directly from chain when the Redis batch-mapping
+  // cache is missing or stale.
+  betTerms: RawBetTerm[];
   // Null for batches created before `created_at` existed on-chain (no migration).
   createdAt: number | null; // ms
   lobbyExpiresAt: number | null; // ms — createdAt + LOBBY_EXPIRY_SECONDS
@@ -83,13 +113,18 @@ function batchStatusToPhase(statusIdx: number): BatchPhase {
   switch (name) {
     case "Lobby":
       return "Lobby";
+    // A batch cycles Locked -> AwaitingCollateral -> Active -> Locked across
+    // each of its 5 weekly bets (finalize_consensus / deposit_collateral /
+    // settle_with_proof) without ever going back to Lobby. All of these —
+    // plus the (currently unused) Cancelled status — are still "the batch
+    // that's live right now" from the UI's perspective; only Settled is
+    // actually done.
     case "Locked":
     case "AwaitingCollateral":
-      return "Locked";
     case "Active":
+    case "Cancelled":
       return "Active";
     case "Settled":
-    case "Cancelled":
       return "Ended";
   }
 }
@@ -427,7 +462,7 @@ export async function fetchLatestBatchId(): Promise<number> {
  * requires amount > 0, there is no program-enforced minimum — left at 0
  * rather than inventing a number.
  */
-function buildBatchState(batchId: number, decoded: ReturnType<typeof decodeBatchAccount>, userDeposited: number): BatchState {
+function buildBatchState(batchId: number, decoded: ReturnType<typeof decodeBatchAccount>, userDeposited: number, userHasVoted: boolean = false, userVotedIndex: number | null = null): BatchState {
   const totalDeposited = Number(decoded.total_deposited) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS;
   const apyBps = decoded.apy_bps as number;
   const voteWeights: number[] = (decoded.vote_weights as any[]).map((w) => Number(w));
@@ -435,22 +470,37 @@ function buildBatchState(batchId: number, decoded: ReturnType<typeof decodeBatch
   const outcome: boolean | null = decoded.outcome ?? null;
   const createdAt: number | null = decoded.created_at != null ? Number(decoded.created_at) * 1000 : null;
   const lobbyExpiresAt: number | null = createdAt != null ? createdAt + ON_CHAIN_LOBBY_EXPIRY_SECONDS * 1000 : null;
+  const betTerms: RawBetTerm[] = (decoded.bet_terms as any[]).map((term) => ({
+    fixtureId: Number(term.fixture_id),
+    period: term.period as number,
+    statAKey: term.stat_a_key as number,
+    statBKey: term.stat_b_key != null ? (term.stat_b_key as number) : null,
+    op: term.op ? (("Add" in term.op ? "Add" : "Subtract") as "Add" | "Subtract") : null,
+    predicateThreshold: term.predicate_threshold as number,
+    predicateComparison: term.predicate_comparison as number,
+    negation: term.negation as boolean,
+  }));
 
   return {
     batchId,
     phase: batchStatusToPhase(decoded.statusIdx),
     totalDeposited,
     weeklyYieldPool: (totalDeposited * (apyBps / 10000)) / 52,
+    apyBps,
+    betSize: Number(decoded.bet_size) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
     acceptedPredictions: decoded.bets_completed as number,
     maxPredictions: ON_CHAIN_MAX_BETS,
     operatorAddress: decoded.operator.toBase58(),
     userDeposited,
+    userHasVoted,
+    userVotedIndex,
     batchStartTime: Number(decoded.kickoff_timestamp) * 1000,
     participantCount: Number(decoded.participant_count ?? 0),
     minimumDeposit: 0, // no program-enforced minimum; see doc comment above
     voteWeights,
     winningVoteIndex,
     outcome,
+    betTerms,
     createdAt,
     lobbyExpiresAt,
   };
@@ -469,16 +519,20 @@ export async function fetchBatchOnChain(batchId: number, userAddress: string | n
   const decoded = decodeBatchAccount(accountInfo.data.slice(8));
 
   let userDeposited = 0;
+  let userHasVoted = false;
+  let userVotedIndex: number | null = null;
   if (userAddress) {
     const userPositionPda = deriveUserPositionPda(batchPda, new PublicKey(userAddress));
     const posInfo = await connection.getAccountInfo(userPositionPda);
     if (posInfo && posInfo.data.length >= 8) {
       const pos = UserPositionLayout.decode(posInfo.data.slice(8));
       userDeposited = Number(pos.deposited_amount) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS;
+      userHasVoted = Boolean(pos.has_voted);
+      userVotedIndex = userHasVoted ? (pos.vote_index as number) : null;
     }
   }
 
-  return buildBatchState(batchId, decoded, userDeposited);
+  return buildBatchState(batchId, decoded, userDeposited, userHasVoted, userVotedIndex);
 }
 
 /**
@@ -520,6 +574,8 @@ export async function fetchAllBatchesOnChain(batchIds: number[], userAddress: st
   });
 
   let userDepositedByBatchId = new Map<number, number>();
+  let userHasVotedByBatchId = new Map<number, boolean>();
+  let userVotedIndexByBatchId = new Map<number, number | null>();
   if (userAddress) {
     const user = new PublicKey(userAddress);
     const positionPdas = decodedByIndex.map(({ batchPda }) => deriveUserPositionPda(batchPda, user));
@@ -533,42 +589,269 @@ export async function fetchAllBatchesOnChain(batchIds: number[], userAddress: st
       const posInfo = positionInfos[i];
       if (posInfo && posInfo.data.length >= 8) {
         const pos = UserPositionLayout.decode(posInfo.data.slice(8));
+        const hasVoted = Boolean(pos.has_voted);
         userDepositedByBatchId.set(batchId, Number(pos.deposited_amount) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS);
+        userHasVotedByBatchId.set(batchId, hasVoted);
+        userVotedIndexByBatchId.set(batchId, hasVoted ? (pos.vote_index as number) : null);
       }
     });
   }
 
   return decodedByIndex.map(({ batchId, decoded }) =>
-    buildBatchState(batchId, decoded, userDepositedByBatchId.get(batchId) ?? 0)
+    buildBatchState(
+      batchId,
+      decoded,
+      userDepositedByBatchId.get(batchId) ?? 0,
+      userHasVotedByBatchId.get(batchId) ?? false,
+      userVotedIndexByBatchId.get(batchId) ?? null
+    )
   );
+}
+
+// Mirrors the encoding in app/test/propose-match/page.tsx's getBetTermsBuffer,
+// run in reverse: given a live TxOdds option, derive what its bet_terms would
+// be if it were the one this slot proposed. Lets us recover a batch's real
+// match/options straight from on-chain bet_terms when the Redis batch-mapping
+// cache (written as a separate, non-atomic step by propose-match) is missing.
+const STAT_KEY_PART1_GOALS = 1002;
+const STAT_KEY_PART2_GOALS = 1003;
+const STAT_KEY_TOTAL_GOALS = 1004;
+const CMP_GREATER_THAN = 0;
+const CMP_LESS_THAN = 1;
+const CMP_EQUAL_TO = 2;
+
+function deriveBetTermFromOption(option: Option): Omit<RawBetTerm, "fixtureId" | "period" | "negation"> | null {
+  const { marketType, outcome, label } = option;
+
+  if (marketType === "1X2_PARTICIPANT_RESULT") {
+    let comparison: number;
+    if (outcome === "part1") comparison = CMP_GREATER_THAN;
+    else if (outcome === "part2") comparison = CMP_LESS_THAN;
+    else if (outcome === "draw") comparison = CMP_EQUAL_TO;
+    else return null;
+    return { statAKey: STAT_KEY_PART1_GOALS, statBKey: STAT_KEY_PART2_GOALS, op: null, predicateThreshold: 0, predicateComparison: comparison };
+  }
+
+  if (marketType === "OVERUNDER_PARTICIPANT_GOALS") {
+    const match = label.match(/([\d.]+)/);
+    if (!match) return null;
+    const rawLine = parseFloat(match[0]);
+    if (rawLine % 0.5 !== 0) return null;
+    const isOver = outcome === "over";
+    return {
+      statAKey: STAT_KEY_TOTAL_GOALS,
+      statBKey: null,
+      op: null,
+      predicateThreshold: isOver ? Math.floor(rawLine) : Math.ceil(rawLine),
+      predicateComparison: isOver ? CMP_GREATER_THAN : CMP_LESS_THAN,
+    };
+  }
+
+  if (marketType === "ASIANHANDICAP_PARTICIPANT_GOALS") {
+    const match = label.match(/Handicap ([+-]?\d+(\.\d+)?)/);
+    if (!match) return null;
+    const line = parseFloat(match[1]);
+    if (line % 0.5 !== 0) return null;
+    const isPart1 = outcome === "part1";
+    return {
+      statAKey: STAT_KEY_PART1_GOALS,
+      statBKey: STAT_KEY_PART2_GOALS,
+      op: "Subtract",
+      predicateThreshold: isPart1 ? Math.floor(-line) : Math.ceil(-line),
+      predicateComparison: isPart1 ? CMP_GREATER_THAN : CMP_LESS_THAN,
+    };
+  }
+
+  return null;
+}
+
+// Slot index (0-3) -> the live TxOdds option that produced it, recovered by
+// re-deriving each candidate's would-be bet term and comparing against what's
+// actually stored on-chain for that slot.
+function matchBetTermsToOptions(betTerms: RawBetTerm[], candidates: Option[]): Map<number, Option> {
+  const matches = new Map<number, Option>();
+  betTerms.forEach((term, slotIndex) => {
+    if (term.fixtureId <= 0) return; // unused slot
+    const option = candidates.find((o) => {
+      if (o.fixtureId !== term.fixtureId) return false;
+      if ((o.period ?? 0) !== term.period) return false;
+      if (term.negation) return false; // derive never produces a negated term, so it can't match one
+      const derived = deriveBetTermFromOption(o);
+      return (
+        !!derived &&
+        derived.statAKey === term.statAKey &&
+        derived.statBKey === term.statBKey &&
+        derived.op === term.op &&
+        derived.predicateThreshold === term.predicateThreshold &&
+        derived.predicateComparison === term.predicateComparison
+      );
+    });
+    if (option) matches.set(slotIndex, option);
+  });
+  return matches;
+}
+
+// The default /api/txodds fetch (no query params) only returns fixtures
+// starting before next batch-end — a match already underway falls outside
+// that window and simply won't be in whatever's already loaded. Mirrors
+// test/cast-vote's pattern of always re-fetching with all=1 (no start-time
+// upper bound) rather than trusting a possibly-stale/filtered options list.
+async function getFixtureCandidates(fixtureId: number, preloaded: Option[]): Promise<Option[]> {
+  const preloadedMatch = preloaded.filter((o) => o.fixtureId === fixtureId);
+  if (preloadedMatch.length > 0) return preloadedMatch;
+
+  try {
+    const res = await fetch("/api/txodds?all=1");
+    if (!res.ok) return [];
+    const data = await res.json();
+    const freshOptions: Option[] = data.options || [];
+    return freshOptions.filter((o) => o.fixtureId === fixtureId);
+  } catch {
+    return [];
+  }
+}
+
+// Mirrors test/cast-vote's statName/predicateText — turns a raw bet_terms
+// slot into a plain-English sentence ("Argentina goals > 0 (Full Time)")
+// using real participant names when known, without needing a matched option.
+function statName(key: number, team1: string, team2: string): string {
+  if (key === STAT_KEY_PART1_GOALS) return `${team1} goals`;
+  if (key === STAT_KEY_PART2_GOALS) return `${team2} goals`;
+  if (key === STAT_KEY_TOTAL_GOALS) return "Total goals";
+  return `Stat ${key}`;
+}
+
+function describeBetTerm(term: RawBetTerm, team1: string, team2: string): string {
+  const periodStr = term.period === 0 ? "Full Time" : "1st Half";
+  const compSymbol = term.predicateComparison === 0 ? ">" : term.predicateComparison === 1 ? "<" : "==";
+  const expr =
+    term.op && term.statBKey != null
+      ? `(${statName(term.statAKey, team1, team2)} ${term.op === "Add" ? "+" : "-"} ${statName(term.statBKey, team1, team2)})`
+      : statName(term.statAKey, team1, team2);
+  let predicate = `${expr} ${compSymbol} ${term.predicateThreshold}`;
+  if (term.negation) predicate = `NOT (${predicate})`;
+  return `${predicate} (${periodStr})`;
+}
+
+export interface BetTermProposal {
+  slotIndex: number;
+  term: RawBetTerm;
+  matchText: string;
+  kickoff: string;
+  predicate: string;
+  multiplier: string;
+  oddsLabel: string;
+}
+
+/**
+ * Human-readable summary of every non-empty bet_terms slot on a batch,
+ * mirroring test/cast-vote's proposalsList: real participant names + kickoff
+ * time when the fixture is found in TxOdds, real odds/label when the exact
+ * bet_terms slot matches a live option, and a plain predicate sentence
+ * (from the raw on-chain fields alone) otherwise — so a proposal is never
+ * shown as bare numbers just because odds matching didn't resolve.
+ */
+export async function describeBatchBetTerms(batchState: BatchState, preloadedOptions: Option[]): Promise<BetTermProposal[]> {
+  const proposals: BetTermProposal[] = [];
+
+  for (let slotIndex = 0; slotIndex < batchState.betTerms.length; slotIndex++) {
+    const term = batchState.betTerms[slotIndex];
+    if (term.fixtureId <= 0) continue;
+
+    const candidates = await getFixtureCandidates(term.fixtureId, preloadedOptions);
+    const first = candidates[0] as Option | undefined;
+    const team1 = first?.participant1 ?? "Team 1";
+    const team2 = first?.participant2 ?? "Team 2";
+
+    let multiplier = "—";
+    let oddsLabel = "";
+    const matched = matchBetTermsToOptions([term], candidates).get(0);
+    if (matched) {
+      multiplier = `${matched.odds.toFixed(1)}x`;
+      oddsLabel = matched.label;
+    }
+
+    // Temporary trace — remove once odds-matching is confirmed working live.
+    // Shows exactly why a slot did/didn't resolve to a live option.
+    console.debug(`[describeBatchBetTerms] slot ${slotIndex}`, {
+      term,
+      candidateCount: candidates.length,
+      candidates: candidates.map((o) => ({
+        id: o.id,
+        marketType: o.marketType,
+        outcome: o.outcome,
+        period: o.period,
+        label: o.label,
+        odds: o.odds,
+        derived: deriveBetTermFromOption(o),
+      })),
+      matchedOptionId: matched?.id ?? null,
+    });
+
+    proposals.push({
+      slotIndex,
+      term,
+      matchText: first ? `${team1} vs ${team2}` : `Fixture ${term.fixtureId}`,
+      kickoff: first ? new Date(first.startTime).toLocaleString() : "",
+      predicate: describeBetTerm(term, team1, team2),
+      multiplier,
+      oddsLabel,
+    });
+  }
+
+  return proposals;
 }
 
 /**
  * Resolve a UI (fixtureId, optionId) pair to the batch's on-chain vote index
- * (0-3 = a bet_terms slot, 4 = skip), using the Redis mapping that propose-match
- * saved when the operator proposed this batch's outcomes.
+ * (0-3 = a bet_terms slot, 4 = skip). Tries the Redis mapping propose-match
+ * saved first (cheap, already-labeled); falls back to re-deriving the mapping
+ * straight from the batch's real bet_terms if that cache is missing.
  */
-export async function resolveVoteIndex(batchId: number, fixtureId: number, optionId: string): Promise<number> {
+export async function resolveVoteIndex(
+  batchId: number,
+  fixtureId: number,
+  optionId: string,
+  batchState?: BatchState,
+  allOptions?: Option[]
+): Promise<number> {
   if (optionId === `${fixtureId}-skip`) return 4;
 
   const res = await fetch(`/api/batch-mapping?batchId=${batchId}`);
-  if (!res.ok) throw new Error("No on-chain proposal mapping found for this batch.");
-  const mapping = await res.json();
-  const slotsMapping: Record<string, { messageId: string; outcomeIndex: number }> = mapping.slotsMapping || {};
-
-  for (const [indexStr, slot] of Object.entries(slotsMapping)) {
-    if (`${slot.messageId}-${slot.outcomeIndex}` === optionId) return Number(indexStr);
+  if (res.ok) {
+    const mapping = await res.json();
+    const slotsMapping: Record<string, { messageId: string; outcomeIndex: number }> = mapping.slotsMapping || {};
+    // Redis stores each slot by (messageId, outcomeIndex) — the raw TxOdds
+    // identity — not by Option.id (fixtureId-marketType-params-outcome-period),
+    // so look candidates up by that same key before comparing to optionId.
+    const optionsByKey = new Map((allOptions ?? []).map((o) => [`${o.messageId}-${o.outcomeIndex}`, o]));
+    for (const [indexStr, slot] of Object.entries(slotsMapping)) {
+      const option = optionsByKey.get(`${slot.messageId}-${slot.outcomeIndex}`);
+      if (option && option.id === optionId) return Number(indexStr);
+    }
   }
+
+  if (batchState) {
+    const candidates = await getFixtureCandidates(fixtureId, allOptions ?? []);
+    const matches = matchBetTermsToOptions(batchState.betTerms, candidates);
+    for (const [slotIndex, option] of matches) {
+      if (option.id === optionId) return slotIndex;
+    }
+  }
+
   throw new Error("Could not resolve this option to an on-chain vote slot.");
 }
 
 /**
  * The inverse of resolveVoteIndex: given a batch's already-fetched on-chain
  * state and the full /api/txodds option catalog, reconstruct the single real
- * match this batch proposed (via propose_match + the Redis batch-mapping) —
- * its options, real vote_weights as tallies, and the real decided outcome
- * (if winning_vote_index has been set). Returns nulls if nothing's been
- * proposed for this batch yet (still Lobby/Locked, pre-propose_match).
+ * match this batch proposed — its options, real vote_weights as tallies, and
+ * the real decided outcome (if winning_vote_index has been set). Tries the
+ * Redis batch-mapping cache first; if it's missing (propose-match's Redis
+ * write is a separate, non-atomic step from the on-chain propose_match tx, so
+ * it can be absent even when bet_terms is real), falls back to matching the
+ * batch's on-chain bet_terms directly against live /api/txodds options.
+ * Returns nulls only if nothing's been proposed for this batch at all yet.
  */
 export async function fetchLiveMatchForBatch(
   batchId: number,
@@ -576,25 +859,38 @@ export async function fetchLiveMatchForBatch(
   allOptions: Option[]
 ): Promise<{ fixture: Fixture | null; votes: Record<string, number>; decision: VoteResult | null }> {
   const res = await fetch(`/api/batch-mapping?batchId=${batchId}`);
-  if (!res.ok) return { fixture: null, votes: {}, decision: null };
+  let resolvedSlots: { slotIndex: number; option: Option }[] = [];
 
-  const mapping = await res.json();
-  const slotsMapping: Record<string, { messageId: string; ts: number; outcomeIndex: number }> =
-    mapping.slotsMapping || {};
-
-  const optionsById = new Map(allOptions.map((o) => [o.id, o]));
-  const resolvedSlots: { slotIndex: number; option: Option }[] = [];
-  for (const [indexStr, slot] of Object.entries(slotsMapping)) {
-    const option = optionsById.get(`${slot.messageId}-${slot.outcomeIndex}`);
-    if (option) resolvedSlots.push({ slotIndex: Number(indexStr), option });
+  if (res.ok) {
+    const mapping = await res.json();
+    const slotsMapping: Record<string, { messageId: string; ts: number; outcomeIndex: number }> =
+      mapping.slotsMapping || {};
+    // Same (messageId, outcomeIndex) keying as resolveVoteIndex — this is the
+    // raw TxOdds identity slotsMapping was written with, not Option.id.
+    const optionsByKey = new Map(allOptions.map((o) => [`${o.messageId}-${o.outcomeIndex}`, o]));
+    for (const [indexStr, slot] of Object.entries(slotsMapping)) {
+      const option = optionsByKey.get(`${slot.messageId}-${slot.outcomeIndex}`);
+      if (option) resolvedSlots.push({ slotIndex: Number(indexStr), option });
+    }
   }
+
+  if (resolvedSlots.length === 0) {
+    // Redis cache missing/empty — fall back to the batch's real bet_terms.
+    const fixtureId = batchState.betTerms.find((t) => t.fixtureId > 0)?.fixtureId;
+    if (fixtureId) {
+      const candidates = await getFixtureCandidates(fixtureId, allOptions);
+      const matches = matchBetTermsToOptions(batchState.betTerms, candidates);
+      resolvedSlots = Array.from(matches, ([slotIndex, option]) => ({ slotIndex, option }));
+    }
+  }
+
   resolvedSlots.sort((a, b) => a.slotIndex - b.slotIndex);
 
   if (resolvedSlots.length === 0) {
     return { fixture: null, votes: {}, decision: null };
   }
 
-  const fixtureId = Number(mapping.fixtureId) || resolvedSlots[0].option.fixtureId;
+  const fixtureId = resolvedSlots[0].option.fixtureId;
   const first = resolvedSlots[0].option;
   const fixture: Fixture = {
     fixtureId,
