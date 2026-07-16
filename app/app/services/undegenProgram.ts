@@ -701,10 +701,13 @@ async function getFixtureCandidates(fixtureId: number, preloaded: Option[]): Pro
   if (preloadedMatch.length > 0) return preloadedMatch;
 
   try {
-    const res = await fetch("/api/txodds?all=1");
-    if (!res.ok) return [];
-    const data = await res.json();
-    const freshOptions: Option[] = data.options || [];
+    const [allRes, pastRes] = await Promise.all([
+      fetch("/api/txodds?all=1"),
+      fetch("/api/txodds?past=1"),
+    ]);
+    const allData = allRes.ok ? await allRes.json() : {};
+    const pastData = pastRes.ok ? await pastRes.json() : {};
+    const freshOptions: Option[] = [...(allData.options || []), ...(pastData.options || [])];
     return freshOptions.filter((o) => o.fixtureId === fixtureId);
   } catch {
     return [];
@@ -754,6 +757,18 @@ export interface BetTermProposal {
 export async function describeBatchBetTerms(batchState: BatchState, preloadedOptions: Option[]): Promise<BetTermProposal[]> {
   const proposals: BetTermProposal[] = [];
 
+  // Fetch Redis mapping for this batch
+  let slotsMapping: Record<string, { messageId: string; ts: number; outcomeIndex: number }> = {};
+  try {
+    const mapRes = await fetch(`/api/batch-mapping?batchId=${batchState.batchId}`);
+    if (mapRes.ok) {
+      const mapData = await mapRes.json();
+      slotsMapping = mapData.slotsMapping || {};
+    }
+  } catch (err) {
+    console.error("Failed to fetch batch-mapping from Redis:", err);
+  }
+
   for (let slotIndex = 0; slotIndex < batchState.betTerms.length; slotIndex++) {
     const term = batchState.betTerms[slotIndex];
     if (term.fixtureId <= 0) continue;
@@ -767,8 +782,34 @@ export async function describeBatchBetTerms(batchState: BatchState, preloadedOpt
     let oddsLabel = "";
     const matched = matchBetTermsToOptions([term], candidates).get(0);
     if (matched) {
-      multiplier = `${matched.odds.toFixed(1)}x`;
       oddsLabel = matched.label;
+    }
+
+    // Now get the exact multiplier from validation endpoint using Redis messageId/ts if available
+    const slotData = slotsMapping[slotIndex];
+    if (slotData && slotData.messageId && slotData.ts !== undefined) {
+      try {
+        const valRes = await fetch(`/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`);
+        if (valRes.ok) {
+          const valData = await valRes.json();
+          const odds = valData.odds;
+          const prices = odds?.Prices ?? odds?.prices;
+          if (prices) {
+            const price = prices[slotData.outcomeIndex];
+            if (price !== undefined) {
+              const calculatedOdds = Number(price) / 1000;
+              multiplier = `${calculatedOdds.toFixed(1)}x`;
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to fetch validation odds for slot ${slotIndex}:`, err);
+      }
+    }
+
+    // Fall back to matched candidate's odds if validation wasn't resolved
+    if (multiplier === "—" && matched) {
+      multiplier = `${matched.odds.toFixed(1)}x`;
     }
 
     // Temporary trace — remove once odds-matching is confirmed working live.
@@ -786,6 +827,7 @@ export async function describeBatchBetTerms(batchState: BatchState, preloadedOpt
         derived: deriveBetTermFromOption(o),
       })),
       matchedOptionId: matched?.id ?? null,
+      validationMultiplier: multiplier,
     });
 
     proposals.push({
@@ -860,11 +902,11 @@ export async function fetchLiveMatchForBatch(
 ): Promise<{ fixture: Fixture | null; votes: Record<string, number>; decision: VoteResult | null }> {
   const res = await fetch(`/api/batch-mapping?batchId=${batchId}`);
   let resolvedSlots: { slotIndex: number; option: Option }[] = [];
+  let slotsMapping: Record<string, { messageId: string; ts: number; outcomeIndex: number }> = {};
 
   if (res.ok) {
     const mapping = await res.json();
-    const slotsMapping: Record<string, { messageId: string; ts: number; outcomeIndex: number }> =
-      mapping.slotsMapping || {};
+    slotsMapping = mapping.slotsMapping || {};
     // Same (messageId, outcomeIndex) keying as resolveVoteIndex — this is the
     // raw TxOdds identity slotsMapping was written with, not Option.id.
     const optionsByKey = new Map(allOptions.map((o) => [`${o.messageId}-${o.outcomeIndex}`, o]));
@@ -881,6 +923,29 @@ export async function fetchLiveMatchForBatch(
       const candidates = await getFixtureCandidates(fixtureId, allOptions);
       const matches = matchBetTermsToOptions(batchState.betTerms, candidates);
       resolvedSlots = Array.from(matches, ([slotIndex, option]) => ({ slotIndex, option }));
+    }
+  }
+
+  // Load precise proposed odds from validation archive for each resolved slot
+  for (const slot of resolvedSlots) {
+    const slotData = slotsMapping[slot.slotIndex];
+    if (slotData && slotData.messageId && slotData.ts !== undefined) {
+      try {
+        const valRes = await fetch(`/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`);
+        if (valRes.ok) {
+          const valData = await valRes.json();
+          const odds = valData.odds;
+          const prices = odds?.Prices ?? odds?.prices;
+          if (prices) {
+            const price = prices[slotData.outcomeIndex];
+            if (price !== undefined) {
+              slot.option.odds = Number(price) / 1000;
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to fetch validation odds for slot ${slot.slotIndex}:`, err);
+      }
     }
   }
 
