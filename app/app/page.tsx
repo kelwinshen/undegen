@@ -1,15 +1,20 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import ConsensusVoting from "./components/live/ConsensusVoting";
-import SyndicateSidebar from "./components/live/SyndicateSidebar";
-import BatchTimer from "./components/live/BatchTimer";
-import HowItWorks from "./components/live/HowItWorks";
-import FAQ from "./components/live/FAQ";
+import ConsensusVoting from "./components/ConsensusVoting";
+import SyndicateSidebar from "./components/SyndicateSidebar";
+import BatchTimer from "./components/BatchTimer";
+import HowItWorks from "./components/HowItWorks";
+import FAQ from "./components/FAQ";
 import { useUndegenProgram } from "./context/UndegenProgramContext";
-import { fetchLiveMatchForBatch, describeBatchBetTerms, BetTermProposal } from "./services/undegenProgram";
+import { describeBatchBetTerms, BetTermProposal } from "./services/undegenProgram";
 
-type BatchVoteStatus = "voting" | "voted" | "ongoing" | "waiting";
+// The Live Batches picker's lifecycle label for each batch's current bet:
+// no-match (nothing proposed yet) -> voting (status Locked, consensus still
+// open) -> voting-ended (status AwaitingCollateral, operator has finalized
+// consensus and just needs to deposit collateral) -> active (status Active,
+// operator has deposited collateral).
+type BatchVoteStatus = "no-match" | "voting" | "voting-ended" | "active";
 
 export default function Live() {
   const {
@@ -23,6 +28,7 @@ export default function Live() {
     setSelectedBatchId,
     isConnected,
     voteBySlotIndex,
+    settleDefault,
   } = useUndegenProgram();
 
   const [userVotes, setUserVotes] = useState<Record<number, string>>({});
@@ -35,29 +41,28 @@ export default function Live() {
   // can actually read instead of bare on-chain numbers).
   const [betTermProposals, setBetTermProposals] = useState<BetTermProposal[]>([]);
 
+  // Voting Session / No Match / Voting Ended, straight off the real on-chain
+  // BatchStatus — same field app/test/batch-details reads, no Redis, no
+  // TxOdds. cast_vote and propose_match both require status === "Locked",
+  // so that's "voting is open"; whether it's actually open for a real match
+  // depends on whether a proposal exists yet (bet_terms has a non-zero
+  // fixtureId). AwaitingCollateral means finalize_consensus already ran —
+  // voting is done, operator just hasn't deposited collateral yet.
+  // Active (ongoing/awaiting-result) isn't wired up yet.
   useEffect(() => {
-    const activeBatches = batches.filter((b) => b.phase === "Active");
-    if (activeBatches.length === 0 || options.length === 0) return;
-    let cancelled = false;
-
-    Promise.all(
-      activeBatches.map(async (b) => {
-        const { fixture } = await fetchLiveMatchForBatch(b.batchId, b, options);
-        let status: BatchVoteStatus;
-        if (!fixture) status = "waiting";
-        else if (b.userHasVoted) status = "voted";
-        else if (fixture.startTime > Date.now()) status = "voting";
-        else status = "ongoing";
-        return [b.batchId, status] as const;
-      })
-    ).then((results) => {
-      if (!cancelled) setBatchVoteStatus(Object.fromEntries(results));
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [batches, options]);
+    const results: Record<number, BatchVoteStatus> = {};
+    for (const b of batches) {
+      if (b.rawStatus === "Locked") {
+        const hasProposal = b.betTerms.some((t) => t.fixtureId > 0);
+        results[b.batchId] = hasProposal ? "voting" : "no-match";
+      } else if (b.rawStatus === "AwaitingCollateral") {
+        results[b.batchId] = "voting-ended";
+      } else if (b.rawStatus === "Active") {
+        results[b.batchId] = "active";
+      }
+    }
+    setBatchVoteStatus((prev) => ({ ...prev, ...results }));
+  }, [batches]);
 
   // The live page only ever shows the batch currently in consensus voting —
   // Lobby (joinable) batches live in /upcoming, Ended ones in /history.
@@ -91,9 +96,12 @@ export default function Live() {
   const remainingBets = maxPredictions - acceptedBetsCount;
   // "Allocated" is the whole weekly yield pool committed to this batch's
   // betting — real data, same figure as Total Bet Capital. "Remaining" is
-  // what's left after completed bets have each drawn their fixed bet_size.
+  // what's left after completed bets have each drawn their fixed bet_size —
+  // skips don't count against it since a skip pays the same bet_size straight
+  // back out rather than putting it at risk, so the capital isn't consumed.
+  const realBetsCount = (liveBatchState?.winsCount ?? 0) + (liveBatchState?.lossesCount ?? 0);
   const allocatedBudget = weeklyYieldPool;
-  const remainingBudget = allocatedBudget - acceptedBetsCount * betSize;
+  const remainingBudget = allocatedBudget - realBetsCount * betSize;
 
   // createdAt is the only real whole-batch timestamp on-chain — kickoff_timestamp
   // is per-match and resets to 0 after every settlement, so it can't anchor a
@@ -101,17 +109,14 @@ export default function Live() {
   const batchEndTime =
     liveBatchState?.createdAt != null ? liveBatchState.createdAt + 7 * 24 * 60 * 60 * 1000 : null;
 
-  // Real on-chain result for whichever match is currently decided on this
-  // batch — winningVoteIndex === 4 is a "skip" (no bet placed, so it's
-  // neither a win nor a loss). Only one decision is ever visible at a time
-  // (past matches within the same batch aren't retained), so this reflects
-  // the latest resolved bet, not a full history.
-  const isSkipDecision = liveBatchState?.winningVoteIndex === 4;
-  const hasDecidedBet = liveBatchState?.winningVoteIndex != null && !isSkipDecision;
+  // Real cumulative record across every bet this batch has settled so far —
+  // straight off the on-chain running counters (wins_count/losses_count/
+  // skips_count), not just whichever single bet happens to be in flight
+  // right now.
   const batchRecord = {
-    wins: hasDecidedBet && liveBatchState?.outcome === true ? 1 : 0,
-    losses: hasDecidedBet && liveBatchState?.outcome === false ? 1 : 0,
-    pending: remainingBets,
+    wins: liveBatchState?.winsCount ?? 0,
+    losses: liveBatchState?.lossesCount ?? 0,
+    skipped: liveBatchState?.skipsCount ?? 0,
   };
 
   const userLockedAmount = liveBatchState?.userDeposited ?? 0;
@@ -119,8 +124,6 @@ export default function Live() {
     liveBatchState?.totalDeposited && liveBatchState.totalDeposited > 0
       ? userLockedAmount / liveBatchState.totalDeposited
       : 0;
-
-  const userWeeklyYield = userPoolShare * weeklyYieldPool;
 
   // Only participants who deposited during this batch's Lobby phase can vote —
   // spectating other syndicate batches is fine, but voting requires skin in the game.
@@ -149,7 +152,7 @@ export default function Live() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg1">
-        <div className="animate-pulse text-gray-400">Loading syndicate...</div>
+        <div className="animate-pulse text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -193,7 +196,20 @@ export default function Live() {
               canVote={canVote}
               betTermProposals={betTermProposals}
               onVoteSlot={voteBySlotIndex}
+              onSettleDefault={() => settleDefault(liveBatchState.batchId)}
               userVotedIndex={liveBatchState.userVotedIndex}
+              voteWeights={liveBatchState.voteWeights}
+              // Voting is done once consensus locked, whether the operator has
+              // deposited collateral yet (AwaitingCollateral) or already has
+              // (Active) — both keep the vote UI in its "completed" state.
+              isVotingCompleted={
+                liveBatchState.rawStatus === "AwaitingCollateral" || liveBatchState.rawStatus === "Active"
+              }
+              isActive={liveBatchState.rawStatus === "Active"}
+              winningVoteIndex={liveBatchState.winningVoteIndex}
+              matchStartTime={liveBatchState.batchStartTime}
+              realAcceptedCount={liveBatchState.winsCount + liveBatchState.lossesCount}
+              skippedCount={liveBatchState.skipsCount}
             />
           </div>
           <div className="space-y-6">
@@ -206,11 +222,9 @@ export default function Live() {
               participantCount={liveBatchState.participantCount}
               allocatedBudget={allocatedBudget}
               remainingBudget={remainingBudget}
-              acceptedBetsCount={acceptedBetsCount}
-              skippedMatchesCount={0}
+              accumulatedWinnings={liveBatchState.accumulatedWinnings}
               remainingBets={remainingBets}
               userPoolShare={userPoolShare}
-              userWeeklyYield={userWeeklyYield}
               userLockedAmount={userLockedAmount}
               isConnected={isConnected}
               phase={liveBatchState.phase}

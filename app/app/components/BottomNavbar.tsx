@@ -272,6 +272,36 @@ export default function BottomNavbar() {
                   </span>
                 </button>
 
+                {/* LOTTERY */}
+                <button
+                  onClick={() => {
+                    router.push("/lottery");
+                    setIsDrawerOpen(false);
+                  }}
+                  className="flex items-center gap-4 w-full text-left group cursor-pointer focus:outline-none transition-opacity hover:opacity-80 active:opacity-60"
+                >
+                  <div className="text-muted group-hover:text-foreground transition-colors duration-150">
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M4 9a1 1 0 0 0 1-1V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2a1 1 0 0 0 0 8v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-2a1 1 0 0 0-1-1" />
+                      <path d="M13 5v2" />
+                      <path d="M13 17v2" />
+                      <path d="M13 11v2" />
+                    </svg>
+                  </div>
+                  <span className="text-base font-bold text-foreground tracking-wide">
+                    Lottery
+                  </span>
+                </button>
+
                 {/* HISTORY */}
                 <button
                   onClick={() => {

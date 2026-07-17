@@ -20,6 +20,7 @@ pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     batch.operator_yield_bps = batch.operator_yield_bps.saturating_sub(2000);
     batch.outcome = Some(true);
     batch.bets_completed = batch.bets_completed.saturating_add(1);
+    batch.wins_count = batch.wins_count.saturating_add(1);
 
     // --- NEW: Reset current bet state for the multi-option array model ---
     batch.bet_terms = [BetTerms::default(); 4];
@@ -51,6 +52,10 @@ pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     // Transfer forfeited collateral into batch_token_account for users to claim
     let collateral_amount = ctx.accounts.collateral_token_account.amount;
     if collateral_amount > 0 {
+        // Operator ghosted on proof past the deadline — the seized collateral
+        // is a real win for users, same as settle_with_proof's true branch.
+        batch.accumulated_winnings = batch.accumulated_winnings.saturating_add(collateral_amount);
+
         let batch_id_bytes = batch.batch_id.to_le_bytes();
         let signer_seeds: &[&[&[u8]]] = &[&[
             BATCH_SEED,

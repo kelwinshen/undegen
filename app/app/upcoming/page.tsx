@@ -2,10 +2,10 @@
 
 import React, { useMemo } from "react";
 import { useUndegenProgram } from "../context/UndegenProgramContext";
-import LobbyPhase from "../components/live/LobbyPhase";
-import SyndicateSidebar from "../components/live/SyndicateSidebar";
-import HowItWorks from "../components/live/HowItWorks";
-import FAQ from "../components/live/FAQ";
+import LobbyPhase from "../components/LobbyPhase";
+import SyndicateSidebar from "../components/SyndicateSidebar";
+import HowItWorks from "../components/HowItWorks";
+import FAQ from "../components/FAQ";
 
 export default function UpcomingBatchesPage() {
   const {
@@ -41,8 +41,6 @@ export default function UpcomingBatchesPage() {
     focusedBatch?.totalDeposited && focusedBatch.totalDeposited > 0
       ? userLockedAmount / focusedBatch.totalDeposited
       : 0;
-  const userWeeklyYield = userPoolShare * weeklyYieldPool;
-
   // Scoped to Lobby batches only, so the sidebar's "already joined" /
   // "available" split only ever reflects upcoming batches, not Active/Ended ones.
   const joinedBatches = useMemo(() => {
@@ -65,7 +63,7 @@ export default function UpcomingBatchesPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg1">
-        <div className="animate-pulse text-gray-400">Loading syndicate batches...</div>
+        <div className="animate-pulse text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -128,11 +126,9 @@ export default function UpcomingBatchesPage() {
               weeklyYieldPool={weeklyYieldPool}
               allocatedBudget={0}
               remainingBudget={weeklyYieldPool}
-              acceptedBetsCount={0}
-              skippedMatchesCount={0}
+              accumulatedWinnings={0}
               remainingBets={focusedBatch.maxPredictions ?? 5}
               userPoolShare={userPoolShare}
-              userWeeklyYield={userWeeklyYield}
               userLockedAmount={userLockedAmount}
               isConnected={isConnected}
               phase="Lobby"

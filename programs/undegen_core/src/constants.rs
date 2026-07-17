@@ -12,8 +12,13 @@ pub const COLLATERAL_SEED: &[u8] = b"collateral";
 #[constant]
 pub const PROTOCOL_CONFIG_SEED: &[u8] = b"protocol_config";
 
-pub const PROOF_DEADLINE_SECONDS: i64 = 3600; // 1hr after kickoff
+pub const PROOF_DEADLINE_SECONDS: i64 = 4*3600; // 1hr after kickoff
 pub const MAX_BETS: u8 = 5;                   // fixed number of bets per batch
+
+// Minimum time a proven score update batch must extend past kickoff before
+// settle_with_proof will accept it — guards against a stale/mid-match score
+// snapshot (still comfortably inside the 4h PROOF_DEADLINE_SECONDS window).
+
 pub const LOBBY_EXPIRY_SECONDS: i64 = 24 * 60 * 60; // batch must be started within 24h of creation
 
 pub const TXODDS_PROGRAM_ID: Pubkey =

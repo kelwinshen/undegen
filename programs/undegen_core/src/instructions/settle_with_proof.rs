@@ -20,6 +20,7 @@ pub fn settle_with_proof_handler(
     // Note: outcome: bool is REMOVED! We get this directly from the Oracle return data now.
 ) -> Result<()> {
     let batch = &mut ctx.accounts.batch;
+    require!(batch.operator == ctx.accounts.operator.key(), CoreError::Unauthorized);
     require!(batch.status == BatchStatus::Active, CoreError::NotActive);
 
     let clock = Clock::get()?;
@@ -34,6 +35,20 @@ pub fn settle_with_proof_handler(
 
     let active_term = batch.bet_terms[winning_index as usize];
     require!(fixture_summary.fixture_id == active_term.fixture_id, CoreError::MatchIdMismatch);
+
+
+    require!(
+        stat_a.stat_to_prove.key == active_term.stat_a_key,
+        CoreError::StatKeyMismatch
+    );
+    match (&stat_b, active_term.stat_b_key) {
+        (Some(sb), Some(expected_key)) => require!(
+            sb.stat_to_prove.key == expected_key,
+            CoreError::StatKeyMismatch
+        ),
+        (None, None) => {}
+        _ => return err!(CoreError::StatKeyMismatch),
+    }
 
     // --- 1. PDA SECURITY CHECK FOR SCORES MERKLE ROOT ---
     // TxOdds Docs: For scores, use validation.summary.updateStats.minTimestamp
@@ -96,6 +111,7 @@ pub fn settle_with_proof_handler(
 
     if outcome {
         // TRUE = Predicate Met (Users won)
+        batch.wins_count = batch.wins_count.saturating_add(1);
         msg!("Oracle says Users won — compounding collateral into vault");
         let collateral_amount = ctx.accounts.collateral_token_account.amount;
           batch.accumulated_winnings = batch.accumulated_winnings.saturating_add(collateral_amount);
@@ -120,7 +136,8 @@ pub fn settle_with_proof_handler(
             )?;
         }
     } else {
-        // FALSE = Predicate Failed (Operator won)
+        // FALSE = Predicate Failed (Operator won) — the user lost this bet.
+        batch.losses_count = batch.losses_count.saturating_add(1);
         msg!("Oracle says Operator won — returning collateral to operator");
         let collateral_amount = ctx.accounts.collateral_token_account.amount;
         if collateral_amount > 0 {

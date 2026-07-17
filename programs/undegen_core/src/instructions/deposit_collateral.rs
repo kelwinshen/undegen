@@ -147,6 +147,7 @@ pub fn deposit_collateral_handler(
         )?;
 
         batch.bets_completed = batch.bets_completed.saturating_add(1);
+        batch.skips_count = batch.skips_count.saturating_add(1);
 
         // Reset current bet state using the Default traits we set up
         batch.bet_terms = [BetTerms::default(); 4];

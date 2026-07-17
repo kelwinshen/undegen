@@ -52,4 +52,8 @@ pub enum CoreError {
     OracleReturnDataMissing,
     #[msg("Lobby has expired — batch was not started within 24h of creation")]
     LobbyExpired,
+    #[msg("Submitted stat does not match the stat key/period agreed at propose_match time")]
+    StatKeyMismatch,
+    #[msg("Score proof does not extend past match completion — stale data")]
+    StaleScoreProof,
 }

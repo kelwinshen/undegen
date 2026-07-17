@@ -4173,6 +4173,7 @@ dependencies = [
  "anchor-spl",
  "litesvm",
  "litesvm-token",
+ "lottery",
  "solana-clock",
  "solana-keypair",
  "solana-message",

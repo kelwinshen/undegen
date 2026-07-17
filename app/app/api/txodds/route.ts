@@ -3,6 +3,18 @@ import { NextResponse } from 'next/server';
 const API_BASE = 'https://txline-dev.txodds.com';
 const TRUSTED_BOOKMAKER_ID = 10021;
 
+// This route fans out into an odds/snapshot fetch per fixture on every call,
+// and gets hit repeatedly — page polling, multiple components resolving the
+// same batch's options independently, dev Fast Refresh re-running effects —
+// with no caching at all. That's enough volume to trip TxOdds rate limits,
+// which getFixtureCandidates (undegenProgram.ts) swallows into an empty
+// array, silently degrading a real match into an unreadable "Fixture <id>"
+// label. Cache each variant's response for a bit, and keep serving the last
+// good payload on error instead of surfacing an empty result.
+const CACHE_TTL_MS = 30_000;
+type CacheEntry = { payload: { options: any[] }; expiresAt: number };
+const cache = new Map<string, CacheEntry>();
+
 function getBatchEndTime(): number {
   const now = new Date();
   const dayOfWeek = now.getUTCDay();
@@ -17,7 +29,12 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const fetchAll = searchParams.get('all') === '1';
   const fetchPast = searchParams.get('past') === '1';
+  const cacheKey = `all=${fetchAll}&past=${fetchPast}`;
 
+  const cached = cache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json(cached.payload);
+  }
 
   const headers = {
     Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
@@ -29,9 +46,14 @@ export async function GET(request: Request) {
     let allFixtures: any[] = [];
 
     if (fetchPast) {
-      // Aggressive Lookback: Fetch the last 5 days of snapshots in parallel
+      // Aggressive Lookback: Fetch today's snapshot plus the last 5 days in
+      // parallel. Offset 0 (today) matters most — a match that kicked off
+      // earlier today is neither "upcoming" (all=1 excludes anything with
+      // start < now) nor covered by yesterday-and-earlier snapshots, so
+      // omitting it left just-started fixtures unresolvable to a live option
+      // (falling back to the raw "Fixture <id>" label instead of team names).
       const currentEpochDay = Math.floor(now / 86400000);
-      const targetDays = [1, 2, 3, 4, 5].map((offset) => currentEpochDay - offset);
+      const targetDays = [0, 1, 2, 3, 4, 5,6,7].map((offset) => currentEpochDay - offset);
 
       const fetchPromises = targetDays.map((epochDay) =>
         fetch(`${API_BASE}/api/fixtures/snapshot/${epochDay}`, {
@@ -90,10 +112,16 @@ export async function GET(request: Request) {
     const options: any[] = [];
 
     for (const f of batchFixtures) {
-      const oddsRes = await fetch(
-        `${API_BASE}/api/odds/snapshot/${f.FixtureId}`,
-        { headers, cache: 'no-store' }
-      );
+      // The plain snapshot endpoint only holds CURRENT odds — once a match
+      // has kicked off/finished, it returns [] for it. asOf=<fixture's own
+      // StartTime> pulls the odds as they stood at that moment instead, which
+      // is what actually lets already-started/past fixtures resolve to real
+      // team names + odds rather than falling back to a bare "Fixture <id>".
+      const isPastFixture = Number(f.StartTime) < now;
+      const oddsUrl = isPastFixture
+        ? `${API_BASE}/api/odds/snapshot/${f.FixtureId}?asOf=${f.StartTime}`
+        : `${API_BASE}/api/odds/snapshot/${f.FixtureId}`;
+      const oddsRes = await fetch(oddsUrl, { headers, cache: 'no-store' });
       if (!oddsRes.ok) {
         throw new Error(`TxOdds odds request failed for fixture ${f.FixtureId}: ${oddsRes.status} ${oddsRes.statusText}`);
       }
@@ -151,9 +179,14 @@ export async function GET(request: Request) {
     }
 
     const payload = { options };
+    cache.set(cacheKey, { payload, expiresAt: Date.now() + CACHE_TTL_MS });
 
     return NextResponse.json(payload);
   } catch (error: any) {
+    // A rate limit or transient TxOdds failure shouldn't blank out data the
+    // UI already had — serve the last good snapshot (even if past its TTL)
+    // rather than an empty options list.
+    if (cached) return NextResponse.json(cached.payload);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

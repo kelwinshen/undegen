@@ -1,5 +1,6 @@
 pub mod cast_vote;
 pub mod claim;
+pub mod claim_and_join_lottery;
 pub mod deposit_collateral;
 pub mod finalize_consensus;
 pub mod initialize_batch;
@@ -16,6 +17,7 @@ pub mod claim_operator_yield;
 
 pub use cast_vote::*;
 pub use claim::*;
+pub use claim_and_join_lottery::*;
 pub use deposit_collateral::*;
 pub use finalize_consensus::*;
 pub use initialize_batch::*;

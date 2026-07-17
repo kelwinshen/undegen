@@ -145,6 +145,18 @@ export default function Navbar() {
                 NEWS
               </Link>
 
+              {/* LOTTERY link */}
+              <Link
+                href="/lottery"
+                className={`relative py-2 transition-colors ${
+                  pathname === "/lottery"
+                    ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-foreground"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                LOTTERY
+              </Link>
+
               {/* Hamburger menu dropdown trigger */}
               <div className="relative" ref={menuRef}>
                 <button

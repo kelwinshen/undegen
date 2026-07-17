@@ -15,8 +15,8 @@ const STATUS_MAP: Record<string, string> = {
   WPE: 'Waiting Penalties',
 };
 
-const STAT_KEY_PARTICIPANT1_GOALS = 1002;
-const STAT_KEY_PARTICIPANT2_GOALS = 1003;
+const STAT_KEY_PARTICIPANT1_GOALS = 1;
+const STAT_KEY_PARTICIPANT2_GOALS = 2;
 
 function extractStatus(statusObj: any): string {
   if (!statusObj) return 'Unknown';

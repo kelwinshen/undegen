@@ -74,6 +74,18 @@ pub struct Batch {
     // at initialize_batch; start_batch/join_batch reject once
     // now > created_at + LOBBY_EXPIRY_SECONDS (see constants.rs).
     pub created_at: i64,
+
+    // Appended fields, same caveat as participant_count/created_at above.
+    // Unlike bets_completed (which counts every settled bet regardless of
+    // outcome and is the only per-batch tally that existed before these),
+    // these three break that total down by real result — bet_terms/
+    // vote_weights/winning_vote_index/outcome all reset after each round, so
+    // without a running tally here the individual outcome of bets 1..N-1
+    // is unrecoverable once bet N is in progress. wins + losses + skipped
+    // always sums to bets_completed.
+    pub wins_count: u8,
+    pub losses_count: u8,
+    pub skips_count: u8,
 }
 
 #[account]
@@ -88,6 +100,19 @@ pub struct UserPosition {
     pub vote_index: u8,
     pub claimed: bool,
     pub bump: u8,
+
+    // Appended field — only positions created/voted-on after this field was
+    // added will have it (same un-migrated-old-account caveat as Batch's
+    // appended fields above). Stamped with batch.bets_completed at the moment
+    // of cast_vote — every settlement path resets the Batch's own
+    // vote_weights/bet_terms for the next round, but has no way to reach into
+    // every voter's UserPosition and reset has_voted/vote_index too. Without
+    // this, a vote from round N reads as "already voted" on round N+1's
+    // fresh match. has_voted/vote_index are only meaningful for the current
+    // round if voted_at_round == batch.bets_completed; otherwise the vote is
+    // stale (belongs to an already-settled round) and should be treated as
+    // not-yet-voted.
+    pub voted_at_round: u8,
 }
 
 #[account]

@@ -85,6 +85,10 @@ pub mod undegen_core {
         instructions::claim::claim_handler(ctx)
     }
 
+    pub fn claim_and_join_lottery(ctx: Context<ClaimAndJoinLottery>) -> Result<()> {
+        instructions::claim_and_join_lottery::claim_and_join_lottery_handler(ctx)
+    }
+
     pub fn settle_with_proof(
         ctx: Context<SettleWithProof>,
         fixture_summary: crate::txodds_types::ScoresBatchSummary,

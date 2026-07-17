@@ -25,8 +25,11 @@ pub fn cast_vote_handler(ctx: Context<CastVote>, vote_index: u8) -> Result<()> {
     //     CoreError::VotingClosed
     // );
 
-    // If user already voted, remove their weight from the old choice first
-    if position.has_voted {
+    // If user already voted THIS round, remove their weight from the old
+    // choice first. A vote stamped with an earlier round is stale — it
+    // belongs to an already-settled bet whose vote_weights were already
+    // zeroed out, so there's nothing to subtract here.
+    if position.has_voted && position.voted_at_round == batch.bets_completed {
         let old_index = position.vote_index as usize;
         batch.vote_weights[old_index] = batch.vote_weights[old_index]
             .saturating_sub(position.deposited_amount);
@@ -35,6 +38,7 @@ pub fn cast_vote_handler(ctx: Context<CastVote>, vote_index: u8) -> Result<()> {
     // Apply vote (new or switched) to the new choice
     position.has_voted = true;
     position.vote_index = vote_index;
+    position.voted_at_round = batch.bets_completed;
 
     batch.vote_weights[vote_index as usize] = batch.vote_weights[vote_index as usize]
         .checked_add(position.deposited_amount)

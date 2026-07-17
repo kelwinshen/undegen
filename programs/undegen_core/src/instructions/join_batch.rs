@@ -97,6 +97,7 @@ pub fn join_batch_handler(ctx: Context<JoinBatch>, amount: u64) -> Result<()> {
 
         // --- NEW: Initialize the vote_index instead of the boolean ---
         position.vote_index = 0;
+        position.voted_at_round = 0;
 
         position.claimed = false;
         position.vault_shares = 0;

@@ -14,7 +14,7 @@ default = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "yield_vault/idl-build"]
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "yield_vault/idl-build", "lottery/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
@@ -23,6 +23,7 @@ custom-panic = []
 anchor-lang = { version = "1.1.2", features = ["init-if-needed"] }
 anchor-spl = "1.1.2"
 yield_vault = { path = "../yield_vault", features = ["cpi"] }
+lottery = { path = "../lottery", features = ["cpi"] }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 litesvm = "0.10.0"

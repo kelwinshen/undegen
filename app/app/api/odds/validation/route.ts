@@ -30,7 +30,6 @@ export async function GET(request: Request) {
     }
 
     const data = await res.json();
-    console.log("FULL API RESPONSE:", JSON.stringify(data, null, 2));
     return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
