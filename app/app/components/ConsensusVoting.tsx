@@ -404,7 +404,7 @@ export default function ConsensusVoting({
     );
   }
 
-  if (!fixtures.length) {
+  if (true) {
     // The batch account's own kickoff_timestamp is the authoritative source
     // — always present, unlike BetTermProposal.kickoffTime which is null
     // whenever TXODDS fixture matching fails to resolve a live option. Fall
@@ -625,7 +625,7 @@ export default function ConsensusVoting({
       {selectedDate && (
         <div className="flex backdrop-blur-sm  justify-between items-center rounded-2xl border border-border-low p-4">
           <span className="text-sm text-muted">
-            Viewing matches for {new Date(selectedDate).toLocaleDateString()}
+            Viewing matches for {new Date(selectedDate ?? "").toLocaleDateString()}
           </span>
           <button
             onClick={() => setSelectedDate(null)}
@@ -695,8 +695,9 @@ export default function ConsensusVoting({
       )}
 
       {canVote && isVotingCompleted && (() => {
+        const localMatchStartTime = matchStartTime ?? 0;
         const kickoffTime =
-          matchStartTime && matchStartTime > 0 ? matchStartTime : fixtures[0]?.startTime;
+          localMatchStartTime > 0 ? localMatchStartTime : fixtures[0]?.startTime;
         const canSettleDefault =
           isActive && !!onSettleDefault && kickoffTime != null && now - kickoffTime >= SETTLE_DEFAULT_AFTER_MS;
         return (
