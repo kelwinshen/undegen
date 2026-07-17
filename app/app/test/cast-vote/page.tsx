@@ -174,17 +174,69 @@ function termsEqual(a: any, b: any) {
 
 function predicateText(term: any, team1: string, team2: string): string {
   if (term.fixture_id === BigInt(0)) return "(empty)";
-  const periodStr = term.period === 0 ? "Full Time" : "1st Half";
+  
+  let periodStr = "";
+  switch (Number(term.period)) {
+    case 0:
+      periodStr = "Full Time";
+      break;
+    case 1000:
+      periodStr = "1st Half";
+      break;
+    case 2000:
+      periodStr = "Halftime";
+      break;
+    case 3000:
+      periodStr = "2nd Half";
+      break;
+    case 4000:
+      periodStr = "ET1";
+      break;
+    case 5000:
+      periodStr = "ET2";
+      break;
+    case 6000:
+      periodStr = "Penalty Shootout";
+      break;
+    case 7000:
+      periodStr = "ETTotal";
+      break;
+    default:
+      periodStr = `Period ${term.period}`;
+  }
+
   const comp = term.predicate_comparison;
   const compSymbol = comp === 0 ? ">" : comp === 1 ? "<" : "==";
   const thresh = term.predicate_threshold;
   const neg = term.negation;
 
   function statName(key: number): string {
-    if (key === STAT_KEY_PART1_GOALS) return `${team1} goals`;
-    if (key === STAT_KEY_PART2_GOALS) return `${team2} goals`;
-    if (key === 1004) return "Total goals";
-    return `Stat ${key}`;
+    const baseKey = key % 1000;
+    const team = (baseKey % 2 === 1) ? team1 : team2;
+    
+    let statType = "";
+    switch (baseKey) {
+      case 1:
+      case 2:
+        statType = "Goals";
+        break;
+      case 3:
+      case 4:
+        statType = "Yellow Cards";
+        break;
+      case 5:
+      case 6:
+        statType = "Red Cards";
+        break;
+      case 7:
+      case 8:
+        statType = "Corners";
+        break;
+      default:
+        statType = `Stat ${baseKey}`;
+    }
+
+    return `${team} ${statType}`;
   }
 
   let expr: string;

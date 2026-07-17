@@ -50,6 +50,7 @@ type OddsOption = {
   marketType: string;
   outcome: string;
   period: number;
+  competition?: string;
 };
 
 type LogEntry = {
@@ -262,7 +263,10 @@ export default function ProposeMatchTest() {
 
       const oddsRes = await fetch("/api/txodds?all=1");
       const oddsData = await oddsRes.json();
-      const options: OddsOption[] = oddsData.options || [];
+      const allOptions: OddsOption[] = oddsData.options || [];
+      const options = allOptions.filter(
+        (opt) => opt.competition?.toLowerCase() === "world cup"
+      );
 
       if (options.length === 0) {
         addLog("warning", `No matches found. ${oddsData || ""}`);

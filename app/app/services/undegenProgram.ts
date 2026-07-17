@@ -34,6 +34,7 @@ export interface Option {
   marketType?: string;
   outcome?: string;
   period?: number;
+  competition?: string;
 }
 
 // A real-world match, resolved either from live TxOdds data or reconstructed
@@ -992,17 +993,65 @@ async function getFixtureCandidates(fixtureId: number, preloaded: Option[]): Pro
   }
 }
 
-// Mirrors test/cast-vote's statName/predicateText — turns a raw bet_terms
-// slot into a plain-English sentence ("Argentina goals > 0 (Full Time)")
-// using real participant names when known, without needing a matched option.
 function statName(key: number, team1: string, team2: string): string {
-  if (key === STAT_KEY_PART1_GOALS) return `${team1} goals`;
-  if (key === STAT_KEY_PART2_GOALS) return `${team2} goals`;
-  return `Stat ${key}`;
+  const baseKey = key % 1000;
+  const team = (baseKey % 2 === 1) ? team1 : team2;
+  
+  let statType = "";
+  switch (baseKey) {
+    case 1:
+    case 2:
+      statType = "Goals";
+      break;
+    case 3:
+    case 4:
+      statType = "Yellow Cards";
+      break;
+    case 5:
+    case 6:
+      statType = "Red Cards";
+      break;
+    case 7:
+    case 8:
+      statType = "Corners";
+      break;
+    default:
+      statType = `Stat ${baseKey}`;
+  }
+
+  return `${team} ${statType}`;
 }
 
 function describeBetTerm(term: RawBetTerm, team1: string, team2: string): string {
-  const periodStr = term.period === 0 ? "Full Time" : "1st Half";
+  let periodStr = "";
+  switch (term.period) {
+    case 0:
+      periodStr = "Full Time";
+      break;
+    case 1000:
+      periodStr = "1st Half";
+      break;
+    case 2000:
+      periodStr = "Halftime";
+      break;
+    case 3000:
+      periodStr = "2nd Half";
+      break;
+    case 4000:
+      periodStr = "ET1";
+      break;
+    case 5000:
+      periodStr = "ET2";
+      break;
+    case 6000:
+      periodStr = "Penalty Shootout";
+      break;
+    case 7000:
+      periodStr = "ETTotal";
+      break;
+    default:
+      periodStr = `Period ${term.period}`;
+  }
   const compSymbol = term.predicateComparison === 0 ? ">" : term.predicateComparison === 1 ? "<" : "==";
   const expr =
     term.op && term.statBKey != null

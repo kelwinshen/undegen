@@ -75,7 +75,7 @@ export default function Live() {
   }, [batches, selectedBatchId]);
 
   useEffect(() => {
-    if (!liveBatchState || fixtures.length > 0) {
+    if (!liveBatchState) {
       setBetTermProposals([]);
       return;
     }
@@ -86,7 +86,7 @@ export default function Live() {
     return () => {
       cancelled = true;
     };
-  }, [liveBatchState, fixtures, options]);
+  }, [liveBatchState, options]);
 
   const weeklyYieldPool = liveBatchState?.weeklyYieldPool ?? 0;
   const apyBps = liveBatchState?.apyBps ?? 0;

@@ -266,20 +266,6 @@ export default function ConsensusVoting({
   const activeScores = overrideLiveScores || fetchedScores;
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // Initialize selectedDate to today if matches exist today
-  useEffect(() => {
-    if (fixtures.length === 0) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const hasMatchesToday = fixtures.some(
-      (f) => new Date(f.startTime).toISOString().slice(0, 10) === today
-    );
-    const targetDate = hasMatchesToday ? today : null;
-    const timer = setTimeout(() => {
-      setSelectedDate(targetDate);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [fixtures]);
-
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
