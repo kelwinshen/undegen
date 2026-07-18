@@ -6,7 +6,13 @@ export default function Footer() {
       <div className="mx-auto max-w-6xl px-6 pt-6 pb-24 md:py-8 flex flex-col md:flex-row items-center justify-between gap-4">
         {/* Left Side: Copyright */}
         <p className="text-sm text-muted">
-          &copy; 2026 Undegen. All rights reserved.
+          &copy; 2026 Undegen. All rights reserved. Powered by{" "}
+          <Link
+            href="https://txodds.net/"
+            className="transition-colors duration-200 hover:text-foreground underline underline-offset-4"
+          >
+            txodds
+          </Link>
         </p>
 
         {/* Right Side: Links */}

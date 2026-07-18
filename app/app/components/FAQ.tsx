@@ -1,16 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
-const items = [
+interface FAQItem {
+  q: string;
+  a: ReactNode;
+}
+
+const items: FAQItem[] = [
   {
     q: "What happens if the community's prediction loses?",
     a: "Only the yield allocated to that prediction is forfeited. Your deposited principal is never placed at risk and is always fully protected — you keep 100% of it regardless of outcome.",
   },
   {
     q: "How are the predictions chosen?",
-    a: "Undegen continuously pulls upcoming fixtures and prediction markets from TXODDS. Every eligible fixture is put to a community vote, and the option with the most votes — including Skip — becomes the protocol's decision.",
+    a: (
+      <>
+        Undegen continuously pulls upcoming fixtures and prediction markets from{" "}
+        <a
+          href="https://txodds.net/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-4 hover:text-foreground transition-colors duration-200"
+        >
+          TXODDS
+        </a>
+        . Every eligible fixture is put to a community vote, and the option with the most votes — including Skip — becomes the protocol's decision.
+      </>
+    ),
+  },
+  {
+    q: "What is TXODDS and TxLINE?",
+    a: (
+      <>
+        <a
+          href="https://txodds.net/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-4 hover:text-foreground transition-colors duration-200"
+        >
+          TXODDS
+        </a>{" "}
+        is a global leader in sports betting data, providing real-time data feeds and sports trading infrastructure.{" "}
+        <a
+          href="https://txline-docs.txodds.com/documentation/quickstart"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-4 hover:text-foreground transition-colors duration-200"
+        >
+          TxLINE
+        </a>{" "}
+        is their blockchain-ready, high-performance data solution that provides cryptographically verifiable, on-chain proof of live sports data and settled matches, ensuring the absolute integrity and transparency of our prediction process.
+      </>
+    ),
   },
   {
     q: "Who pays the winnings?",
@@ -22,7 +65,20 @@ const items = [
   },
   {
     q: "How is a prediction actually settled?",
-    a: "Trustlessly, on-chain. Once a match ends, the Operator submits TXODDS' cryptographic verification proof of the real result, and the protocol settles the prediction automatically — no manual intervention, no centralized bookmaker.",
+    a: (
+      <>
+        Trustlessly, on-chain. Once a match ends, the Operator submits{" "}
+        <a
+          href="https://txodds.net/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-4 hover:text-foreground transition-colors duration-200"
+        >
+          TXODDS
+        </a>
+        ' cryptographic verification proof of the real result, and the protocol settles the prediction automatically — no manual intervention, no centralized bookmaker.
+      </>
+    ),
   },
   {
     q: "Can I unstake my principal anytime?",
