@@ -2,6 +2,8 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import Image from "next/image";
+import logoOnly from "../assets/logo-only.png";
 import { useUndegenProgram } from "../context/UndegenProgramContext";
 import LobbyPhase from "../components/LobbyPhase";
 import SyndicateSidebar from "../components/SyndicateSidebar";
@@ -34,7 +36,10 @@ export default function UpcomingBatchesPage() {
     () =>
       batches
         .filter((b) => b.phase === "Lobby")
-        .sort((a, b) => (a.lobbyExpiresAt ?? Infinity) - (b.lobbyExpiresAt ?? Infinity)),
+        .sort(
+          (a, b) =>
+            (a.lobbyExpiresAt ?? Infinity) - (b.lobbyExpiresAt ?? Infinity)
+        ),
     [batches]
   );
 
@@ -57,7 +62,8 @@ export default function UpcomingBatchesPage() {
   const joinedBatches = useMemo(() => {
     return lobbyBatches.map((b) => {
       const userDeposited = isConnected ? b.userDeposited : 0;
-      const poolShare = b.totalDeposited > 0 ? userDeposited / b.totalDeposited : 0;
+      const poolShare =
+        b.totalDeposited > 0 ? userDeposited / b.totalDeposited : 0;
       const weeklyYield = poolShare * b.weeklyYieldPool;
       return {
         batchId: b.batchId,
@@ -73,19 +79,55 @@ export default function UpcomingBatchesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg1">
-        <div className="animate-pulse text-gray-400">Loading...</div>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <motion.div
+          animate={{
+            opacity: [0.3, 1, 0.3],
+            scale: [0.95, 1.05, 0.95],
+          }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="relative w-16 h-16"
+        >
+          <Image
+            src={logoOnly}
+            alt="Undegen Logo"
+            fill
+            className="object-contain"
+            priority
+          />
+        </motion.div>
+        <motion.div
+          animate={{ opacity: [0.4, 0.8, 0.4] }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.2,
+          }}
+          className="text-sm font-semibold tracking-widest text-muted uppercase font-sans"
+        >
+          Loading...
+        </motion.div>
       </div>
     );
   }
 
   if (!focusedBatch) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-bg1 text-center px-6">
-        <div className="text-muted text-lg font-semibold">No open batches right now</div>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3  text-center px-6">
+        <div className="text-muted text-lg font-semibold">
+          No open batches right now
+        </div>
         <p className="text-muted text-sm max-w-sm">
-          Check back soon, or view <a href="/history" className="underline hover:text-foreground">History</a> for
-          past results.
+          Check back soon, or view{" "}
+          <a href="/history" className="underline hover:text-foreground">
+            History
+          </a>{" "}
+          for past results.
         </p>
       </div>
     );
@@ -122,15 +164,17 @@ export default function UpcomingBatchesPage() {
                   </span>
                 </h2>
                 <p className="text-sm text-muted mt-1">
-                  Stake or unstake freely until it locks. Once a batch starts, manage
-                  it from the Live page instead.
+                  Stake or unstake freely until it locks. Once a batch starts,
+                  manage it from the Live page instead.
                 </p>
               </div>
             </div>
 
             {!isConnected && (
               <div className="p-4 text-center border border-dashed border-border-low rounded-xl">
-                <p className="text-xs text-muted font-light">Connect your wallet to stake into a batch.</p>
+                <p className="text-xs text-muted font-light">
+                  Connect your wallet to stake into a batch.
+                </p>
               </div>
             )}
 

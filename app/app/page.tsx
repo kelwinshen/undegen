@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import Image from "next/image";
+import logoOnly from "./assets/logo-only.png";
 import ConsensusVoting from "./components/ConsensusVoting";
 import SyndicateSidebar from "./components/SyndicateSidebar";
 import BatchTimer from "./components/BatchTimer";
@@ -9,7 +11,10 @@ import HowItWorks from "./components/HowItWorks";
 import FAQ from "./components/FAQ";
 import BannerSlider from "./components/SliderBanner";
 import { useUndegenProgram } from "./context/UndegenProgramContext";
-import { describeBatchBetTerms, BetTermProposal } from "./services/undegenProgram";
+import {
+  describeBatchBetTerms,
+  BetTermProposal,
+} from "./services/undegenProgram";
 
 // The Live Batches picker's lifecycle label for each batch's current bet:
 // no-match (nothing proposed yet) -> voting (status Locked, consensus still
@@ -45,11 +50,15 @@ export default function Live() {
   // Per-batch voting/match status for the sidebar's Live Batches list — each
   // Active batch's fixture mapping is fetched independently of whichever
   // batch is currently selected/focused, since that only drives `fixtures`.
-  const [batchVoteStatus, setBatchVoteStatus] = useState<Record<number, BatchVoteStatus>>({});
+  const [batchVoteStatus, setBatchVoteStatus] = useState<
+    Record<number, BatchVoteStatus>
+  >({});
   // Human-readable version of the focused batch's raw bet_terms, for when
   // fixtures hasn't resolved a real match yet (still shows something a user
   // can actually read instead of bare on-chain numbers).
-  const [betTermProposals, setBetTermProposals] = useState<BetTermProposal[]>([]);
+  const [betTermProposals, setBetTermProposals] = useState<BetTermProposal[]>(
+    []
+  );
 
   // Voting Session / No Match / Voting Ended, straight off the real on-chain
   // BatchStatus — same field app/test/batch-details reads, no Redis, no
@@ -109,7 +118,8 @@ export default function Live() {
   // what's left after completed bets have each drawn their fixed bet_size —
   // skips don't count against it since a skip pays the same bet_size straight
   // back out rather than putting it at risk, so the capital isn't consumed.
-  const realBetsCount = (liveBatchState?.winsCount ?? 0) + (liveBatchState?.lossesCount ?? 0);
+  const realBetsCount =
+    (liveBatchState?.winsCount ?? 0) + (liveBatchState?.lossesCount ?? 0);
   const allocatedBudget = weeklyYieldPool;
   const remainingBudget = allocatedBudget - realBetsCount * betSize;
 
@@ -117,7 +127,9 @@ export default function Live() {
   // is per-match and resets to 0 after every settlement, so it can't anchor a
   // 7-day batch countdown.
   const batchEndTime =
-    liveBatchState?.createdAt != null ? liveBatchState.createdAt + 7 * 24 * 60 * 60 * 1000 : null;
+    liveBatchState?.createdAt != null
+      ? liveBatchState.createdAt + 7 * 24 * 60 * 60 * 1000
+      : null;
 
   // Real cumulative record across every bet this batch has settled so far —
   // straight off the on-chain running counters (wins_count/losses_count/
@@ -143,7 +155,8 @@ export default function Live() {
   const joinedBatches = useMemo(() => {
     return batches.map((b) => {
       const userDeposited = isConnected ? b.userDeposited : 0;
-      const poolShare = b.totalDeposited > 0 ? userDeposited / b.totalDeposited : 0;
+      const poolShare =
+        b.totalDeposited > 0 ? userDeposited / b.totalDeposited : 0;
       const weeklyYield = poolShare * b.weeklyYieldPool;
 
       return {
@@ -161,8 +174,39 @@ export default function Live() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg1">
-        <div className="animate-pulse text-gray-400">Loading...</div>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <motion.div
+          animate={{
+            opacity: [0.3, 1, 0.3],
+            scale: [0.95, 1.05, 0.95],
+          }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="relative w-16 h-16"
+        >
+          <Image
+            src={logoOnly}
+            alt="Undegen Logo"
+            fill
+            className="object-contain"
+            priority
+          />
+        </motion.div>
+        <motion.div
+          animate={{ opacity: [0.4, 0.8, 0.4] }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.2,
+          }}
+          className="text-sm font-semibold tracking-widest text-muted uppercase font-sans"
+        >
+          Loading...
+        </motion.div>
       </div>
     );
   }
@@ -170,12 +214,19 @@ export default function Live() {
   if (!liveBatchState) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-bg1 text-center px-6">
-        <div className="text-gray-300 text-lg font-semibold">No live batch right now</div>
+        <div className="text-gray-300 text-lg font-semibold">
+          No live batch right now
+        </div>
         <p className="text-gray-500 text-sm max-w-sm">
           Nothing is currently in consensus voting. Check{" "}
-          <a href="/upcoming" className="underline hover:text-gray-300">Upcoming</a> to join
-          the next batch, or <a href="/history" className="underline hover:text-gray-300">History</a> for
-          past results.
+          <a href="/upcoming" className="underline hover:text-gray-300">
+            Upcoming
+          </a>{" "}
+          to join the next batch, or{" "}
+          <a href="/history" className="underline hover:text-gray-300">
+            History
+          </a>{" "}
+          for past results.
         </p>
       </div>
     );
@@ -231,12 +282,15 @@ export default function Live() {
               // deposited collateral yet (AwaitingCollateral) or already has
               // (Active) — both keep the vote UI in its "completed" state.
               isVotingCompleted={
-                liveBatchState.rawStatus === "AwaitingCollateral" || liveBatchState.rawStatus === "Active"
+                liveBatchState.rawStatus === "AwaitingCollateral" ||
+                liveBatchState.rawStatus === "Active"
               }
               isActive={liveBatchState.rawStatus === "Active"}
               winningVoteIndex={liveBatchState.winningVoteIndex}
               matchStartTime={liveBatchState.batchStartTime}
-              realAcceptedCount={liveBatchState.winsCount + liveBatchState.lossesCount}
+              realAcceptedCount={
+                liveBatchState.winsCount + liveBatchState.lossesCount
+              }
               skippedCount={liveBatchState.skipsCount}
             />
           </div>
