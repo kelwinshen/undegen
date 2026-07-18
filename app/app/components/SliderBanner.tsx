@@ -11,6 +11,7 @@ import slider3 from "../assets/slider-3.webp";
 import slider4 from "../assets/slider-4.webp";
 import slider5 from "../assets/slider-5.webp";
 import slider6 from "../assets/slider-6.webp";
+import slider7 from "../assets/slider-7.webp";
 import { StaticImageData } from "next/image";
 
 export interface Slide {
@@ -40,6 +41,9 @@ const DEFAULT_SLIDES: Slide[] = [
   },
   {
     image: slider6,
+  },
+  {
+    image: slider7,
   },
 ];
 
