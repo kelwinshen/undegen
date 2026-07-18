@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion } from "motion/react";
+import Image from "next/image";
+import logoOnly from "../assets/logo-only.png";
 
 // Grid configuration
 const COLS = 24;
@@ -69,6 +71,20 @@ export default function PixelTransition() {
   const router = useRouter();
   const pathname = usePathname();
   const [phase, setPhase] = useState<TransitionPhase>("intro");
+  const [showWarning, setShowWarning] = useState(false);
+
+  // Track phase changes to handle the 1-second timeout for slow transitions
+  useEffect(() => {
+    if (phase === "outro") {
+      const timer = setTimeout(() => {
+        setShowWarning(true);
+      }, 1000);
+      return () => {
+        clearTimeout(timer);
+        setShowWarning(false);
+      };
+    }
+  }, [phase]);
 
   // Generate stable transition delays for each block in the grid
   const blocks = useMemo(() => {
@@ -159,31 +175,80 @@ export default function PixelTransition() {
   }, [router]);
 
   return (
-    <div
-      className={`fixed inset-0 grid w-screen h-screen z-9999 overflow-hidden ${
-        phase === "outro" ? "pointer-events-auto" : "pointer-events-none"
-      }`}
-      style={{
-        gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-        gridTemplateRows: `repeat(${ROWS}, 1fr)`,
-      }}
-    >
-      {blocks.map((block) => (
-        <motion.div
-          key={block.index}
-          custom={{ delay: block.delay }}
-          variants={blockVariants}
-          initial={phase === "intro" ? "introInitial" : "outroInitial"}
-          animate={
-            phase === "intro"
-              ? "introAnimate"
-              : phase === "outro"
-                ? "outroAnimate"
-                : "idle"
-          }
-          className="w-full h-full relative"
-        />
-      ))}
-    </div>
+    <>
+      <div
+        className={`fixed inset-0 grid w-screen h-screen z-9999 overflow-hidden ${
+          phase === "outro" ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+        style={{
+          gridTemplateColumns: `repeat(${COLS}, 1fr)`,
+          gridTemplateRows: `repeat(${ROWS}, 1fr)`,
+        }}
+      >
+        {blocks.map((block) => (
+          <motion.div
+            key={block.index}
+            custom={{ delay: block.delay }}
+            variants={blockVariants}
+            initial={phase === "intro" ? "introInitial" : "outroInitial"}
+            animate={
+              phase === "intro"
+                ? "introAnimate"
+                : phase === "outro"
+                  ? "outroAnimate"
+                  : "idle"
+            }
+            className="w-full h-full relative"
+          />
+        ))}
+      </div>
+
+      {phase === "outro" && (
+        <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center pointer-events-none">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{
+              opacity: [0, 0.8, 0.4, 0.8],
+              scale: [0.8, 1, 0.95, 1],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut",
+              times: [0, 0.3, 0.65, 1],
+            }}
+            className="flex items-center justify-center"
+          >
+            <Image
+              src={logoOnly}
+              alt="Loading..."
+              width={80}
+              height={80}
+              priority
+              className="object-contain"
+            />
+          </motion.div>
+
+          {showWarning && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mt-6 flex flex-col items-center gap-2 pointer-events-auto"
+            >
+              <p className="text-sm font-medium text-white/60 text-center px-4 max-w-xs">
+                Taking longer than expected?
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-xs font-semibold text-white transition-all backdrop-blur-sm cursor-pointer shadow-lg active:scale-95"
+              >
+                Refresh Page
+              </button>
+            </motion.div>
+          )}
+        </div>
+      )}
+    </>
   );
 }
