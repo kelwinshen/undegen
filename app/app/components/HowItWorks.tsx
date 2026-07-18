@@ -161,10 +161,10 @@ export default function HowItWorks() {
           <p className="text-neutral-600 dark:text-neutral-400 text-sm md:text-base leading-relaxed">
             Instead of claiming your earnings straight to your wallet, wager
             them into the protocol&apos;s shared weekly lottery — one jackpot,
-            open to anyone. Every ticket buys a range of numbers proportional
-            to its size, so the more of the pool you cover, the better your
-            odds. One random draw each week hands the entire jackpot to a
-            single winner.
+            open to anyone. Every ticket buys a range of numbers proportional to
+            its size, so the more of the pool you cover, the better your odds.
+            One random draw each week hands the entire jackpot to a single
+            winner.
           </p>
           <div className="max-w-md border border-border-low rounded-xl overflow-hidden">
             <div className="p-4 bg-foreground/5 dark:bg-white/5 space-y-1">
@@ -194,9 +194,7 @@ export default function HowItWorks() {
                 <span className="text-[10px] text-neutral-400 block font-medium uppercase tracking-wider">
                   Win Chance
                 </span>
-                <span className="text-lg font-bold text-foreground">
-                  1.04%
-                </span>
+                <span className="text-lg font-bold text-foreground">1.04%</span>
               </div>
             </div>
           </div>

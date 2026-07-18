@@ -19,7 +19,9 @@ import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
-const PROPOSE_MATCH_DISCRIMINATOR = Buffer.from([148, 147, 248, 246, 13, 197, 75, 93]);
+const PROPOSE_MATCH_DISCRIMINATOR = Buffer.from([
+  148, 147, 248, 246, 13, 197, 75, 93,
+]);
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
 
 const COMPARISON = {
@@ -38,7 +40,7 @@ const BASE_KEY_PART1_GOALS = 1;
 const BASE_KEY_PART2_GOALS = 2;
 
 type OddsOption = {
-  id: string; 
+  id: string;
   messageId: string;
   ts: number;
   outcomeIndex: number;
@@ -68,7 +70,14 @@ const BatchStatusLayout = borsh.struct([
   borsh.u8("status"),
 ]);
 
-const BATCH_STATUS_NAMES = ["Lobby", "Locked", "AwaitingCollateral", "Active", "Settled", "Cancelled"];
+const BATCH_STATUS_NAMES = [
+  "Lobby",
+  "Locked",
+  "AwaitingCollateral",
+  "Active",
+  "Settled",
+  "Cancelled",
+];
 
 function writeUInt64LE(value: bigint | number): Buffer {
   const buffer = Buffer.alloc(8);
@@ -112,19 +121,21 @@ function writeOptionBinaryOp(value: number | null): Buffer {
 
 const EMPTY_BET_TERMS = Buffer.alloc(22, 0);
 
-function getBetTermsBuffer(option: OddsOption): { data: Buffer; label: string; details: string } | null {
+function getBetTermsBuffer(
+  option: OddsOption
+): { data: Buffer; label: string; details: string } | null {
   const type = option.marketType;
-  const outcome = option.outcome.toLowerCase(); 
-  
+  const outcome = option.outcome.toLowerCase();
+
   // Apply TxODDS period_prefix + base_key logic
   const periodPrefix = option.period ?? 0;
-  const statKey1 = periodPrefix + BASE_KEY_PART1_GOALS; 
-  const statKey2 = periodPrefix + BASE_KEY_PART2_GOALS; 
+  const statKey1 = periodPrefix + BASE_KEY_PART1_GOALS;
+  const statKey2 = periodPrefix + BASE_KEY_PART2_GOALS;
 
   if (type === "1X2_PARTICIPANT_RESULT") {
     let comparison = COMPARISON.GreaterThan;
     let desc = "";
-    
+
     if (outcome === "part1" || outcome === "1") {
       comparison = COMPARISON.GreaterThan;
       desc = `${option.participant1} wins`;
@@ -135,15 +146,15 @@ function getBetTermsBuffer(option: OddsOption): { data: Buffer; label: string; d
       comparison = COMPARISON.EqualTo;
       desc = `Draw`;
     } else {
-      return null; 
+      return null;
     }
 
     const data = Buffer.concat([
       writeInt64LE(option.fixtureId),
       writeU16LE(periodPrefix), // Kept for struct layout size matching
-      writeU32LE(statKey1),     // Encoded Key 1
+      writeU32LE(statKey1), // Encoded Key 1
       writeOptionU32(statKey2), // Encoded Key 2
-      writeOptionBinaryOp(BINARY_OP.Subtract), 
+      writeOptionBinaryOp(BINARY_OP.Subtract),
       writeI32LE(0),
       Buffer.from([comparison]),
       Buffer.from([0]),
@@ -155,9 +166,9 @@ function getBetTermsBuffer(option: OddsOption): { data: Buffer; label: string; d
     const match = option.label.match(/([\d.]+)/);
     if (match) {
       const rawLine = parseFloat(match[0]);
-      if (rawLine % 0.5 !== 0) return null; 
+      if (rawLine % 0.5 !== 0) return null;
 
-      const isOver = outcome === "over"; 
+      const isOver = outcome === "over";
       const comparison = isOver ? COMPARISON.GreaterThan : COMPARISON.LessThan;
       const threshold = isOver ? Math.floor(rawLine) : Math.ceil(rawLine);
 
@@ -165,9 +176,9 @@ function getBetTermsBuffer(option: OddsOption): { data: Buffer; label: string; d
       const data = Buffer.concat([
         writeInt64LE(option.fixtureId),
         writeU16LE(periodPrefix), // Kept for struct layout size matching
-        writeU32LE(statKey1),     // Encoded Key 1 
+        writeU32LE(statKey1), // Encoded Key 1
         writeOptionU32(statKey2), // Encoded Key 2
-        writeOptionBinaryOp(BINARY_OP.Add),     
+        writeOptionBinaryOp(BINARY_OP.Add),
         writeI32LE(threshold),
         Buffer.from([comparison]),
         Buffer.from([0]),
@@ -186,7 +197,11 @@ export default function ProposeMatchTest() {
   const [batchId, setBatchId] = useState(initialBatchId);
   const [loading, setLoading] = useState(false);
   const [kickoffMode, setKickoffMode] = useState("real");
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string; batchId?: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+    batchId?: string;
+  } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [batchPda, setBatchPda] = useState<PublicKey | null>(null);
   const [batchStatus, setBatchStatus] = useState<string>("");
@@ -199,7 +214,8 @@ export default function ProposeMatchTest() {
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
-    if (!secretKeyEnv) throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
+    if (!secretKeyEnv)
+      throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
       return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
@@ -209,17 +225,19 @@ export default function ProposeMatchTest() {
   const sendTx = async (ix: TransactionInstruction): Promise<string> => {
     const connection = new Connection(DEVNET_RPC, "confirmed");
     const signer = getOperatorKeypair();
-    
+
     const tx = new Transaction().add(
       ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
       ix
     );
-    
+
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
     tx.feePayer = signer.publicKey;
     tx.sign(signer);
-    const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+    });
     await connection.confirmTransaction(sig);
     return sig;
   };
@@ -251,7 +269,10 @@ export default function ProposeMatchTest() {
       );
 
       const accountInfo = await connection.getAccountInfo(pda);
-      if (!accountInfo || !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) {
+      if (
+        !accountInfo ||
+        !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)
+      ) {
         throw new Error("Batch not found or not initialized.");
       }
 
@@ -291,7 +312,10 @@ export default function ProposeMatchTest() {
 
       const targetFixtureOptions = sortedFixtures[0][1];
       const match = targetFixtureOptions[0];
-      addLog("info", `Target match: ${match.participant1} vs ${match.participant2} (${match.fixtureId})`);
+      addLog(
+        "info",
+        `Target match: ${match.participant1} vs ${match.participant2} (${match.fixtureId})`
+      );
 
       const supported = targetFixtureOptions
         .filter((o) => getBetTermsBuffer(o) !== null)
@@ -302,7 +326,10 @@ export default function ProposeMatchTest() {
       const selected = supported.slice(0, Math.min(4, supported.length));
       setSelectedOutcomes(selected);
 
-      addLog("success", `Loaded ${supported.length} supported outcomes. Auto-selected ${selected.length}.`);
+      addLog(
+        "success",
+        `Loaded ${supported.length} supported outcomes. Auto-selected ${selected.length}.`
+      );
       setResult({ type: "success", message: "Batch and options loaded." });
     } catch (err: any) {
       addLog("error", err.message);
@@ -330,92 +357,102 @@ export default function ProposeMatchTest() {
   };
 
   const handlePropose = async () => {
-      if (!batchPda || selectedOutcomes.length === 0) {
-        addLog("error", "Select at least one outcome.");
-        return;
+    if (!batchPda || selectedOutcomes.length === 0) {
+      addLog("error", "Select at least one outcome.");
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const kickoffTs = getKickoffTimestamp();
+      const betTermsArray: Buffer[] = [];
+      const optionsMapping: Record<number, string> = {};
+      const timestamps: Record<number, number> = {};
+      const slotsMapping: Record<
+        number,
+        { messageId: string; ts: number; outcomeIndex: number }
+      > = {};
+
+      for (let i = 0; i < selectedOutcomes.length; i++) {
+        const opt = selectedOutcomes[i];
+        const terms = getBetTermsBuffer(opt);
+        if (!terms) throw new Error("Unsupported outcome in selection.");
+
+        betTermsArray.push(terms.data);
+        slotsMapping[i] = {
+          messageId: opt.messageId || opt.id,
+          ts: opt.ts || 0,
+          outcomeIndex: opt.outcomeIndex,
+        };
+
+        optionsMapping[i] = opt.messageId;
+        timestamps[i] = opt.ts || 0;
       }
 
-      setLoading(true);
-      setResult(null);
+      const fixtureId = selectedOutcomes[0].fixtureId;
 
-      try {
-        const kickoffTs = getKickoffTimestamp();
-        const betTermsArray: Buffer[] = [];
-        const optionsMapping: Record<number, string> = {};
-        const timestamps: Record<number, number> = {};
-        const slotsMapping: Record<number, { messageId: string; ts: number; outcomeIndex: number }> = {};
-
-        for (let i = 0; i < selectedOutcomes.length; i++) {
-          const opt = selectedOutcomes[i];
-          const terms = getBetTermsBuffer(opt);
-          if (!terms) throw new Error("Unsupported outcome in selection.");
-          
-          betTermsArray.push(terms.data);
-          slotsMapping[i] = {
-            messageId: opt.messageId || opt.id,
-            ts: opt.ts || 0,
-            outcomeIndex: opt.outcomeIndex,
-          };
-          
-          optionsMapping[i] = opt.messageId; 
-          timestamps[i] = opt.ts || 0;  
-        }
-
-        const fixtureId = selectedOutcomes[0].fixtureId;
-
-        while (betTermsArray.length < 4) {
-          betTermsArray.push(EMPTY_BET_TERMS);
-        }
-
-        const betTermsData = Buffer.concat(betTermsArray);
-        const data = Buffer.concat([
-          PROPOSE_MATCH_DISCRIMINATOR,
-          betTermsData,
-          writeInt64LE(kickoffTs),
-        ]);
-
-        const ix = new TransactionInstruction({
-          programId: UNDEGEN_PROGRAM_ID,
-          keys: [
-            { pubkey: getOperatorKeypair().publicKey, isSigner: true, isWritable: false },
-            { pubkey: batchPda, isSigner: false, isWritable: true },
-          ],
-          data,
-        });
-
-        const sig = await sendTx(ix);
-        addLog("success", `Proposed ${selectedOutcomes.length} outcome(s). Tx: ${sig}`);
-
-        const redisResponse = await fetch('/api/batch-mapping', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            batchId: Number(batchId),
-            fixtureId,
-            slotsMapping,
-            optionsMapping,
-            timestamps,
-          }),
-        });
-
-        if (!redisResponse.ok) {
-          const errData = await redisResponse.json();
-          throw new Error(`Failed to save Redis mapping: ${errData.error}`);
-        }
-
-        addLog("success", "Redis mapping saved successfully.");
-        setResult({
-          type: "success",
-          message: `Proposed ${selectedOutcomes.length} outcome(s) and mapped to Redis.`,
-          batchId,
-        });
-      } catch (err: any) {
-        addLog("error", err.message);
-        setResult({ type: "error", message: err.message });
-      } finally {
-        setLoading(false);
+      while (betTermsArray.length < 4) {
+        betTermsArray.push(EMPTY_BET_TERMS);
       }
-    };
+
+      const betTermsData = Buffer.concat(betTermsArray);
+      const data = Buffer.concat([
+        PROPOSE_MATCH_DISCRIMINATOR,
+        betTermsData,
+        writeInt64LE(kickoffTs),
+      ]);
+
+      const ix = new TransactionInstruction({
+        programId: UNDEGEN_PROGRAM_ID,
+        keys: [
+          {
+            pubkey: getOperatorKeypair().publicKey,
+            isSigner: true,
+            isWritable: false,
+          },
+          { pubkey: batchPda, isSigner: false, isWritable: true },
+        ],
+        data,
+      });
+
+      const sig = await sendTx(ix);
+      addLog(
+        "success",
+        `Proposed ${selectedOutcomes.length} outcome(s). Tx: ${sig}`
+      );
+
+      const redisResponse = await fetch("/api/batch-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchId: Number(batchId),
+          fixtureId,
+          slotsMapping,
+          optionsMapping,
+          timestamps,
+        }),
+      });
+
+      if (!redisResponse.ok) {
+        const errData = await redisResponse.json();
+        throw new Error(`Failed to save Redis mapping: ${errData.error}`);
+      }
+
+      addLog("success", "Redis mapping saved successfully.");
+      setResult({
+        type: "success",
+        message: `Proposed ${selectedOutcomes.length} outcome(s) and mapped to Redis.`,
+        batchId,
+      });
+    } catch (err: any) {
+      addLog("error", err.message);
+      setResult({ type: "error", message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (initialBatchId) handleFetch();
@@ -425,13 +462,17 @@ export default function ProposeMatchTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-3xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Propose Match (Test)</h2>
           <p className="text-sm text-gray-400">
-            Select 1‑4 outcomes for the target match. Selections are mapped and stored in Redis.
+            Select 1‑4 outcomes for the target match. Selections are mapped and
+            stored in Redis.
           </p>
 
           <div className="flex flex-col gap-3">
@@ -479,22 +520,34 @@ export default function ProposeMatchTest() {
           {fixtureOptions.length > 0 && (
             <div className="space-y-3">
               <p className="text-sm text-gray-400">
-                Target match: <strong>{fixtureOptions[0].participant1} vs {fixtureOptions[0].participant2}</strong>
+                Target match:{" "}
+                <strong>
+                  {fixtureOptions[0].participant1} vs{" "}
+                  {fixtureOptions[0].participant2}
+                </strong>
               </p>
               <p className="text-xs text-gray-400">
-                Real kickoff: {new Date(fixtureOptions[0].startTime).toLocaleString()}
+                Real kickoff:{" "}
+                {new Date(fixtureOptions[0].startTime).toLocaleString()}
               </p>
               <p className="text-xs text-emerald-400">
-                Submitted kickoff: {new Date(Number(getKickoffTimestamp()) * 1000).toLocaleString()}
+                Submitted kickoff:{" "}
+                {new Date(
+                  Number(getKickoffTimestamp()) * 1000
+                ).toLocaleString()}
               </p>
               <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
                 {fixtureOptions.map((opt) => {
-                  const isSelected = selectedOutcomes.some((s) => s.id === opt.id);
+                  const isSelected = selectedOutcomes.some(
+                    (s) => s.id === opt.id
+                  );
                   return (
                     <label
                       key={opt.id}
                       className={`flex items-center gap-2 p-2 bg-bg1 rounded-lg border cursor-pointer ${
-                        isSelected ? "border-emerald-400 bg-emerald-500/10" : "border-border-low"
+                        isSelected
+                          ? "border-emerald-400 bg-emerald-500/10"
+                          : "border-border-low"
                       }`}
                     >
                       <input
@@ -506,7 +559,10 @@ export default function ProposeMatchTest() {
                               return prev.filter((s) => s.id !== opt.id);
                             } else {
                               if (prev.length >= 4) {
-                                addLog("warning", "You can select at most 4 outcomes.");
+                                addLog(
+                                  "warning",
+                                  "You can select at most 4 outcomes."
+                                );
                                 return prev;
                               }
                               return [...prev, opt];
@@ -517,12 +573,16 @@ export default function ProposeMatchTest() {
                         className="cursor-pointer"
                       />
                       <span className="text-xs">{opt.label}</span>
-                      <span className="text-xs text-emerald-300 ml-auto">{opt.odds.toFixed(1)}x</span>
+                      <span className="text-xs text-emerald-300 ml-auto">
+                        {opt.odds.toFixed(1)}x
+                      </span>
                     </label>
                   );
                 })}
               </div>
-              <p className="text-xs text-gray-500">Selected: {selectedOutcomes.length}/4</p>
+              <p className="text-xs text-gray-500">
+                Selected: {selectedOutcomes.length}/4
+              </p>
               <button
                 onClick={handlePropose}
                 disabled={loading || !batchPda || selectedOutcomes.length === 0}
@@ -531,8 +591,8 @@ export default function ProposeMatchTest() {
                 {loading
                   ? "Proposing..."
                   : selectedOutcomes.length < 4
-                  ? `Propose ${selectedOutcomes.length} Outcome${selectedOutcomes.length > 1 ? "s" : ""} (${4 - selectedOutcomes.length} empty)`
-                  : "Propose 4 Outcomes"}
+                    ? `Propose ${selectedOutcomes.length} Outcome${selectedOutcomes.length > 1 ? "s" : ""} (${4 - selectedOutcomes.length} empty)`
+                    : "Propose 4 Outcomes"}
               </button>
             </div>
           )}
@@ -570,13 +630,14 @@ export default function ProposeMatchTest() {
                       entry.type === "error"
                         ? "text-red-400"
                         : entry.type === "success"
-                        ? "text-emerald-300"
-                        : entry.type === "warning"
-                        ? "text-yellow-300"
-                        : "text-gray-300"
+                          ? "text-emerald-300"
+                          : entry.type === "warning"
+                            ? "text-yellow-300"
+                            : "text-gray-300"
                     }`}
                   >
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

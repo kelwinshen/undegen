@@ -145,24 +145,59 @@ const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
 const LOTTERY_PROGRAM_ID = new PublicKey(lotteryIdl.address);
 const USDC_MINT = new PublicKey(SOLANA_CONFIG.USDC_MINT);
-const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+);
 
-const JOIN_BATCH_DISCRIMINATOR = Buffer.from([81, 186, 86, 76, 184, 199, 194, 96]);
-const LEAVE_BATCH_DISCRIMINATOR = Buffer.from([238, 161, 41, 130, 22, 134, 9, 154]);
-const CLAIM_DISCRIMINATOR = Buffer.from([62, 198, 214, 193, 213, 159, 108, 210]);
-const CLAIM_AND_JOIN_LOTTERY_DISCRIMINATOR = Buffer.from([172, 154, 144, 50, 228, 215, 185, 209]);
-const BUY_TICKET_DISCRIMINATOR = Buffer.from([11, 24, 17, 193, 168, 116, 164, 169]);
-const CLAIM_PRIZE_DISCRIMINATOR = Buffer.from([157, 233, 139, 121, 246, 62, 234, 235]);
-const LOTTERY_CONFIG_DISCRIMINATOR = Buffer.from([174, 54, 184, 175, 81, 20, 237, 24]);
-const LOTTERY_ROUND_DISCRIMINATOR = Buffer.from([87, 127, 165, 51, 73, 78, 116, 174]);
-const LOTTERY_ENTRY_DISCRIMINATOR = Buffer.from([63, 18, 152, 113, 215, 246, 221, 250]);
-const CAST_VOTE_DISCRIMINATOR = Buffer.from([20, 212, 15, 189, 69, 180, 69, 151]);
-const SETTLE_DEFAULT_DISCRIMINATOR = Buffer.from([246, 228, 125, 180, 94, 53, 233, 137]);
+const JOIN_BATCH_DISCRIMINATOR = Buffer.from([
+  81, 186, 86, 76, 184, 199, 194, 96,
+]);
+const LEAVE_BATCH_DISCRIMINATOR = Buffer.from([
+  238, 161, 41, 130, 22, 134, 9, 154,
+]);
+const CLAIM_DISCRIMINATOR = Buffer.from([
+  62, 198, 214, 193, 213, 159, 108, 210,
+]);
+const CLAIM_AND_JOIN_LOTTERY_DISCRIMINATOR = Buffer.from([
+  172, 154, 144, 50, 228, 215, 185, 209,
+]);
+const BUY_TICKET_DISCRIMINATOR = Buffer.from([
+  11, 24, 17, 193, 168, 116, 164, 169,
+]);
+const CLAIM_PRIZE_DISCRIMINATOR = Buffer.from([
+  157, 233, 139, 121, 246, 62, 234, 235,
+]);
+const LOTTERY_CONFIG_DISCRIMINATOR = Buffer.from([
+  174, 54, 184, 175, 81, 20, 237, 24,
+]);
+const LOTTERY_ROUND_DISCRIMINATOR = Buffer.from([
+  87, 127, 165, 51, 73, 78, 116, 174,
+]);
+const LOTTERY_ENTRY_DISCRIMINATOR = Buffer.from([
+  63, 18, 152, 113, 215, 246, 221, 250,
+]);
+const CAST_VOTE_DISCRIMINATOR = Buffer.from([
+  20, 212, 15, 189, 69, 180, 69, 151,
+]);
+const SETTLE_DEFAULT_DISCRIMINATOR = Buffer.from([
+  246, 228, 125, 180, 94, 53, 233, 137,
+]);
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
-const PROTOCOL_CONFIG_DISCRIMINATOR = Buffer.from([207, 91, 250, 28, 152, 179, 215, 209]);
+const PROTOCOL_CONFIG_DISCRIMINATOR = Buffer.from([
+  207, 91, 250, 28, 152, 179, 215, 209,
+]);
 
-const BATCH_STATUS_NAMES = ["Lobby", "Locked", "AwaitingCollateral", "Active", "Settled", "Cancelled"] as const;
+const BATCH_STATUS_NAMES = [
+  "Lobby",
+  "Locked",
+  "AwaitingCollateral",
+  "Active",
+  "Settled",
+  "Cancelled",
+] as const;
 
 // Real on-chain program constants (programs/undegen_core/src/constants.rs).
 const ON_CHAIN_MAX_BETS = 5;
@@ -406,15 +441,42 @@ const ProtocolConfigLayout = borsh.struct([
 
 function decodeBatchAccount(data: Buffer) {
   if (data.length === 319)
-    return { ...OldBatchLayout.decode(data), participant_count: 0, created_at: null, wins_count: 0, losses_count: 0, skips_count: 0 };
+    return {
+      ...OldBatchLayout.decode(data),
+      participant_count: 0,
+      created_at: null,
+      wins_count: 0,
+      losses_count: 0,
+      skips_count: 0,
+    };
   if (data.length === 327)
-    return { ...BatchLayout.decode(data), participant_count: 0, created_at: null, wins_count: 0, losses_count: 0, skips_count: 0 };
+    return {
+      ...BatchLayout.decode(data),
+      participant_count: 0,
+      created_at: null,
+      wins_count: 0,
+      losses_count: 0,
+      skips_count: 0,
+    };
   if (data.length === 331)
-    return { ...ParticipantCountBatchLayout.decode(data), created_at: null, wins_count: 0, losses_count: 0, skips_count: 0 };
+    return {
+      ...ParticipantCountBatchLayout.decode(data),
+      created_at: null,
+      wins_count: 0,
+      losses_count: 0,
+      skips_count: 0,
+    };
   if (data.length === 339)
-    return { ...TimestampedBatchLayout.decode(data), wins_count: 0, losses_count: 0, skips_count: 0 };
+    return {
+      ...TimestampedBatchLayout.decode(data),
+      wins_count: 0,
+      losses_count: 0,
+      skips_count: 0,
+    };
   if (data.length === 342) return CurrentBatchLayout.decode(data);
-  throw new Error(`Unexpected Batch account size: ${data.length} bytes (expected 319, 327, 331, 339 or 342).`);
+  throw new Error(
+    `Unexpected Batch account size: ${data.length} bytes (expected 319, 327, 331, 339 or 342).`
+  );
 }
 
 function writeUInt64LE(value: bigint | number): Buffer {
@@ -423,7 +485,10 @@ function writeUInt64LE(value: bigint | number): Buffer {
   return buffer;
 }
 
-function deriveAssociatedTokenAddress(owner: PublicKey, mint: PublicKey): PublicKey {
+function deriveAssociatedTokenAddress(
+  owner: PublicKey,
+  mint: PublicKey
+): PublicKey {
   const [ata] = PublicKey.findProgramAddressSync(
     [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
     ASSOCIATED_TOKEN_PROGRAM_ID
@@ -439,7 +504,10 @@ function deriveBatchPda(batchId: number): PublicKey {
   return batchPda;
 }
 
-function deriveUserPositionPda(batchPda: PublicKey, user: PublicKey): PublicKey {
+function deriveUserPositionPda(
+  batchPda: PublicKey,
+  user: PublicKey
+): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
     [Buffer.from("user_position"), batchPda.toBuffer(), user.toBuffer()],
     UNDEGEN_PROGRAM_ID
@@ -475,7 +543,10 @@ function deriveLotteryRoundPda(roundId: bigint): PublicKey {
   return pda;
 }
 
-function deriveLotteryEntryPda(roundPda: PublicKey, buyer: PublicKey): PublicKey {
+function deriveLotteryEntryPda(
+  roundPda: PublicKey,
+  buyer: PublicKey
+): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
     [Buffer.from("entry"), roundPda.toBuffer(), buyer.toBuffer()],
     LOTTERY_PROGRAM_ID
@@ -512,7 +583,8 @@ const LotteryRoundLayout = borsh.struct([
   borsh.u8("bump"),
 ]);
 
-export type LotteryRoundStatus = "Open" | "RandomnessRequested" | "Drawn" | "Settled";
+export type LotteryRoundStatus =
+  "Open" | "RandomnessRequested" | "Drawn" | "Settled";
 
 // Minimum time a round must stay open before the admin can request the draw
 // (programs/lottery/src/constants.rs's ROUND_DURATION_SECONDS — also in the
@@ -544,14 +616,20 @@ export interface LotteryConfigState {
 
 // Shared by fetchActiveLotteryRound and fetchAllLotteryRoundsOnChain so the
 // layout decode + unit conversion only lives in one place.
-function decodeLotteryRoundAccount(roundId: bigint, roundPda: PublicKey, data: Buffer): Omit<LotteryRoundState, "myEntry"> {
+function decodeLotteryRoundAccount(
+  roundId: bigint,
+  roundPda: PublicKey,
+  data: Buffer
+): Omit<LotteryRoundState, "myEntry"> {
   const round = LotteryRoundLayout.decode(data.slice(8));
-  const status = (Object.keys(round.status)[0] as LotteryRoundStatus) ?? "Settled";
+  const status =
+    (Object.keys(round.status)[0] as LotteryRoundStatus) ?? "Settled";
   return {
     roundId,
     roundPda: roundPda.toBase58(),
     jackpotTokenAccount: (round.jackpot_token_account as PublicKey).toBase58(),
-    totalPool: Number(round.total_pool.toString()) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
+    totalPool:
+      Number(round.total_pool.toString()) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
     status,
     winningNumber: BigInt(round.winning_number.toString()),
     startTime: Number(round.start_time.toString()) * 1000,
@@ -560,10 +638,17 @@ function decodeLotteryRoundAccount(roundId: bigint, roundPda: PublicKey, data: B
 
 /** Whether LotteryConfig exists yet at all — false before anyone has called `initialize_lottery`. */
 export async function fetchLotteryConfig(): Promise<LotteryConfigState | null> {
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
   const lotteryConfigPda = deriveLotteryConfigPda();
   const configInfo = await connection.getAccountInfo(lotteryConfigPda);
-  if (!configInfo || !configInfo.data.slice(0, 8).equals(LOTTERY_CONFIG_DISCRIMINATOR)) return null;
+  if (
+    !configInfo ||
+    !configInfo.data.slice(0, 8).equals(LOTTERY_CONFIG_DISCRIMINATOR)
+  )
+    return null;
 
   const config = LotteryConfigLayout.decode(configInfo.data.slice(8));
   return {
@@ -579,7 +664,10 @@ export async function fetchLotteryConfig(): Promise<LotteryConfigState | null> {
  * Read-only, no wallet required — anyone can see what's joinable.
  */
 export async function fetchActiveLotteryRound(): Promise<LotteryRoundState | null> {
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
   const config = await fetchLotteryConfig();
   if (!config) return null;
 
@@ -588,9 +676,17 @@ export async function fetchActiveLotteryRound(): Promise<LotteryRoundState | nul
 
   const roundPda = deriveLotteryRoundPda(currentRoundId);
   const roundInfo = await connection.getAccountInfo(roundPda);
-  if (!roundInfo || !roundInfo.data.slice(0, 8).equals(LOTTERY_ROUND_DISCRIMINATOR)) return null;
+  if (
+    !roundInfo ||
+    !roundInfo.data.slice(0, 8).equals(LOTTERY_ROUND_DISCRIMINATOR)
+  )
+    return null;
 
-  const decoded = decodeLotteryRoundAccount(currentRoundId, roundPda, roundInfo.data);
+  const decoded = decodeLotteryRoundAccount(
+    currentRoundId,
+    roundPda,
+    roundInfo.data
+  );
   if (decoded.status !== "Open") return null;
 
   return { ...decoded, myEntry: null };
@@ -626,12 +722,17 @@ export async function fetchAllLotteryRoundsOnChain(
   userAddress: string | null
 ): Promise<LotteryRoundState[]> {
   if (roundIds.length === 0) return [];
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
 
   const roundPdas = roundIds.map((id) => deriveLotteryRoundPda(id));
 
   const CHUNK_SIZE = 100;
-  const roundAccountInfos: (import("@solana/web3.js").AccountInfo<Buffer> | null)[] = [];
+  const roundAccountInfos: (
+    import("@solana/web3.js").AccountInfo<Buffer> | null
+  )[] = [];
   for (let i = 0; i < roundPdas.length; i += CHUNK_SIZE) {
     const chunk = roundPdas.slice(i, i + CHUNK_SIZE);
     const infos = await connection.getMultipleAccountsInfo(chunk);
@@ -656,8 +757,11 @@ export async function fetchAllLotteryRoundsOnChain(
   const entriesByRoundPda = new Map<string, LotteryEntryState>();
   if (userAddress) {
     const user = new PublicKey(userAddress);
-    const entryPdas = decodedRoundPdas.map((roundPda) => deriveLotteryEntryPda(roundPda, user));
-    const entryInfos: (import("@solana/web3.js").AccountInfo<Buffer> | null)[] = [];
+    const entryPdas = decodedRoundPdas.map((roundPda) =>
+      deriveLotteryEntryPda(roundPda, user)
+    );
+    const entryInfos: (import("@solana/web3.js").AccountInfo<Buffer> | null)[] =
+      [];
     for (let i = 0; i < entryPdas.length; i += CHUNK_SIZE) {
       const chunk = entryPdas.slice(i, i + CHUNK_SIZE);
       const infos = await connection.getMultipleAccountsInfo(chunk);
@@ -665,7 +769,8 @@ export async function fetchAllLotteryRoundsOnChain(
     }
     decodedRoundPdas.forEach((roundPda, i) => {
       const info = entryInfos[i];
-      if (!info || !info.data.slice(0, 8).equals(LOTTERY_ENTRY_DISCRIMINATOR)) return;
+      if (!info || !info.data.slice(0, 8).equals(LOTTERY_ENTRY_DISCRIMINATOR))
+        return;
       const entry = LotteryEntryLayout.decode(info.data.slice(8));
       const amountRaw = BigInt(entry.amount.toString());
       if (amountRaw <= BigInt(0)) return;
@@ -681,7 +786,12 @@ export async function fetchAllLotteryRoundsOnChain(
   return decoded.map((round) => {
     const entry = entriesByRoundPda.get(round.roundPda) ?? null;
     const myEntry = entry
-      ? { ...entry, isWinner: round.winningNumber >= entry.startOffset && round.winningNumber < entry.endOffset }
+      ? {
+          ...entry,
+          isWinner:
+            round.winningNumber >= entry.startOffset &&
+            round.winningNumber < entry.endOffset,
+        }
       : null;
     return { ...round, myEntry };
   });
@@ -693,12 +803,18 @@ export async function fetchAllLotteryRoundsOnChain(
  * to any undegen_core batch required. Ported from
  * programs/lottery/src/instructions/buy_ticket.rs's account list.
  */
-export async function buyTicketOnChain(amount: number, wallet: WalletLike): Promise<string> {
+export async function buyTicketOnChain(
+  amount: number,
+  wallet: WalletLike
+): Promise<string> {
   const address = wallet.account?.address;
   if (!address) throw new Error("Wallet not connected.");
   const user = new PublicKey(address);
 
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
 
   const activeRound = await fetchActiveLotteryRound();
   if (!activeRound) throw new Error("No open lottery round to join right now.");
@@ -708,8 +824,13 @@ export async function buyTicketOnChain(amount: number, wallet: WalletLike): Prom
   const buyerTokenAccount = deriveAssociatedTokenAddress(user, USDC_MINT);
   const entryPda = deriveLotteryEntryPda(roundPda, user);
 
-  const rawAmount = BigInt(Math.floor(amount * 10 ** SOLANA_CONFIG.TOKEN_DECIMALS));
-  const data = Buffer.concat([BUY_TICKET_DISCRIMINATOR, writeUInt64LE(rawAmount)]);
+  const rawAmount = BigInt(
+    Math.floor(amount * 10 ** SOLANA_CONFIG.TOKEN_DECIMALS)
+  );
+  const data = Buffer.concat([
+    BUY_TICKET_DISCRIMINATOR,
+    writeUInt64LE(rawAmount),
+  ]);
 
   const keys = [
     { pubkey: user, isSigner: true, isWritable: true },
@@ -722,7 +843,11 @@ export async function buyTicketOnChain(amount: number, wallet: WalletLike): Prom
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
 
-  const ix = new TransactionInstruction({ programId: LOTTERY_PROGRAM_ID, keys, data });
+  const ix = new TransactionInstruction({
+    programId: LOTTERY_PROGRAM_ID,
+    keys,
+    data,
+  });
   const tx = new Transaction().add(ix);
 
   return signAndSend(connection, tx, user, wallet);
@@ -734,16 +859,25 @@ export async function buyTicketOnChain(amount: number, wallet: WalletLike): Prom
  * winning_number and it hasn't been claimed yet. Ported from
  * programs/lottery/src/instructions/claim_prize.rs's account list.
  */
-export async function claimPrizeOnChain(roundId: bigint, wallet: WalletLike): Promise<string> {
+export async function claimPrizeOnChain(
+  roundId: bigint,
+  wallet: WalletLike
+): Promise<string> {
   const address = wallet.account?.address;
   if (!address) throw new Error("Wallet not connected.");
   const user = new PublicKey(address);
 
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
 
   const roundPda = deriveLotteryRoundPda(roundId);
   const roundInfo = await connection.getAccountInfo(roundPda);
-  if (!roundInfo || !roundInfo.data.slice(0, 8).equals(LOTTERY_ROUND_DISCRIMINATOR)) {
+  if (
+    !roundInfo ||
+    !roundInfo.data.slice(0, 8).equals(LOTTERY_ROUND_DISCRIMINATOR)
+  ) {
     throw new Error(`Round ${roundId} not found on-chain.`);
   }
   const round = decodeLotteryRoundAccount(roundId, roundPda, roundInfo.data);
@@ -762,7 +896,11 @@ export async function claimPrizeOnChain(roundId: bigint, wallet: WalletLike): Pr
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
   ];
 
-  const ix = new TransactionInstruction({ programId: LOTTERY_PROGRAM_ID, keys, data: CLAIM_PRIZE_DISCRIMINATOR });
+  const ix = new TransactionInstruction({
+    programId: LOTTERY_PROGRAM_ID,
+    keys,
+    data: CLAIM_PRIZE_DISCRIMINATOR,
+  });
   const tx = new Transaction().add(ix);
 
   return signAndSend(connection, tx, user, wallet);
@@ -777,24 +915,33 @@ export interface WalletLike {
   signTransaction?: (tx: any) => Promise<any>;
 }
 
-async function signAndSend(connection: Connection, tx: Transaction, userPubkey: PublicKey, wallet: WalletLike): Promise<string> {
+async function signAndSend(
+  connection: Connection,
+  tx: Transaction,
+  userPubkey: PublicKey,
+  wallet: WalletLike
+): Promise<string> {
   tx.feePayer = userPubkey;
   const { blockhash } = await connection.getLatestBlockhash();
   tx.recentBlockhash = blockhash;
 
-  const provider = typeof window !== "undefined" ? (window as any).solana : undefined;
+  const provider =
+    typeof window !== "undefined" ? (window as any).solana : undefined;
   let rawTx: any;
   if (provider) {
     const signedTx = await provider.signTransaction(tx);
     rawTx = signedTx.serialize();
   } else if (wallet.signTransaction) {
     const signed = await wallet.signTransaction(tx as any);
-    rawTx = signed instanceof Uint8Array ? signed : signed?.serialize?.() ?? signed;
+    rawTx =
+      signed instanceof Uint8Array ? signed : (signed?.serialize?.() ?? signed);
   } else {
     throw new Error("Wallet does not support signTransaction.");
   }
 
-  const sig = await connection.sendRawTransaction(rawTx, { skipPreflight: false });
+  const sig = await connection.sendRawTransaction(rawTx, {
+    skipPreflight: false,
+  });
   await connection.confirmTransaction(sig);
   return sig;
 }
@@ -805,7 +952,10 @@ async function signAndSend(connection: Connection, tx: Transaction, userPubkey: 
  * (e.g. they've never held this mint) rather than throwing.
  */
 export async function fetchUsdcBalance(userAddress: string): Promise<number> {
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
   const user = new PublicKey(userAddress);
   const ata = deriveAssociatedTokenAddress(user, USDC_MINT);
 
@@ -826,7 +976,10 @@ export async function fetchUsdcBalance(userAddress: string): Promise<number> {
 // Reusing one instance here (instead of a fresh Connection per subscribe call)
 // means switching batches/wallets reuses the same socket instead of opening a
 // new one every time.
-const realtimeConnection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+const realtimeConnection = new Connection(
+  SOLANA_CONFIG.RPC_URL,
+  SOLANA_CONFIG.COMMITMENT
+);
 
 /**
  * Pushes a signal — no payload, callers refetch via fetchUsdcBalance above so
@@ -837,10 +990,17 @@ const realtimeConnection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.C
  * unsubscribe function; always call it (on wallet change or unmount) or the
  * socket leaks a listener.
  */
-export function subscribeToUsdcAccount(userAddress: string, onChange: () => void): () => void {
+export function subscribeToUsdcAccount(
+  userAddress: string,
+  onChange: () => void
+): () => void {
   const user = new PublicKey(userAddress);
   const ata = deriveAssociatedTokenAddress(user, USDC_MINT);
-  const subId = realtimeConnection.onAccountChange(ata, () => onChange(), SOLANA_CONFIG.COMMITMENT);
+  const subId = realtimeConnection.onAccountChange(
+    ata,
+    () => onChange(),
+    SOLANA_CONFIG.COMMITMENT
+  );
   return () => {
     realtimeConnection.removeAccountChangeListener(subId).catch(() => {});
   };
@@ -853,15 +1013,36 @@ export function subscribeToUsdcAccount(userAddress: string, onChange: () => void
  * fetchBatchOnChain/fetchAllBatchesOnChain to reuse the real decode logic.
  * Returns a single unsubscribe that tears down both listeners.
  */
-export function subscribeToBatchAccount(batchId: number, userAddress: string | null, onChange: () => void): () => void {
+export function subscribeToBatchAccount(
+  batchId: number,
+  userAddress: string | null,
+  onChange: () => void
+): () => void {
   const batchPda = deriveBatchPda(batchId);
-  const subIds = [realtimeConnection.onAccountChange(batchPda, () => onChange(), SOLANA_CONFIG.COMMITMENT)];
+  const subIds = [
+    realtimeConnection.onAccountChange(
+      batchPda,
+      () => onChange(),
+      SOLANA_CONFIG.COMMITMENT
+    ),
+  ];
   if (userAddress) {
-    const userPositionPda = deriveUserPositionPda(batchPda, new PublicKey(userAddress));
-    subIds.push(realtimeConnection.onAccountChange(userPositionPda, () => onChange(), SOLANA_CONFIG.COMMITMENT));
+    const userPositionPda = deriveUserPositionPda(
+      batchPda,
+      new PublicKey(userAddress)
+    );
+    subIds.push(
+      realtimeConnection.onAccountChange(
+        userPositionPda,
+        () => onChange(),
+        SOLANA_CONFIG.COMMITMENT
+      )
+    );
   }
   return () => {
-    subIds.forEach((id) => realtimeConnection.removeAccountChangeListener(id).catch(() => {}));
+    subIds.forEach((id) =>
+      realtimeConnection.removeAccountChangeListener(id).catch(() => {})
+    );
   };
 }
 
@@ -870,13 +1051,17 @@ export function subscribeToBatchAccount(batchId: number, userAddress: string | n
  * app/test/join-batch's "Load Latest Batch ID". Returns -1 if none exist yet.
  */
 export async function fetchLatestBatchId(): Promise<number> {
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
   const [configPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("protocol_config")],
     UNDEGEN_PROGRAM_ID
   );
   const info = await connection.getAccountInfo(configPda);
-  if (!info || !info.data.slice(0, 8).equals(PROTOCOL_CONFIG_DISCRIMINATOR)) return -1;
+  if (!info || !info.data.slice(0, 8).equals(PROTOCOL_CONFIG_DISCRIMINATOR))
+    return -1;
   const config = ProtocolConfigLayout.decode(info.data.slice(8));
   return Number(config.next_batch_id) - 1;
 }
@@ -895,20 +1080,34 @@ export async function fetchLatestBatchId(): Promise<number> {
  * requires amount > 0, there is no program-enforced minimum — left at 0
  * rather than inventing a number.
  */
-function buildBatchState(batchId: number, decoded: ReturnType<typeof decodeBatchAccount>, userDeposited: number, userHasVoted: boolean = false, userVotedIndex: number | null = null, userClaimed: boolean = false): BatchState {
-  const totalDeposited = Number(decoded.total_deposited) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS;
+function buildBatchState(
+  batchId: number,
+  decoded: ReturnType<typeof decodeBatchAccount>,
+  userDeposited: number,
+  userHasVoted: boolean = false,
+  userVotedIndex: number | null = null,
+  userClaimed: boolean = false
+): BatchState {
+  const totalDeposited =
+    Number(decoded.total_deposited) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS;
   const apyBps = decoded.apy_bps as number;
-  const voteWeights: number[] = (decoded.vote_weights as any[]).map((w) => Number(w));
+  const voteWeights: number[] = (decoded.vote_weights as any[]).map((w) =>
+    Number(w)
+  );
   const winningVoteIndex: number | null = decoded.winning_vote_index ?? null;
   const outcome: boolean | null = decoded.outcome ?? null;
-  const createdAt: number | null = decoded.created_at != null ? Number(decoded.created_at) * 1000 : null;
-  const lobbyExpiresAt: number | null = createdAt != null ? createdAt + ON_CHAIN_LOBBY_EXPIRY_SECONDS * 1000 : null;
+  const createdAt: number | null =
+    decoded.created_at != null ? Number(decoded.created_at) * 1000 : null;
+  const lobbyExpiresAt: number | null =
+    createdAt != null ? createdAt + ON_CHAIN_LOBBY_EXPIRY_SECONDS * 1000 : null;
   const betTerms: RawBetTerm[] = (decoded.bet_terms as any[]).map((term) => ({
     fixtureId: Number(term.fixture_id),
     period: term.period as number,
     statAKey: term.stat_a_key as number,
     statBKey: term.stat_b_key != null ? (term.stat_b_key as number) : null,
-    op: term.op ? (("Add" in term.op ? "Add" : "Subtract") as "Add" | "Subtract") : null,
+    op: term.op
+      ? (("Add" in term.op ? "Add" : "Subtract") as "Add" | "Subtract")
+      : null,
     predicateThreshold: term.predicate_threshold as number,
     predicateComparison: term.predicate_comparison as number,
     negation: term.negation as boolean,
@@ -946,12 +1145,19 @@ function buildBatchState(batchId: number, decoded: ReturnType<typeof decodeBatch
     winsCount: Number(decoded.wins_count ?? 0),
     lossesCount: Number(decoded.losses_count ?? 0),
     skipsCount: Number(decoded.skips_count ?? 0),
-    accumulatedWinnings: Number(decoded.accumulated_winnings) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
+    accumulatedWinnings:
+      Number(decoded.accumulated_winnings) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
   };
 }
 
-export async function fetchBatchOnChain(batchId: number, userAddress: string | null): Promise<BatchState> {
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+export async function fetchBatchOnChain(
+  batchId: number,
+  userAddress: string | null
+): Promise<BatchState> {
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
   const batchPda = deriveBatchPda(batchId);
 
   const accountInfo = await connection.getAccountInfo(batchPda);
@@ -967,21 +1173,34 @@ export async function fetchBatchOnChain(batchId: number, userAddress: string | n
   let userVotedIndex: number | null = null;
   let userClaimed = false;
   if (userAddress) {
-    const userPositionPda = deriveUserPositionPda(batchPda, new PublicKey(userAddress));
+    const userPositionPda = deriveUserPositionPda(
+      batchPda,
+      new PublicKey(userAddress)
+    );
     const posInfo = await connection.getAccountInfo(userPositionPda);
     if (posInfo && posInfo.data.length >= 8) {
       const pos = decodeUserPositionAccount(posInfo.data.slice(8));
-      userDeposited = Number(pos.deposited_amount) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS;
+      userDeposited =
+        Number(pos.deposited_amount) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS;
       // A vote stamped with an earlier round than the batch's current
       // bets_completed is stale — it belongs to an already-settled bet
       // whose vote_weights were already zeroed out on-chain.
-      userHasVoted = Boolean(pos.has_voted) && Number(pos.voted_at_round) === Number(decoded.bets_completed);
+      userHasVoted =
+        Boolean(pos.has_voted) &&
+        Number(pos.voted_at_round) === Number(decoded.bets_completed);
       userVotedIndex = userHasVoted ? (pos.vote_index as number) : null;
       userClaimed = Boolean(pos.claimed);
     }
   }
 
-  return buildBatchState(batchId, decoded, userDeposited, userHasVoted, userVotedIndex, userClaimed);
+  return buildBatchState(
+    batchId,
+    decoded,
+    userDeposited,
+    userHasVoted,
+    userVotedIndex,
+    userClaimed
+  );
 }
 
 /**
@@ -995,21 +1214,33 @@ export async function fetchBatchOnChain(batchId: number, userAddress: string | n
  * getMultipleAccountsInfo caps out at 100 pubkeys per call; batches beyond
  * that are chunked.
  */
-export async function fetchAllBatchesOnChain(batchIds: number[], userAddress: string | null): Promise<BatchState[]> {
+export async function fetchAllBatchesOnChain(
+  batchIds: number[],
+  userAddress: string | null
+): Promise<BatchState[]> {
   if (batchIds.length === 0) return [];
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
 
   const batchPdas = batchIds.map((id) => deriveBatchPda(id));
 
   const CHUNK_SIZE = 100;
-  const batchAccountInfos: (import("@solana/web3.js").AccountInfo<Buffer> | null)[] = [];
+  const batchAccountInfos: (
+    import("@solana/web3.js").AccountInfo<Buffer> | null
+  )[] = [];
   for (let i = 0; i < batchPdas.length; i += CHUNK_SIZE) {
     const chunk = batchPdas.slice(i, i + CHUNK_SIZE);
     const infos = await connection.getMultipleAccountsInfo(chunk);
     batchAccountInfos.push(...infos);
   }
 
-  const decodedByIndex: { batchId: number; batchPda: PublicKey; decoded: ReturnType<typeof decodeBatchAccount> }[] = [];
+  const decodedByIndex: {
+    batchId: number;
+    batchPda: PublicKey;
+    decoded: ReturnType<typeof decodeBatchAccount>;
+  }[] = [];
   batchIds.forEach((batchId, i) => {
     const info = batchAccountInfos[i];
     if (!info) return;
@@ -1028,8 +1259,12 @@ export async function fetchAllBatchesOnChain(batchIds: number[], userAddress: st
   let userClaimedByBatchId = new Map<number, boolean>();
   if (userAddress) {
     const user = new PublicKey(userAddress);
-    const positionPdas = decodedByIndex.map(({ batchPda }) => deriveUserPositionPda(batchPda, user));
-    const positionInfos: (import("@solana/web3.js").AccountInfo<Buffer> | null)[] = [];
+    const positionPdas = decodedByIndex.map(({ batchPda }) =>
+      deriveUserPositionPda(batchPda, user)
+    );
+    const positionInfos: (
+      import("@solana/web3.js").AccountInfo<Buffer> | null
+    )[] = [];
     for (let i = 0; i < positionPdas.length; i += CHUNK_SIZE) {
       const chunk = positionPdas.slice(i, i + CHUNK_SIZE);
       const infos = await connection.getMultipleAccountsInfo(chunk);
@@ -1040,10 +1275,18 @@ export async function fetchAllBatchesOnChain(batchIds: number[], userAddress: st
       if (posInfo && posInfo.data.length >= 8) {
         const pos = decodeUserPositionAccount(posInfo.data.slice(8));
         // Stale-round check — see fetchBatchOnChain's identical comment.
-        const hasVoted = Boolean(pos.has_voted) && Number(pos.voted_at_round) === Number(decoded.bets_completed);
-        userDepositedByBatchId.set(batchId, Number(pos.deposited_amount) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS);
+        const hasVoted =
+          Boolean(pos.has_voted) &&
+          Number(pos.voted_at_round) === Number(decoded.bets_completed);
+        userDepositedByBatchId.set(
+          batchId,
+          Number(pos.deposited_amount) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS
+        );
         userHasVotedByBatchId.set(batchId, hasVoted);
-        userVotedIndexByBatchId.set(batchId, hasVoted ? (pos.vote_index as number) : null);
+        userVotedIndexByBatchId.set(
+          batchId,
+          hasVoted ? (pos.vote_index as number) : null
+        );
         userClaimedByBatchId.set(batchId, Boolean(pos.claimed));
       }
     });
@@ -1072,7 +1315,9 @@ const CMP_GREATER_THAN = 0;
 const CMP_LESS_THAN = 1;
 const CMP_EQUAL_TO = 2;
 
-function deriveBetTermFromOption(option: Option): Omit<RawBetTerm, "fixtureId" | "period" | "negation"> | null {
+function deriveBetTermFromOption(
+  option: Option
+): Omit<RawBetTerm, "fixtureId" | "period" | "negation"> | null {
   const { marketType, outcome, label } = option;
 
   if (marketType === "1X2_PARTICIPANT_RESULT") {
@@ -1081,7 +1326,13 @@ function deriveBetTermFromOption(option: Option): Omit<RawBetTerm, "fixtureId" |
     else if (outcome === "part2") comparison = CMP_LESS_THAN;
     else if (outcome === "draw") comparison = CMP_EQUAL_TO;
     else return null;
-    return { statAKey: STAT_KEY_PART1_GOALS, statBKey: STAT_KEY_PART2_GOALS, op: "Subtract", predicateThreshold: 0, predicateComparison: comparison };
+    return {
+      statAKey: STAT_KEY_PART1_GOALS,
+      statBKey: STAT_KEY_PART2_GOALS,
+      op: "Subtract",
+      predicateThreshold: 0,
+      predicateComparison: comparison,
+    };
   }
 
   if (marketType === "OVERUNDER_PARTICIPANT_GOALS") {
@@ -1120,7 +1371,10 @@ function deriveBetTermFromOption(option: Option): Omit<RawBetTerm, "fixtureId" |
 // Slot index (0-3) -> the live TxOdds option that produced it, recovered by
 // re-deriving each candidate's would-be bet term and comparing against what's
 // actually stored on-chain for that slot.
-function matchBetTermsToOptions(betTerms: RawBetTerm[], candidates: Option[]): Map<number, Option> {
+function matchBetTermsToOptions(
+  betTerms: RawBetTerm[],
+  candidates: Option[]
+): Map<number, Option> {
   const matches = new Map<number, Option>();
   betTerms.forEach((term, slotIndex) => {
     if (term.fixtureId <= 0) return; // unused slot
@@ -1148,7 +1402,10 @@ function matchBetTermsToOptions(betTerms: RawBetTerm[], candidates: Option[]): M
 // that window and simply won't be in whatever's already loaded. Mirrors
 // test/cast-vote's pattern of always re-fetching with all=1 (no start-time
 // upper bound) rather than trusting a possibly-stale/filtered options list.
-async function getFixtureCandidates(fixtureId: number, preloaded: Option[]): Promise<Option[]> {
+async function getFixtureCandidates(
+  fixtureId: number,
+  preloaded: Option[]
+): Promise<Option[]> {
   const preloadedMatch = preloaded.filter((o) => o.fixtureId === fixtureId);
   if (preloadedMatch.length > 0) return preloadedMatch;
 
@@ -1159,7 +1416,10 @@ async function getFixtureCandidates(fixtureId: number, preloaded: Option[]): Pro
     ]);
     const allData = allRes.ok ? await allRes.json() : {};
     const pastData = pastRes.ok ? await pastRes.json() : {};
-    const freshOptions: Option[] = [...(allData.options || []), ...(pastData.options || [])];
+    const freshOptions: Option[] = [
+      ...(allData.options || []),
+      ...(pastData.options || []),
+    ];
     return freshOptions.filter((o) => o.fixtureId === fixtureId);
   } catch {
     return [];
@@ -1171,7 +1431,7 @@ async function getFixtureCandidates(fixtureId: number, preloaded: Option[]): Pro
 // using real participant names when known, without needing a matched option.
 function statName(key: number, team1: string, team2: string): string {
   const baseKey = key % 1000;
-  const team = (baseKey % 2 === 1) ? team1 : team2;
+  const team = baseKey % 2 === 1 ? team1 : team2;
 
   let statType = "";
   switch (baseKey) {
@@ -1198,7 +1458,11 @@ function statName(key: number, team1: string, team2: string): string {
   return `${team} ${statType}`;
 }
 
-function describeBetTerm(term: RawBetTerm, team1: string, team2: string): string {
+function describeBetTerm(
+  term: RawBetTerm,
+  team1: string,
+  team2: string
+): string {
   let periodStr = "";
   switch (term.period) {
     case 0:
@@ -1228,7 +1492,12 @@ function describeBetTerm(term: RawBetTerm, team1: string, team2: string): string
     default:
       periodStr = `Period ${term.period}`;
   }
-  const compSymbol = term.predicateComparison === 0 ? ">" : term.predicateComparison === 1 ? "<" : "==";
+  const compSymbol =
+    term.predicateComparison === 0
+      ? ">"
+      : term.predicateComparison === 1
+        ? "<"
+        : "==";
   const expr =
     term.op && term.statBKey != null
       ? `(${statName(term.statAKey, team1, team2)} ${term.op === "Add" ? "+" : "-"} ${statName(term.statBKey, team1, team2)})`
@@ -1269,7 +1538,10 @@ interface StoredSlotMapping {
 // Reconstructs an Option straight from what propose_match captured, for when
 // the live TxOdds feed no longer has this fixture (already started, or aged
 // out of the dev API's window) so key-matching against it can't succeed.
-function optionFromStoredSlot(slot: StoredSlotMapping, fixtureId: number): Option | null {
+function optionFromStoredSlot(
+  slot: StoredSlotMapping,
+  fixtureId: number
+): Option | null {
   if (!slot.participant1 || !slot.participant2 || !slot.startTime) return null;
   return {
     id: slot.messageId,
@@ -1293,13 +1565,18 @@ function optionFromStoredSlot(slot: StoredSlotMapping, fixtureId: number): Optio
  * (from the raw on-chain fields alone) otherwise — so a proposal is never
  * shown as bare numbers just because odds matching didn't resolve.
  */
-export async function describeBatchBetTerms(batchState: BatchState, preloadedOptions: Option[]): Promise<BetTermProposal[]> {
+export async function describeBatchBetTerms(
+  batchState: BatchState,
+  preloadedOptions: Option[]
+): Promise<BetTermProposal[]> {
   const proposals: BetTermProposal[] = [];
 
   // Fetch Redis mapping for this batch
   let slotsMapping: Record<string, StoredSlotMapping> = {};
   try {
-    const mapRes = await fetch(`/api/batch-mapping?batchId=${batchState.batchId}`);
+    const mapRes = await fetch(
+      `/api/batch-mapping?batchId=${batchState.batchId}`
+    );
     if (mapRes.ok) {
       const mapData = await mapRes.json();
       slotsMapping = mapData.slotsMapping || {};
@@ -1312,7 +1589,10 @@ export async function describeBatchBetTerms(batchState: BatchState, preloadedOpt
     const term = batchState.betTerms[slotIndex];
     if (term.fixtureId <= 0) continue;
 
-    const candidates = await getFixtureCandidates(term.fixtureId, preloadedOptions);
+    const candidates = await getFixtureCandidates(
+      term.fixtureId,
+      preloadedOptions
+    );
     const first = candidates[0] as Option | undefined;
     // The live TxOdds candidate lookup fails once a fixture ages out of the
     // feed (already started, or simply no longer returned) — fall back to
@@ -1334,7 +1614,9 @@ export async function describeBatchBetTerms(batchState: BatchState, preloadedOpt
     const slotData = slotsMapping[slotIndex];
     if (slotData && slotData.messageId && slotData.ts !== undefined) {
       try {
-        const valRes = await fetch(`/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`);
+        const valRes = await fetch(
+          `/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`
+        );
         if (valRes.ok) {
           const valData = await valRes.json();
           const odds = valData.odds;
@@ -1348,7 +1630,10 @@ export async function describeBatchBetTerms(batchState: BatchState, preloadedOpt
           }
         }
       } catch (err) {
-        console.error(`Failed to fetch validation odds for slot ${slotIndex}:`, err);
+        console.error(
+          `Failed to fetch validation odds for slot ${slotIndex}:`,
+          err
+        );
       }
     }
 
@@ -1381,8 +1666,12 @@ export async function describeBatchBetTerms(batchState: BatchState, preloadedOpt
     proposals.push({
       slotIndex,
       term,
-      matchText: kickoffTimeMs != null ? `${team1} vs ${team2}` : `Fixture ${term.fixtureId}`,
-      kickoff: kickoffTimeMs != null ? new Date(kickoffTimeMs).toLocaleString() : "",
+      matchText:
+        kickoffTimeMs != null
+          ? `${team1} vs ${team2}`
+          : `Fixture ${term.fixtureId}`,
+      kickoff:
+        kickoffTimeMs != null ? new Date(kickoffTimeMs).toLocaleString() : "",
       kickoffTime: kickoffTimeMs,
       predicate: describeBetTerm(term, team1, team2),
       multiplier,
@@ -1411,11 +1700,16 @@ export async function resolveVoteIndex(
   const res = await fetch(`/api/batch-mapping?batchId=${batchId}`);
   if (res.ok) {
     const mapping = await res.json();
-    const slotsMapping: Record<string, { messageId: string; outcomeIndex: number }> = mapping.slotsMapping || {};
+    const slotsMapping: Record<
+      string,
+      { messageId: string; outcomeIndex: number }
+    > = mapping.slotsMapping || {};
     // Redis stores each slot by (messageId, outcomeIndex) — the raw TxOdds
     // identity — not by Option.id (fixtureId-marketType-params-outcome-period),
     // so look candidates up by that same key before comparing to optionId.
-    const optionsByKey = new Map((allOptions ?? []).map((o) => [`${o.messageId}-${o.outcomeIndex}`, o]));
+    const optionsByKey = new Map(
+      (allOptions ?? []).map((o) => [`${o.messageId}-${o.outcomeIndex}`, o])
+    );
     for (const [indexStr, slot] of Object.entries(slotsMapping)) {
       const option = optionsByKey.get(`${slot.messageId}-${slot.outcomeIndex}`);
       if (option && option.id === optionId) return Number(indexStr);
@@ -1448,7 +1742,11 @@ export async function fetchLiveMatchForBatch(
   batchId: number,
   batchState: BatchState,
   allOptions: Option[]
-): Promise<{ fixture: Fixture | null; votes: Record<string, number>; decision: VoteResult | null }> {
+): Promise<{
+  fixture: Fixture | null;
+  votes: Record<string, number>;
+  decision: VoteResult | null;
+}> {
   const res = await fetch(`/api/batch-mapping?batchId=${batchId}`);
   let resolvedSlots: { slotIndex: number; option: Option }[] = [];
   let slotsMapping: Record<string, StoredSlotMapping> = {};
@@ -1458,7 +1756,9 @@ export async function fetchLiveMatchForBatch(
     slotsMapping = mapping.slotsMapping || {};
     // Same (messageId, outcomeIndex) keying as resolveVoteIndex — this is the
     // raw TxOdds identity slotsMapping was written with, not Option.id.
-    const optionsByKey = new Map(allOptions.map((o) => [`${o.messageId}-${o.outcomeIndex}`, o]));
+    const optionsByKey = new Map(
+      allOptions.map((o) => [`${o.messageId}-${o.outcomeIndex}`, o])
+    );
     for (const [indexStr, slot] of Object.entries(slotsMapping)) {
       // Prefer the live TxOdds option (fresher odds) but fall back to the
       // readable fields captured at propose_match time — the fixture can
@@ -1475,11 +1775,16 @@ export async function fetchLiveMatchForBatch(
 
   if (resolvedSlots.length === 0) {
     // Redis cache missing/empty — fall back to the batch's real bet_terms.
-    const fixtureId = batchState.betTerms.find((t) => t.fixtureId > 0)?.fixtureId;
+    const fixtureId = batchState.betTerms.find(
+      (t) => t.fixtureId > 0
+    )?.fixtureId;
     if (fixtureId) {
       const candidates = await getFixtureCandidates(fixtureId, allOptions);
       const matches = matchBetTermsToOptions(batchState.betTerms, candidates);
-      resolvedSlots = Array.from(matches, ([slotIndex, option]) => ({ slotIndex, option }));
+      resolvedSlots = Array.from(matches, ([slotIndex, option]) => ({
+        slotIndex,
+        option,
+      }));
     }
   }
 
@@ -1488,7 +1793,9 @@ export async function fetchLiveMatchForBatch(
     const slotData = slotsMapping[slot.slotIndex];
     if (slotData && slotData.messageId && slotData.ts !== undefined) {
       try {
-        const valRes = await fetch(`/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`);
+        const valRes = await fetch(
+          `/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`
+        );
         if (valRes.ok) {
           const valData = await valRes.json();
           const odds = valData.odds;
@@ -1501,7 +1808,10 @@ export async function fetchLiveMatchForBatch(
           }
         }
       } catch (err) {
-        console.error(`Failed to fetch validation odds for slot ${slot.slotIndex}:`, err);
+        console.error(
+          `Failed to fetch validation odds for slot ${slot.slotIndex}:`,
+          err
+        );
       }
     }
   }
@@ -1531,10 +1841,14 @@ export async function fetchLiveMatchForBatch(
   let decision: VoteResult | null = null;
   if (batchState.winningVoteIndex !== null) {
     const isSkip = batchState.winningVoteIndex === 4;
-    const winner = resolvedSlots.find((s) => s.slotIndex === batchState.winningVoteIndex);
+    const winner = resolvedSlots.find(
+      (s) => s.slotIndex === batchState.winningVoteIndex
+    );
     decision = {
       fixtureId,
-      winningOptionId: isSkip ? `${fixtureId}-skip` : winner?.option.id ?? null,
+      winningOptionId: isSkip
+        ? `${fixtureId}-skip`
+        : (winner?.option.id ?? null),
       isSkip,
       accepted: !isSkip,
       won: batchState.outcome === true,
@@ -1549,12 +1863,19 @@ export async function fetchLiveMatchForBatch(
  * Assumes the shared yield vault has already been initialized by the
  * operator out-of-band — the frontend never signs on the operator's behalf.
  */
-export async function joinBatchOnChain(batchId: number, amount: number, wallet: WalletLike): Promise<string> {
+export async function joinBatchOnChain(
+  batchId: number,
+  amount: number,
+  wallet: WalletLike
+): Promise<string> {
   const address = wallet.account?.address;
   if (!address) throw new Error("Wallet not connected.");
   const user = new PublicKey(address);
 
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
 
   const [vaultConfigPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("vault_config"), USDC_MINT.toBuffer()],
@@ -1564,14 +1885,23 @@ export async function joinBatchOnChain(batchId: number, amount: number, wallet: 
   const batchPda = deriveBatchPda(batchId);
   const accountInfo = await connection.getAccountInfo(batchPda);
   if (!accountInfo) throw new Error("Batch account not found on-chain.");
-  if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) throw new Error("Batch not initialized.");
+  if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR))
+    throw new Error("Batch not initialized.");
 
-  const rawAmount = BigInt(Math.floor(amount * 10 ** SOLANA_CONFIG.TOKEN_DECIMALS));
-  const data = Buffer.concat([JOIN_BATCH_DISCRIMINATOR, writeUInt64LE(rawAmount)]);
+  const rawAmount = BigInt(
+    Math.floor(amount * 10 ** SOLANA_CONFIG.TOKEN_DECIMALS)
+  );
+  const data = Buffer.concat([
+    JOIN_BATCH_DISCRIMINATOR,
+    writeUInt64LE(rawAmount),
+  ]);
 
   const userTokenAccount = deriveAssociatedTokenAddress(user, USDC_MINT);
   const batchTokenAccount = deriveAssociatedTokenAddress(batchPda, USDC_MINT);
-  const vaultTokenAccount = deriveAssociatedTokenAddress(vaultConfigPda, USDC_MINT);
+  const vaultTokenAccount = deriveAssociatedTokenAddress(
+    vaultConfigPda,
+    USDC_MINT
+  );
 
   const [vaultPositionPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("position"), vaultConfigPda.toBuffer(), batchPda.toBuffer()],
@@ -1595,7 +1925,11 @@ export async function joinBatchOnChain(batchId: number, amount: number, wallet: 
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
 
-  const ix = new TransactionInstruction({ programId: UNDEGEN_PROGRAM_ID, keys, data });
+  const ix = new TransactionInstruction({
+    programId: UNDEGEN_PROGRAM_ID,
+    keys,
+    data,
+  });
   const tx = new Transaction().add(ix);
 
   return signAndSend(connection, tx, user, wallet);
@@ -1608,12 +1942,19 @@ export async function joinBatchOnChain(batchId: number, amount: number, wallet: 
  * programs/undegen_core/src/instructions/leave_batch.rs's account list —
  * there's no app/test page for this one, so this is the first real use.
  */
-export async function leaveBatchOnChain(batchId: number, amount: number, wallet: WalletLike): Promise<string> {
+export async function leaveBatchOnChain(
+  batchId: number,
+  amount: number,
+  wallet: WalletLike
+): Promise<string> {
   const address = wallet.account?.address;
   if (!address) throw new Error("Wallet not connected.");
   const user = new PublicKey(address);
 
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
 
   const [vaultConfigPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("vault_config"), USDC_MINT.toBuffer()],
@@ -1623,11 +1964,15 @@ export async function leaveBatchOnChain(batchId: number, amount: number, wallet:
   const batchPda = deriveBatchPda(batchId);
   const accountInfo = await connection.getAccountInfo(batchPda);
   if (!accountInfo) throw new Error("Batch account not found on-chain.");
-  if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) throw new Error("Batch not initialized.");
+  if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR))
+    throw new Error("Batch not initialized.");
 
   const userTokenAccount = deriveAssociatedTokenAddress(user, USDC_MINT);
   const batchTokenAccount = deriveAssociatedTokenAddress(batchPda, USDC_MINT);
-  const vaultTokenAccount = deriveAssociatedTokenAddress(vaultConfigPda, USDC_MINT);
+  const vaultTokenAccount = deriveAssociatedTokenAddress(
+    vaultConfigPda,
+    USDC_MINT
+  );
   const [vaultPositionPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("position"), vaultConfigPda.toBuffer(), batchPda.toBuffer()],
     YIELD_VAULT_PROGRAM_ID
@@ -1650,10 +1995,19 @@ export async function leaveBatchOnChain(batchId: number, amount: number, wallet:
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
 
-  const rawAmount = BigInt(Math.floor(amount * 10 ** SOLANA_CONFIG.TOKEN_DECIMALS));
-  const data = Buffer.concat([LEAVE_BATCH_DISCRIMINATOR, writeUInt64LE(rawAmount)]);
+  const rawAmount = BigInt(
+    Math.floor(amount * 10 ** SOLANA_CONFIG.TOKEN_DECIMALS)
+  );
+  const data = Buffer.concat([
+    LEAVE_BATCH_DISCRIMINATOR,
+    writeUInt64LE(rawAmount),
+  ]);
 
-  const ix = new TransactionInstruction({ programId: UNDEGEN_PROGRAM_ID, keys, data });
+  const ix = new TransactionInstruction({
+    programId: UNDEGEN_PROGRAM_ID,
+    keys,
+    data,
+  });
   const tx = new Transaction().add(ix);
 
   return signAndSend(connection, tx, user, wallet);
@@ -1669,12 +2023,18 @@ export async function leaveBatchOnChain(batchId: number, amount: number, wallet:
  * amount argument, it always pays out this user's whole position and marks
  * it claimed (a second call reverts with AlreadyClaimed).
  */
-export async function claimOnChain(batchId: number, wallet: WalletLike): Promise<string> {
+export async function claimOnChain(
+  batchId: number,
+  wallet: WalletLike
+): Promise<string> {
   const address = wallet.account?.address;
   if (!address) throw new Error("Wallet not connected.");
   const user = new PublicKey(address);
 
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
 
   const [vaultConfigPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("vault_config"), USDC_MINT.toBuffer()],
@@ -1684,11 +2044,15 @@ export async function claimOnChain(batchId: number, wallet: WalletLike): Promise
   const batchPda = deriveBatchPda(batchId);
   const accountInfo = await connection.getAccountInfo(batchPda);
   if (!accountInfo) throw new Error("Batch account not found on-chain.");
-  if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) throw new Error("Batch not initialized.");
+  if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR))
+    throw new Error("Batch not initialized.");
 
   const userTokenAccount = deriveAssociatedTokenAddress(user, USDC_MINT);
   const batchTokenAccount = deriveAssociatedTokenAddress(batchPda, USDC_MINT);
-  const vaultTokenAccount = deriveAssociatedTokenAddress(vaultConfigPda, USDC_MINT);
+  const vaultTokenAccount = deriveAssociatedTokenAddress(
+    vaultConfigPda,
+    USDC_MINT
+  );
   const [vaultPositionPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("position"), vaultConfigPda.toBuffer(), batchPda.toBuffer()],
     YIELD_VAULT_PROGRAM_ID
@@ -1714,7 +2078,11 @@ export async function claimOnChain(batchId: number, wallet: WalletLike): Promise
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
 
-  const ix = new TransactionInstruction({ programId: UNDEGEN_PROGRAM_ID, keys, data: CLAIM_DISCRIMINATOR });
+  const ix = new TransactionInstruction({
+    programId: UNDEGEN_PROGRAM_ID,
+    keys,
+    data: CLAIM_DISCRIMINATOR,
+  });
   const tx = new Transaction().add(ix);
 
   return signAndSend(connection, tx, user, wallet);
@@ -1730,12 +2098,18 @@ export async function claimOnChain(batchId: number, wallet: WalletLike): Promise
  * programs/undegen_core/src/instructions/claim_and_join_lottery.rs's
  * account list.
  */
-export async function claimAndJoinLotteryOnChain(batchId: number, wallet: WalletLike): Promise<string> {
+export async function claimAndJoinLotteryOnChain(
+  batchId: number,
+  wallet: WalletLike
+): Promise<string> {
   const address = wallet.account?.address;
   if (!address) throw new Error("Wallet not connected.");
   const user = new PublicKey(address);
 
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
 
   const activeRound = await fetchActiveLotteryRound();
   if (!activeRound) throw new Error("No open lottery round to join right now.");
@@ -1748,11 +2122,15 @@ export async function claimAndJoinLotteryOnChain(batchId: number, wallet: Wallet
   const batchPda = deriveBatchPda(batchId);
   const accountInfo = await connection.getAccountInfo(batchPda);
   if (!accountInfo) throw new Error("Batch account not found on-chain.");
-  if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) throw new Error("Batch not initialized.");
+  if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR))
+    throw new Error("Batch not initialized.");
 
   const userTokenAccount = deriveAssociatedTokenAddress(user, USDC_MINT);
   const batchTokenAccount = deriveAssociatedTokenAddress(batchPda, USDC_MINT);
-  const vaultTokenAccount = deriveAssociatedTokenAddress(vaultConfigPda, USDC_MINT);
+  const vaultTokenAccount = deriveAssociatedTokenAddress(
+    vaultConfigPda,
+    USDC_MINT
+  );
   const [vaultPositionPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("position"), vaultConfigPda.toBuffer(), batchPda.toBuffer()],
     YIELD_VAULT_PROGRAM_ID
@@ -1760,7 +2138,9 @@ export async function claimAndJoinLotteryOnChain(batchId: number, wallet: Wallet
   const userPositionPda = deriveUserPositionPda(batchPda, user);
 
   const lotteryRoundPda = new PublicKey(activeRound.roundPda);
-  const lotteryJackpotTokenAccount = new PublicKey(activeRound.jackpotTokenAccount);
+  const lotteryJackpotTokenAccount = new PublicKey(
+    activeRound.jackpotTokenAccount
+  );
   const lotteryEntryPda = deriveLotteryEntryPda(lotteryRoundPda, user);
 
   // Account order must match ClaimAndJoinLottery's #[derive(Accounts)] field
@@ -1828,7 +2208,10 @@ export async function previewClaimAmount(
   batchId: number,
   userAddress: string
 ): Promise<{ principal: number; earnings: number; total: number } | null> {
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
   const user = new PublicKey(userAddress);
   const batchPda = deriveBatchPda(batchId);
 
@@ -1844,7 +2227,12 @@ export async function previewClaimAmount(
   const batchTokenAccount = deriveAssociatedTokenAddress(batchPda, USDC_MINT);
 
   const [batchInfo, vaultConfigInfo, vaultPositionInfo, userPositionInfo] =
-    await connection.getMultipleAccountsInfo([batchPda, vaultConfigPda, vaultPositionPda, userPositionPda]);
+    await connection.getMultipleAccountsInfo([
+      batchPda,
+      vaultConfigPda,
+      vaultPositionPda,
+      userPositionPda,
+    ]);
 
   if (!batchInfo || !userPositionInfo) return null;
   if (!batchInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) return null;
@@ -1862,14 +2250,17 @@ export async function previewClaimAmount(
   let withdrawUnderlying = BigInt(0);
   if (vaultConfigInfo && vaultPositionInfo) {
     const vaultState = VaultConfigLayout.decode(vaultConfigInfo.data.slice(8));
-    const positionState = VaultPositionLayout.decode(vaultPositionInfo.data.slice(8));
+    const positionState = VaultPositionLayout.decode(
+      vaultPositionInfo.data.slice(8)
+    );
     const totalShares = BigInt(vaultState.total_shares.toString());
     const totalUnderlying = BigInt(vaultState.total_underlying.toString());
     const positionShares = BigInt(positionState.shares.toString());
     if (totalShares > BigInt(0) && totalUnderlying > BigInt(0)) {
       const userShares = (positionShares * userDeposited) / totalDeposited;
       const userUnderlying = (userShares * totalUnderlying) / totalShares;
-      withdrawUnderlying = userUnderlying < userDeposited ? userUnderlying : userDeposited;
+      withdrawUnderlying =
+        userUnderlying < userDeposited ? userUnderlying : userDeposited;
     }
   }
 
@@ -1878,7 +2269,8 @@ export async function previewClaimAmount(
   // settled winnings/leftover capital, not a derived estimate of it.
   let userBatchShare = BigInt(0);
   try {
-    const balanceRes = await connection.getTokenAccountBalance(batchTokenAccount);
+    const balanceRes =
+      await connection.getTokenAccountBalance(batchTokenAccount);
     const batchBalance = BigInt(balanceRes.value.amount);
     if (batchBalance > BigInt(0)) {
       userBatchShare = (batchBalance * userDeposited) / totalDeposited;
@@ -1897,16 +2289,26 @@ export async function previewClaimAmount(
  * Cast a consensus vote (real `cast_vote` instruction, user-signed).
  * `index` is 0-3 for a proposed bet_terms slot, or 4 to skip.
  */
-export async function castVoteOnChain(batchId: number, index: number, wallet: WalletLike): Promise<string> {
+export async function castVoteOnChain(
+  batchId: number,
+  index: number,
+  wallet: WalletLike
+): Promise<string> {
   const address = wallet.account?.address;
   if (!address) throw new Error("Wallet not connected.");
   const user = new PublicKey(address);
 
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
   const batchPda = deriveBatchPda(batchId);
 
   const accountInfo = await connection.getAccountInfo(batchPda);
-  if (!accountInfo || !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) {
+  if (
+    !accountInfo ||
+    !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)
+  ) {
     throw new Error("Batch not found or not initialized.");
   }
 
@@ -1919,7 +2321,11 @@ export async function castVoteOnChain(batchId: number, index: number, wallet: Wa
     { pubkey: userPositionPda, isSigner: false, isWritable: true },
   ];
 
-  const ix = new TransactionInstruction({ programId: UNDEGEN_PROGRAM_ID, keys, data });
+  const ix = new TransactionInstruction({
+    programId: UNDEGEN_PROGRAM_ID,
+    keys,
+    data,
+  });
   const tx = new Transaction().add(ix);
 
   return signAndSend(connection, tx, user, wallet);
@@ -1931,16 +2337,25 @@ export async function castVoteOnChain(batchId: number, index: number, wallet: Wa
  * the proof deadline; no signer account required by the instruction itself,
  * the connected wallet only pays the tx fee.
  */
-export async function settleDefaultOnChain(batchId: number, wallet: WalletLike): Promise<string> {
+export async function settleDefaultOnChain(
+  batchId: number,
+  wallet: WalletLike
+): Promise<string> {
   const address = wallet.account?.address;
   if (!address) throw new Error("Wallet not connected.");
   const user = new PublicKey(address);
 
-  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+  const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    SOLANA_CONFIG.COMMITMENT
+  );
   const batchPda = deriveBatchPda(batchId);
 
   const accountInfo = await connection.getAccountInfo(batchPda);
-  if (!accountInfo || !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) {
+  if (
+    !accountInfo ||
+    !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)
+  ) {
     throw new Error("Batch not found or not initialized.");
   }
 
@@ -1956,7 +2371,11 @@ export async function settleDefaultOnChain(batchId: number, wallet: WalletLike):
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
   ];
 
-  const ix = new TransactionInstruction({ programId: UNDEGEN_PROGRAM_ID, keys, data: SETTLE_DEFAULT_DISCRIMINATOR });
+  const ix = new TransactionInstruction({
+    programId: UNDEGEN_PROGRAM_ID,
+    keys,
+    data: SETTLE_DEFAULT_DISCRIMINATOR,
+  });
   const tx = new Transaction().add(ix);
 
   return signAndSend(connection, tx, user, wallet);

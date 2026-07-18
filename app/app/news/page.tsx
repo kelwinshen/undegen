@@ -311,7 +311,10 @@ export default function FIFANewsPage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filtered.map((article, idx) => (
-                  <ArticleCard key={`${article.url}-${idx}`} article={article} />
+                  <ArticleCard
+                    key={`${article.url}-${idx}`}
+                    article={article}
+                  />
                 ))}
               </div>
             )}

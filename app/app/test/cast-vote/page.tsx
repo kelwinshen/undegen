@@ -17,7 +17,9 @@ import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
-const CAST_VOTE_DISCRIMINATOR = Buffer.from([20, 212, 15, 189, 69, 180, 69, 151]);
+const CAST_VOTE_DISCRIMINATOR = Buffer.from([
+  20, 212, 15, 189, 69, 180, 69, 151,
+]);
 
 type LogEntry = {
   time: number;
@@ -111,7 +113,7 @@ function getBetTermsFromOdds(option: any) {
     if (match) {
       const rawLine = parseFloat(match[0]);
       if (rawLine % 0.5 !== 0) return null;
-      
+
       const isOver = outcome === "over";
       const comparison = isOver ? COMPARISON.GreaterThan : COMPARISON.LessThan;
       const threshold = isOver ? Math.floor(rawLine) : Math.ceil(rawLine);
@@ -164,14 +166,16 @@ function getBetTermsFromOdds(option: any) {
 
 function termsEqual(a: any, b: any) {
   if (!a || !b) return false;
-  return a.fixture_id.toString() === b.fixture_id.toString() &&
-         a.period === b.period &&
-         a.stat_a_key === b.stat_a_key &&
-         a.stat_b_key === b.stat_b_key &&
-         JSON.stringify(a.op) === JSON.stringify(b.op) &&
-         a.predicate_threshold === b.predicate_threshold &&
-         a.predicate_comparison === b.predicate_comparison &&
-         a.negation === b.negation;
+  return (
+    a.fixture_id.toString() === b.fixture_id.toString() &&
+    a.period === b.period &&
+    a.stat_a_key === b.stat_a_key &&
+    a.stat_b_key === b.stat_b_key &&
+    JSON.stringify(a.op) === JSON.stringify(b.op) &&
+    a.predicate_threshold === b.predicate_threshold &&
+    a.predicate_comparison === b.predicate_comparison &&
+    a.negation === b.negation
+  );
 }
 
 function predicateText(term: any, team1: string, team2: string): string {
@@ -213,16 +217,29 @@ function predicateText(term: any, team1: string, team2: string): string {
 export default function CastVoteTest() {
   const { wallet, status } = useWalletConnection();
   const connected = status === "connected";
-  const userPubkey = wallet?.account.address ? new PublicKey(wallet.account.address) : null;
+  const userPubkey = wallet?.account.address
+    ? new PublicKey(wallet.account.address)
+    : null;
 
   const [batchId, setBatchId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [batchPda, setBatchPda] = useState<PublicKey | null>(null);
   const [voteWeights, setVoteWeights] = useState<bigint[]>([]);
   const [proposals, setProposals] = useState<
-    { label: string; matchText: string; kickoff: string; weight: bigint; multiplier: string; oddsLabel: string; percentage: number }[]
+    {
+      label: string;
+      matchText: string;
+      kickoff: string;
+      weight: bigint;
+      multiplier: string;
+      oddsLabel: string;
+      percentage: number;
+    }[]
   >([]);
   const [userDeposited, setUserDeposited] = useState<bigint | null>(null);
   const [userHasVoted, setUserHasVoted] = useState(false);
@@ -268,7 +285,10 @@ export default function CastVoteTest() {
       );
 
       const accountInfo = await connection.getAccountInfo(pda);
-      if (!accountInfo || !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) {
+      if (
+        !accountInfo ||
+        !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)
+      ) {
         throw new Error("Batch not found or not initialized.");
       }
       setBatchPda(pda);
@@ -277,7 +297,9 @@ export default function CastVoteTest() {
       const weights: bigint[] = decodedBatch.vote_weights;
       setVoteWeights(weights);
 
-      const totalWeightNum = Number(weights.reduce((sum, w) => sum + w, BigInt(0)));
+      const totalWeightNum = Number(
+        weights.reduce((sum, w) => sum + w, BigInt(0))
+      );
 
       const [userPositionPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_position"), pda.toBuffer(), userPubkey.toBuffer()],
@@ -292,13 +314,22 @@ export default function CastVoteTest() {
           setUserHasVoted(pos.has_voted);
           setUserVotedIndex(pos.vote_index);
 
-          addLog("info", `User deposit: ${pos.deposited_amount.toString()}, voted: ${pos.has_voted}, index: ${pos.vote_index}`);
+          addLog(
+            "info",
+            `User deposit: ${pos.deposited_amount.toString()}, voted: ${pos.has_voted}, index: ${pos.vote_index}`
+          );
 
           if (pos.has_voted && pos.vote_index < 5) {
             const votedWeight = weights[pos.vote_index];
-            addLog("info", `Your voted index [${pos.vote_index}] weight: ${votedWeight.toString()}`);
+            addLog(
+              "info",
+              `Your voted index [${pos.vote_index}] weight: ${votedWeight.toString()}`
+            );
             if (votedWeight < pos.deposited_amount) {
-              addLog("warning", `Vote weight mismatch! The weight at index ${pos.vote_index} is ${votedWeight} but your deposit is ${pos.deposited_amount}.`);
+              addLog(
+                "warning",
+                `Vote weight mismatch! The weight at index ${pos.vote_index} is ${votedWeight} but your deposit is ${pos.deposited_amount}.`
+              );
             }
           }
         } catch (e) {
@@ -311,7 +342,10 @@ export default function CastVoteTest() {
       const oddsRes = await fetch("/api/txodds?all=1");
       const oddsData = await oddsRes.json();
       const options: any[] = oddsData.options || [];
-      const matchMap = new Map<number, { participant1: string; participant2: string; startTime: number }>();
+      const matchMap = new Map<
+        number,
+        { participant1: string; participant2: string; startTime: number }
+      >();
 
       options.forEach((opt: any) => {
         if (!matchMap.has(opt.fixtureId)) {
@@ -327,7 +361,8 @@ export default function CastVoteTest() {
       for (let i = 0; i < 4; i++) {
         const term = decodedBatch.bet_terms[i];
         const fixtureId = term.fixture_id;
-        const match = fixtureId !== BigInt(0) ? matchMap.get(Number(fixtureId)) : null;
+        const match =
+          fixtureId !== BigInt(0) ? matchMap.get(Number(fixtureId)) : null;
 
         let matchText = "";
         let kickoff = "";
@@ -341,9 +376,15 @@ export default function CastVoteTest() {
         } else if (match) {
           matchText = `${match.participant1} vs ${match.participant2}`;
           kickoff = new Date(match.startTime).toLocaleString();
-          predicate = predicateText(term, match.participant1, match.participant2);
+          predicate = predicateText(
+            term,
+            match.participant1,
+            match.participant2
+          );
 
-          const fixtureOptions = options.filter((o: any) => o.fixtureId === Number(fixtureId));
+          const fixtureOptions = options.filter(
+            (o: any) => o.fixtureId === Number(fixtureId)
+          );
           for (const opt of fixtureOptions) {
             const candidate = getBetTermsFromOdds(opt);
             if (candidate && termsEqual(candidate, term)) {
@@ -358,7 +399,8 @@ export default function CastVoteTest() {
         }
 
         const weight = weights[i] || BigInt(0);
-        const percentage = totalWeightNum > 0 ? (Number(weight) / totalWeightNum) * 100 : 0;
+        const percentage =
+          totalWeightNum > 0 ? (Number(weight) / totalWeightNum) * 100 : 0;
 
         proposalsList.push({
           label: predicate,
@@ -393,7 +435,11 @@ export default function CastVoteTest() {
       const programId = UNDEGEN_PROGRAM_ID;
 
       const [userPositionPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("user_position"), batchPda.toBuffer(), userPubkey.toBuffer()],
+        [
+          Buffer.from("user_position"),
+          batchPda.toBuffer(),
+          userPubkey.toBuffer(),
+        ],
         programId
       );
 
@@ -419,19 +465,29 @@ export default function CastVoteTest() {
       const provider = (window as any).solana;
       if (provider) {
         const signedTx = await provider.signTransaction(tx);
-        const sig = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
+        const sig = await connection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: false,
+        });
         addLog("info", `Sent. Signature: ${sig}`);
         await connection.confirmTransaction(sig);
         addLog("success", "Confirmed");
-        setResult({ type: "success", message: `Voted for index ${index}. Tx: ${sig}` });
+        setResult({
+          type: "success",
+          message: `Voted for index ${index}. Tx: ${sig}`,
+        });
         await fetchBatch();
       } else if (wallet?.signTransaction) {
         await wallet.signTransaction(tx as any);
-        const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+        const sig = await connection.sendRawTransaction(tx.serialize(), {
+          skipPreflight: false,
+        });
         addLog("info", `Sent. Signature: ${sig}`);
         await connection.confirmTransaction(sig);
         addLog("success", "Confirmed");
-        setResult({ type: "success", message: `Voted for index ${index}. Tx: ${sig}` });
+        setResult({
+          type: "success",
+          message: `Voted for index ${index}. Tx: ${sig}`,
+        });
         await fetchBatch();
       } else {
         throw new Error("Wallet does not support signTransaction");
@@ -448,16 +504,22 @@ export default function CastVoteTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Cast Vote (Test)</h2>
           <p className="text-sm text-gray-400">
-            Connect your wallet, load a batch, and vote for one of the proposals or skip.
+            Connect your wallet, load a batch, and vote for one of the proposals
+            or skip.
           </p>
           {!connected && (
-            <p className="text-xs text-yellow-300">Connect your wallet (devnet) to vote.</p>
+            <p className="text-xs text-yellow-300">
+              Connect your wallet (devnet) to vote.
+            </p>
           )}
           <div className="flex gap-2">
             <input
@@ -479,12 +541,23 @@ export default function CastVoteTest() {
 
           {userDeposited !== null && (
             <div className="p-3 bg-bg1 rounded-lg border border-border-low text-xs text-gray-400 space-y-1">
-              <p>Your deposit: <span className="text-emerald-300">{userDeposited.toString()} raw units</span></p>
+              <p>
+                Your deposit:{" "}
+                <span className="text-emerald-300">
+                  {userDeposited.toString()} raw units
+                </span>
+              </p>
               {userHasVoted && (
-                <p>You have already voted for index <span className="text-emerald-300">{userVotedIndex}</span></p>
+                <p>
+                  You have already voted for index{" "}
+                  <span className="text-emerald-300">{userVotedIndex}</span>
+                </p>
               )}
               {userDeposited === BigInt(0) && (
-                <p className="text-yellow-300">You must deposit USDC using <strong>Join Batch</strong> before your vote carries weight.</p>
+                <p className="text-yellow-300">
+                  You must deposit USDC using <strong>Join Batch</strong> before
+                  your vote carries weight.
+                </p>
               )}
             </div>
           )}
@@ -497,7 +570,9 @@ export default function CastVoteTest() {
                   <div
                     key={idx}
                     className={`p-4 bg-bg1 rounded-lg border space-y-2 ${
-                      isMyVote ? "border-emerald-400 ring-1 ring-emerald-400/30" : "border-border-low"
+                      isMyVote
+                        ? "border-emerald-400 ring-1 ring-emerald-400/30"
+                        : "border-border-low"
                     }`}
                   >
                     <div className="flex justify-between items-start">
@@ -513,7 +588,9 @@ export default function CastVoteTest() {
                           )}
                         </div>
                         {proposal.kickoff && (
-                          <p className="text-xs text-gray-400">{proposal.kickoff}</p>
+                          <p className="text-xs text-gray-400">
+                            {proposal.kickoff}
+                          </p>
                         )}
                         <p className="text-sm text-emerald-300 mt-1">
                           {proposal.oddsLabel || proposal.label}
@@ -531,7 +608,9 @@ export default function CastVoteTest() {
                         <div className="w-24 bg-gray-700 rounded-full h-1.5 mt-1">
                           <div
                             className="bg-emerald-400 h-1.5 rounded-full"
-                            style={{ width: `${Math.min(proposal.percentage, 100)}%` }}
+                            style={{
+                              width: `${Math.min(proposal.percentage, 100)}%`,
+                            }}
                           />
                         </div>
                         <button
@@ -546,9 +625,13 @@ export default function CastVoteTest() {
                   </div>
                 );
               })}
-              <div className={`p-4 bg-bg1 rounded-lg border flex justify-between items-center ${
-                userHasVoted && userVotedIndex === 4 ? "border-emerald-400 ring-1 ring-emerald-400/30" : "border-border-low"
-              }`}>
+              <div
+                className={`p-4 bg-bg1 rounded-lg border flex justify-between items-center ${
+                  userHasVoted && userVotedIndex === 4
+                    ? "border-emerald-400 ring-1 ring-emerald-400/30"
+                    : "border-border-low"
+                }`}
+              >
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">[4] Skip this match</p>
@@ -563,9 +646,14 @@ export default function CastVoteTest() {
                 <div className="text-right ml-4">
                   <span className="text-xs text-gray-400 block">
                     {(() => {
-                      const totalWeightNum = Number(voteWeights.reduce((sum, w) => sum + w, BigInt(0)));
+                      const totalWeightNum = Number(
+                        voteWeights.reduce((sum, w) => sum + w, BigInt(0))
+                      );
                       const skipWeightNum = Number(voteWeights[4] ?? BigInt(0));
-                      const pct = totalWeightNum > 0 ? (skipWeightNum / totalWeightNum) * 100 : 0;
+                      const pct =
+                        totalWeightNum > 0
+                          ? (skipWeightNum / totalWeightNum) * 100
+                          : 0;
                       return `${pct.toFixed(1)}%`;
                     })()}
                   </span>
@@ -604,13 +692,14 @@ export default function CastVoteTest() {
                       entry.type === "error"
                         ? "text-red-400"
                         : entry.type === "success"
-                        ? "text-emerald-300"
-                        : entry.type === "warning"
-                        ? "text-yellow-300"
-                        : "text-gray-300"
+                          ? "text-emerald-300"
+                          : entry.type === "warning"
+                            ? "text-yellow-300"
+                            : "text-gray-300"
                     }`}
                   >
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

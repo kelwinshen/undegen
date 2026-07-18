@@ -17,9 +17,13 @@ import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
-const START_BATCH_DISCRIMINATOR = Buffer.from([147, 69, 236, 227, 64, 168, 57, 68]);
+const START_BATCH_DISCRIMINATOR = Buffer.from([
+  147, 69, 236, 227, 64, 168, 57, 68,
+]);
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
-const PROTOCOL_CONFIG_DISCRIMINATOR = Buffer.from([207, 91, 250, 28, 152, 179, 215, 209]);
+const PROTOCOL_CONFIG_DISCRIMINATOR = Buffer.from([
+  207, 91, 250, 28, 152, 179, 215, 209,
+]);
 
 type LogEntry = {
   time: number;
@@ -27,7 +31,14 @@ type LogEntry = {
   message: string;
 };
 
-const BATCH_STATUS_NAMES = ["Lobby", "Locked", "AwaitingCollateral", "Active", "Settled", "Cancelled"];
+const BATCH_STATUS_NAMES = [
+  "Lobby",
+  "Locked",
+  "AwaitingCollateral",
+  "Active",
+  "Settled",
+  "Cancelled",
+];
 
 const ProtocolConfigLayout = borsh.struct([
   borsh.publicKey("authority"),
@@ -71,7 +82,10 @@ const BatchLayout = borsh.struct([
 export default function StartBatchTest() {
   const [batchIdInput, setBatchIdInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [latestBatchId, setLatestBatchId] = useState<number | null>(null);
   const [batchStatus, setBatchStatus] = useState<string | null>(null);
@@ -82,7 +96,8 @@ export default function StartBatchTest() {
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
-    if (!secretKeyEnv) throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
+    if (!secretKeyEnv)
+      throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
       return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
@@ -98,27 +113,36 @@ export default function StartBatchTest() {
         programId
       );
       const info = await connection.getAccountInfo(configPda);
-      
+
       if (info && info.data.slice(0, 8).equals(PROTOCOL_CONFIG_DISCRIMINATOR)) {
         const decodedConfig = ProtocolConfigLayout.decode(info.data.slice(8));
         const latestId = Number(decodedConfig.next_batch_id) - 1;
-        
+
         if (latestId >= 0) {
           setLatestBatchId(latestId);
           setBatchIdInput(latestId.toString());
 
           const batchIdBuffer = Buffer.alloc(8);
-          new DataView(batchIdBuffer.buffer).setBigUint64(0, BigInt(latestId), true);
-          
+          new DataView(batchIdBuffer.buffer).setBigUint64(
+            0,
+            BigInt(latestId),
+            true
+          );
+
           const [batchPda] = PublicKey.findProgramAddressSync(
             [Buffer.from("batch"), batchIdBuffer],
             programId
           );
-          
+
           const batchInfo = await connection.getAccountInfo(batchPda);
-          if (batchInfo && batchInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) {
+          if (
+            batchInfo &&
+            batchInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)
+          ) {
             const decodedBatch = BatchLayout.decode(batchInfo.data.slice(8));
-            setBatchStatus(BATCH_STATUS_NAMES[decodedBatch.statusIdx] || "Unknown");
+            setBatchStatus(
+              BATCH_STATUS_NAMES[decodedBatch.statusIdx] || "Unknown"
+            );
           } else {
             setBatchStatus(null);
           }
@@ -156,11 +180,14 @@ export default function StartBatchTest() {
 
       const accountInfo = await connection.getAccountInfo(batchPda);
       if (!accountInfo) throw new Error("Batch account not found.");
-      if (!accountInfo.owner.equals(programId)) throw new Error("Batch PDA not owned by Undegen.");
-      if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) throw new Error("Batch not initialized.");
+      if (!accountInfo.owner.equals(programId))
+        throw new Error("Batch PDA not owned by Undegen.");
+      if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR))
+        throw new Error("Batch not initialized.");
 
       const decodedBatch = BatchLayout.decode(accountInfo.data.slice(8));
-      const statusName = BATCH_STATUS_NAMES[decodedBatch.statusIdx] || "Unknown";
+      const statusName =
+        BATCH_STATUS_NAMES[decodedBatch.statusIdx] || "Unknown";
       addLog("info", `Current batch status: ${statusName}`);
 
       const ix = new TransactionInstruction({
@@ -177,13 +204,18 @@ export default function StartBatchTest() {
       tx.recentBlockhash = blockhash;
       tx.feePayer = operator.publicKey;
       tx.sign(operator);
-      
+
       addLog("info", "Sending start_batch transaction...");
-      const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+      const sig = await connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+      });
       addLog("info", `Sent. Signature: ${sig}`);
       await connection.confirmTransaction(sig);
       addLog("success", "Confirmed");
-      setResult({ type: "success", message: `Batch ${id} started. Tx: ${sig}` });
+      setResult({
+        type: "success",
+        message: `Batch ${id} started. Tx: ${sig}`,
+      });
     } catch (err: any) {
       addLog("error", err.message);
       setResult({ type: "error", message: err.message });
@@ -196,14 +228,17 @@ export default function StartBatchTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Start Batch (Test)</h2>
           <p className="text-sm text-gray-400">
-            Transitions a batch from Lobby to Locked (or whatever the program requires). The batch
-            must be in <strong>Lobby</strong> status.
+            Transitions a batch from Lobby to Locked (or whatever the program
+            requires). The batch must be in <strong>Lobby</strong> status.
           </p>
           <div className="flex gap-2 items-end">
             <div className="flex-1">
@@ -259,13 +294,14 @@ export default function StartBatchTest() {
                       entry.type === "error"
                         ? "text-red-400"
                         : entry.type === "success"
-                        ? "text-emerald-300"
-                        : entry.type === "warning"
-                        ? "text-yellow-300"
-                        : "text-gray-300"
+                          ? "text-emerald-300"
+                          : entry.type === "warning"
+                            ? "text-yellow-300"
+                            : "text-gray-300"
                     }`}
                   >
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

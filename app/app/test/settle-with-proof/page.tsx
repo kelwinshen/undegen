@@ -15,7 +15,11 @@ import {
   AddressLookupTableAccount,
   AddressLookupTableProgram,
 } from "@solana/web3.js";
-import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  getAssociatedTokenAddress,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
 import Header from "@/app/components/Header";
@@ -25,10 +29,14 @@ import yieldVaultIdl from "@/app/lib/idl/yield_vault.json";
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const ALT_ADDRESS_STR = "9iTNvzhM6opWF1BPA84Qx39Py2EFTVLXtmojp1d9NJSv";
 const DEVNET_RPC = "https://api.devnet.solana.com";
-const TXODDS_PROGRAM_ID = new PublicKey("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
+const TXODDS_PROGRAM_ID = new PublicKey(
+  "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
+);
 const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
 
-const SETTLE_WITH_PROOF_DISCRIMINATOR = Buffer.from([37, 77, 147, 139, 128, 174, 33, 158]);
+const SETTLE_WITH_PROOF_DISCRIMINATOR = Buffer.from([
+  37, 77, 147, 139, 128, 174, 33, 158,
+]);
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
 
 // ---- BORSH LAYOUTS ----
@@ -75,12 +83,20 @@ const BatchLayout = borsh.struct([
 // ---- SERIALISATION HELPERS ----
 function writeUInt64LE(value: number | bigint | string): Buffer {
   const buf = Buffer.alloc(8);
-  new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigUint64(0, BigInt(value), true);
+  new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigUint64(
+    0,
+    BigInt(value),
+    true
+  );
   return buf;
 }
 function writeInt64LE(value: number | bigint | string): Buffer {
   const buf = Buffer.alloc(8);
-  new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigInt64(0, BigInt(value), true);
+  new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigInt64(
+    0,
+    BigInt(value),
+    true
+  );
   return buf;
 }
 function writeUInt32LE(value: number): Buffer {
@@ -96,7 +112,9 @@ function writeInt32LE(value: number): Buffer {
 function serializeProofVec(proofs: any[]): Buffer {
   if (!proofs || proofs.length === 0) return Buffer.alloc(4, 0);
   const parts = proofs.map((p) => {
-    let hashBuf: Buffer = Array.isArray(p.hash) ? Buffer.from(p.hash) : Buffer.from(p.hash, "base64");
+    let hashBuf: Buffer = Array.isArray(p.hash)
+      ? Buffer.from(p.hash)
+      : Buffer.from(p.hash, "base64");
     if (hashBuf.length !== 32) throw new Error("Proof hash must be 32 bytes");
     const isRight = Boolean(p.isRightSibling ?? p.is_right_sibling ?? false);
     return Buffer.concat([hashBuf, Buffer.from([isRight ? 1 : 0])]);
@@ -109,8 +127,11 @@ function serializeProofVec(proofs: any[]): Buffer {
 function serializeScoresBatchSummary(summary: any): Buffer {
   const updateStats = summary.update_stats;
   const eventsRoot = summary.events_sub_tree_root;
-  let rootBuf = Array.isArray(eventsRoot) ? Buffer.from(eventsRoot) : Buffer.from(eventsRoot, "base64");
-  if (rootBuf.length !== 32) throw new Error("events_sub_tree_root must be 32 bytes");
+  let rootBuf = Array.isArray(eventsRoot)
+    ? Buffer.from(eventsRoot)
+    : Buffer.from(eventsRoot, "base64");
+  if (rootBuf.length !== 32)
+    throw new Error("events_sub_tree_root must be 32 bytes");
   return Buffer.concat([
     writeInt64LE(summary.fixture_id),
     writeInt32LE(updateStats.update_count),
@@ -123,8 +144,11 @@ function serializeScoresBatchSummary(summary: any): Buffer {
 function serializeStatTerm(stat: any): Buffer {
   const statToProve = stat.stat_to_prove;
   const eventStatRoot = stat.event_stat_root;
-  let rootBuf = Array.isArray(eventStatRoot) ? Buffer.from(eventStatRoot) : Buffer.from(eventStatRoot, "base64");
-  if (rootBuf.length !== 32) throw new Error("event_stat_root must be 32 bytes");
+  let rootBuf = Array.isArray(eventStatRoot)
+    ? Buffer.from(eventStatRoot)
+    : Buffer.from(eventStatRoot, "base64");
+  if (rootBuf.length !== 32)
+    throw new Error("event_stat_root must be 32 bytes");
   const proof = stat.stat_proof;
   return Buffer.concat([
     writeUInt32LE(statToProve.key),
@@ -145,19 +169,25 @@ function SettleWithProofPageContent() {
   const batchIdParam = searchParams.get("batchId") || "";
   const [batchId, setBatchId] = useState(batchIdParam);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [batchPda, setBatchPda] = useState<PublicKey | null>(null);
   const [batchData, setBatchData] = useState<any>(null);
   const [scoresProof, setScoresProof] = useState<any>(null);
   const [vaultConfigOverride, setVaultConfigOverride] = useState<string>("");
-  const [vaultTokenAccountOverride, setVaultTokenAccountOverride] = useState<string>("");
+  const [vaultTokenAccountOverride, setVaultTokenAccountOverride] =
+    useState<string>("");
 
-  const addLog = (msg: string) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  const addLog = (msg: string) =>
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
-    if (!secretKeyEnv) throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
+    if (!secretKeyEnv)
+      throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
       return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
@@ -180,11 +210,17 @@ function SettleWithProofPageContent() {
       const connection = new Connection(DEVNET_RPC, "confirmed");
       const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
-      const [pda] = PublicKey.findProgramAddressSync([Buffer.from("batch"), batchIdBuffer], programId);
+      const [pda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("batch"), batchIdBuffer],
+        programId
+      );
       setBatchPda(pda);
       addLog(`Batch PDA: ${pda.toBase58()}`);
       const accountInfo = await connection.getAccountInfo(pda);
-      if (!accountInfo || !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) {
+      if (
+        !accountInfo ||
+        !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)
+      ) {
         throw new Error("Batch not found or not initialized.");
       }
       const decoded = BatchLayout.decode(accountInfo.data.slice(8));
@@ -243,7 +279,7 @@ function SettleWithProofPageContent() {
     buf.writeUInt16LE(epochDay);
     const [pda] = PublicKey.findProgramAddressSync(
       [Buffer.from("daily_scores_roots"), buf],
-      TXODDS_PROGRAM_ID,
+      TXODDS_PROGRAM_ID
     );
     return pda;
   };
@@ -269,10 +305,13 @@ function SettleWithProofPageContent() {
       const operator = getOperatorKeypair();
       const mint = batchData.mint;
 
-      const operatorTokenAccount = await getAssociatedTokenAddress(mint, operator.publicKey);
+      const operatorTokenAccount = await getAssociatedTokenAddress(
+        mint,
+        operator.publicKey
+      );
       const [collateralPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("collateral"), batchPda.toBuffer()],
-        programId,
+        programId
       );
       const dailyScoresRoots = deriveDailyScoresRoots(ts);
 
@@ -282,7 +321,7 @@ function SettleWithProofPageContent() {
       } else {
         const [pda] = PublicKey.findProgramAddressSync(
           [Buffer.from("vault_config"), mint.toBuffer()],
-          YIELD_VAULT_PROGRAM_ID,
+          YIELD_VAULT_PROGRAM_ID
         );
         vaultConfig = pda;
       }
@@ -292,14 +331,20 @@ function SettleWithProofPageContent() {
       if (vaultTokenAccountOverride.trim()) {
         vaultTokenAccount = new PublicKey(vaultTokenAccountOverride.trim());
       } else {
-        vaultTokenAccount = await getAssociatedTokenAddress(mint, vaultConfig, true);
+        vaultTokenAccount = await getAssociatedTokenAddress(
+          mint,
+          vaultConfig,
+          true
+        );
       }
       addLog(`Using vault_token_account: ${vaultTokenAccount.toBase58()}`);
 
       const vaultPosition = batchData.vault_position;
       addLog(`Using vault_position: ${vaultPosition.toBase58()}`);
 
-      const fixtureSummaryBuf = serializeScoresBatchSummary(scoresProof.fixtureSummary);
+      const fixtureSummaryBuf = serializeScoresBatchSummary(
+        scoresProof.fixtureSummary
+      );
       const mainTreeProofBuf = serializeProofVec(scoresProof.mainTreeProof);
       const fixtureProofBuf = serializeProofVec(scoresProof.fixtureProof);
       const statABuf = serializeStatTerm(scoresProof.statA);
@@ -312,15 +357,19 @@ function SettleWithProofPageContent() {
         fixtureProofBuf,
         statABuf,
         statBBuf,
-        writeInt64LE(ts)
+        writeInt64LE(ts),
       ]);
 
       addLog(`> Packaged Instruction Size: ${instructionData.length} bytes`);
       addLog(`> TS Submitted: ${ts}`);
       addLog(`> Fixture: ${scoresProof.fixtureSummary.fixture_id}`);
-      addLog(`> StatA: Key=${scoresProof.statA.stat_to_prove.key}, Val=${scoresProof.statA.stat_to_prove.value}, Per=${scoresProof.statA.stat_to_prove.period}`);
+      addLog(
+        `> StatA: Key=${scoresProof.statA.stat_to_prove.key}, Val=${scoresProof.statA.stat_to_prove.value}, Per=${scoresProof.statA.stat_to_prove.period}`
+      );
       if (scoresProof.statB) {
-        addLog(`> StatB: Key=${scoresProof.statB.stat_to_prove.key}, Val=${scoresProof.statB.stat_to_prove.value}, Per=${scoresProof.statB.stat_to_prove.period}`);
+        addLog(
+          `> StatB: Key=${scoresProof.statB.stat_to_prove.key}, Val=${scoresProof.statB.stat_to_prove.value}, Per=${scoresProof.statB.stat_to_prove.period}`
+        );
       } else {
         addLog(`> StatB: None`);
       }
@@ -338,16 +387,26 @@ function SettleWithProofPageContent() {
         { pubkey: vaultPosition, isSigner: false, isWritable: true },
         { pubkey: YIELD_VAULT_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        {
+          pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,
+          isSigner: false,
+          isWritable: false,
+        },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ];
 
-      const ix = new TransactionInstruction({ programId, keys, data: instructionData });
-      
+      const ix = new TransactionInstruction({
+        programId,
+        keys,
+        data: instructionData,
+      });
+
       const altAddress = new PublicKey(ALT_ADDRESS_STR);
-      let lookupTableAccount = (await connection.getAddressLookupTable(altAddress, {
-        commitment: "confirmed",
-      })).value;
+      let lookupTableAccount = (
+        await connection.getAddressLookupTable(altAddress, {
+          commitment: "confirmed",
+        })
+      ).value;
       if (!lookupTableAccount) {
         throw new Error(`Lookup table ${altAddress.toBase58()} not found`);
       }
@@ -355,21 +414,23 @@ function SettleWithProofPageContent() {
       const candidateAddresses = [
         programId,
         ComputeBudgetProgram.programId,
-        ...keys.filter(k => !k.isSigner).map(k => k.pubkey)
+        ...keys.filter((k) => !k.isSigner).map((k) => k.pubkey),
       ];
       const uniqueCandidates = Array.from(
-        new Set(candidateAddresses.map(p => p.toBase58()))
-      ).map(s => new PublicKey(s));
+        new Set(candidateAddresses.map((p) => p.toBase58()))
+      ).map((s) => new PublicKey(s));
 
       const existingAddressesSet = new Set(
-        lookupTableAccount.state.addresses.map(a => a.toBase58())
+        lookupTableAccount.state.addresses.map((a) => a.toBase58())
       );
       const missingAddresses = uniqueCandidates.filter(
-        addr => !existingAddressesSet.has(addr.toBase58())
+        (addr) => !existingAddressesSet.has(addr.toBase58())
       );
 
       if (missingAddresses.length > 0) {
-        addLog(`ALT is missing ${missingAddresses.length} addresses. Extending ALT...`);
+        addLog(
+          `ALT is missing ${missingAddresses.length} addresses. Extending ALT...`
+        );
         const extendInstruction = AddressLookupTableProgram.extendLookupTable({
           payer: operator.publicKey,
           authority: operator.publicKey,
@@ -377,7 +438,8 @@ function SettleWithProofPageContent() {
           addresses: missingAddresses,
         });
 
-        const { blockhash: extendBlockhash } = await connection.getLatestBlockhash("confirmed");
+        const { blockhash: extendBlockhash } =
+          await connection.getLatestBlockhash("confirmed");
         const extendMessage = new TransactionMessage({
           payerKey: operator.publicKey,
           recentBlockhash: extendBlockhash,
@@ -387,27 +449,40 @@ function SettleWithProofPageContent() {
         const extendTx = new VersionedTransaction(extendMessage);
         extendTx.sign([operator]);
 
-        const extendSig = await connection.sendRawTransaction(extendTx.serialize(), {
-          skipPreflight: false,
-        });
+        const extendSig = await connection.sendRawTransaction(
+          extendTx.serialize(),
+          {
+            skipPreflight: false,
+          }
+        );
         addLog(`ALT extend tx sent: ${extendSig}. Waiting for confirmation...`);
-        
-        const latestBlockHash = await connection.getLatestBlockhash("confirmed");
-        await connection.confirmTransaction({
-          blockhash: latestBlockHash.blockhash,
-          lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-          signature: extendSig,
-        }, "confirmed");
 
-        addLog("ALT extended successfully. Waiting 2 seconds for lookup table activation slot...");
+        const latestBlockHash =
+          await connection.getLatestBlockhash("confirmed");
+        await connection.confirmTransaction(
+          {
+            blockhash: latestBlockHash.blockhash,
+            lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+            signature: extendSig,
+          },
+          "confirmed"
+        );
+
+        addLog(
+          "ALT extended successfully. Waiting 2 seconds for lookup table activation slot..."
+        );
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        const updatedLut = (await connection.getAddressLookupTable(altAddress, {
-          commitment: "confirmed",
-        })).value;
+        const updatedLut = (
+          await connection.getAddressLookupTable(altAddress, {
+            commitment: "confirmed",
+          })
+        ).value;
         if (updatedLut) {
           lookupTableAccount = updatedLut;
-          addLog(`Re-loaded ALT. Now contains ${lookupTableAccount.state.addresses.length} addresses.`);
+          addLog(
+            `Re-loaded ALT. Now contains ${lookupTableAccount.state.addresses.length} addresses.`
+          );
         } else {
           throw new Error("Failed to re-fetch extended ALT");
         }
@@ -427,7 +502,9 @@ function SettleWithProofPageContent() {
         ],
       }).compileToV0Message(lookupTables);
 
-      addLog(`Compiled V0 Message Size Estimate: ~${messageV0.serialize().length} bytes / 1232 limit`);
+      addLog(
+        `Compiled V0 Message Size Estimate: ~${messageV0.serialize().length} bytes / 1232 limit`
+      );
 
       const tx = new VersionedTransaction(messageV0);
       tx.sign([operator]);
@@ -452,19 +529,28 @@ function SettleWithProofPageContent() {
   }, [batchIdParam]);
 
   const winningIdx = batchData?.winning_vote_index;
-  const winningBetTerm = winningIdx !== null && winningIdx !== undefined ? batchData?.bet_terms[winningIdx] : null;
+  const winningBetTerm =
+    winningIdx !== null && winningIdx !== undefined
+      ? batchData?.bet_terms[winningIdx]
+      : null;
 
   return (
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-3xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
-          <h2 className="text-xl font-bold">Settle With Proof (Auto Resolve)</h2>
+          <h2 className="text-xl font-bold">
+            Settle With Proof (Auto Resolve)
+          </h2>
           <p className="text-sm text-gray-400">
-            The contract evaluates the bet predicate automatically. No outcome input needed. Period is taken from the winning bet term.
+            The contract evaluates the bet predicate automatically. No outcome
+            input needed. Period is taken from the winning bet term.
           </p>
 
           <div className="flex gap-2">
@@ -488,13 +574,28 @@ function SettleWithProofPageContent() {
           {batchData && (
             <div className="space-y-4">
               <div className="text-sm text-gray-400 p-3 bg-black/20 rounded-lg border border-border-low">
-                <span className="block mb-1"><strong>Batch ID:</strong> {batchData.batch_id.toString()}</span>
-                <span className="block"><strong>Status:</strong>{" "}
+                <span className="block mb-1">
+                  <strong>Batch ID:</strong> {batchData.batch_id.toString()}
+                </span>
+                <span className="block">
+                  <strong>Status:</strong>{" "}
                   <span className="text-emerald-300 font-semibold">
-                    {["Lobby","Locked","AwaitingCollateral","Active","Settled","Cancelled"][batchData.statusIdx]}
+                    {
+                      [
+                        "Lobby",
+                        "Locked",
+                        "AwaitingCollateral",
+                        "Active",
+                        "Settled",
+                        "Cancelled",
+                      ][batchData.statusIdx]
+                    }
                   </span>
                 </span>
-                <span className="block"><strong>Winning Vote Index:</strong> {winningIdx !== null ? winningIdx : "none"}</span>
+                <span className="block">
+                  <strong>Winning Vote Index:</strong>{" "}
+                  {winningIdx !== null ? winningIdx : "none"}
+                </span>
                 {winningBetTerm && (
                   <div className="mt-2">
                     <p className="text-xs text-gray-500">Winning Bet Term:</p>
@@ -502,10 +603,20 @@ function SettleWithProofPageContent() {
                       {JSON.stringify(winningBetTerm, null, 2)}
                     </pre>
                     <div className="mt-2 text-xs text-gray-400">
-                      <span className="block">Fixture ID: {winningBetTerm.fixture_id.toString()}</span>
-                      <span className="block">Period: {winningBetTerm.period}</span>
-                      <span className="block">Stat A Key: {winningBetTerm.stat_a_key}</span>
-                      {winningBetTerm.stat_b_key !== null && <span className="block">Stat B Key: {winningBetTerm.stat_b_key}</span>}
+                      <span className="block">
+                        Fixture ID: {winningBetTerm.fixture_id.toString()}
+                      </span>
+                      <span className="block">
+                        Period: {winningBetTerm.period}
+                      </span>
+                      <span className="block">
+                        Stat A Key: {winningBetTerm.stat_a_key}
+                      </span>
+                      {winningBetTerm.stat_b_key !== null && (
+                        <span className="block">
+                          Stat B Key: {winningBetTerm.stat_b_key}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -529,7 +640,9 @@ function SettleWithProofPageContent() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs text-gray-400">Vault Config (override):</label>
+                      <label className="text-xs text-gray-400">
+                        Vault Config (override):
+                      </label>
                       <input
                         type="text"
                         value={vaultConfigOverride}
@@ -539,18 +652,23 @@ function SettleWithProofPageContent() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400">Vault Token Account (override):</label>
+                      <label className="text-xs text-gray-400">
+                        Vault Token Account (override):
+                      </label>
                       <input
                         type="text"
                         value={vaultTokenAccountOverride}
-                        onChange={(e) => setVaultTokenAccountOverride(e.target.value)}
+                        onChange={(e) =>
+                          setVaultTokenAccountOverride(e.target.value)
+                        }
                         placeholder="Auto-derived"
                         className="w-full bg-bg1 border border-border-low rounded px-2 py-1 text-xs text-white"
                       />
                     </div>
                   </div>
                   <p className="text-xs text-gray-500">
-                    * Auto‑derived vault_config uses seed <code>["vault_config", mint]</code> from the yield program.
+                    * Auto‑derived vault_config uses seed{" "}
+                    <code>["vault_config", mint]</code> from the yield program.
                   </p>
 
                   <button
@@ -566,18 +684,22 @@ function SettleWithProofPageContent() {
           )}
 
           {result && (
-            <div className={`p-3 rounded-lg text-sm ${
-              result.type === "success"
-                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
-                : "bg-red-500/10 border border-red-500/30 text-red-300"
-            }`}>
+            <div
+              className={`p-3 rounded-lg text-sm ${
+                result.type === "success"
+                  ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+                  : "bg-red-500/10 border border-red-500/30 text-red-300"
+              }`}
+            >
               {result.message}
             </div>
           )}
 
           {logs.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-sm font-semibold mb-2 text-gray-400">Execution Log</h3>
+              <h3 className="text-sm font-semibold mb-2 text-gray-400">
+                Execution Log
+              </h3>
               <div className="bg-black/40 rounded-lg p-4 max-h-64 overflow-y-auto space-y-1 text-xs font-mono border border-border-low">
                 {logs.map((msg, i) => (
                   <div
@@ -585,9 +707,11 @@ function SettleWithProofPageContent() {
                     className={
                       msg.includes("Error") || msg.includes("Failed")
                         ? "text-red-400"
-                        : msg.includes("Success") || msg.includes("success") || msg.includes(">")
-                        ? "text-emerald-300"
-                        : "text-gray-400"
+                        : msg.includes("Success") ||
+                            msg.includes("success") ||
+                            msg.includes(">")
+                          ? "text-emerald-300"
+                          : "text-gray-400"
                     }
                   >
                     {msg}
@@ -604,7 +728,13 @@ function SettleWithProofPageContent() {
 
 export default function SettleWithProofPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-bg1 text-white flex items-center justify-center">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-bg1 text-white flex items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
       <SettleWithProofPageContent />
     </Suspense>
   );

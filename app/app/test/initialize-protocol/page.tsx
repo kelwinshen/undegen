@@ -18,7 +18,9 @@ import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
-const INIT_PROTOCOL_DISCRIMINATOR = Buffer.from([188, 233, 252, 106, 134, 146, 202, 91]);
+const INIT_PROTOCOL_DISCRIMINATOR = Buffer.from([
+  188, 233, 252, 106, 134, 146, 202, 91,
+]);
 
 // Borsh layout for ProtocolConfig (consistent with other pages)
 const ProtocolConfigLayout = borsh.struct([
@@ -35,7 +37,10 @@ type LogEntry = {
 
 export default function InitializeProtocolTest() {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const addLog = (type: LogEntry["type"], message: string) => {
@@ -46,7 +51,10 @@ export default function InitializeProtocolTest() {
     setLogs([]);
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
     if (!secretKeyEnv) {
-      setResult({ type: "error", message: "NEXT_PUBLIC_OPERATOR_SECRET_KEY not set." });
+      setResult({
+        type: "error",
+        message: "NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.",
+      });
       return;
     }
 
@@ -57,7 +65,9 @@ export default function InitializeProtocolTest() {
       let adminKeypair: Keypair;
       addLog("info", "Loading admin keypair...");
       if (secretKeyEnv.startsWith("[")) {
-        adminKeypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
+        adminKeypair = Keypair.fromSecretKey(
+          Uint8Array.from(JSON.parse(secretKeyEnv))
+        );
       } else {
         adminKeypair = Keypair.fromSecretKey(bs58.decode(secretKeyEnv));
       }
@@ -76,7 +86,11 @@ export default function InitializeProtocolTest() {
         keys: [
           { pubkey: adminKeypair.publicKey, isSigner: true, isWritable: true },
           { pubkey: configPda, isSigner: false, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          {
+            pubkey: SystemProgram.programId,
+            isSigner: false,
+            isWritable: false,
+          },
         ],
         data: INIT_PROTOCOL_DISCRIMINATOR,
       });
@@ -87,10 +101,15 @@ export default function InitializeProtocolTest() {
       tx.feePayer = adminKeypair.publicKey;
       tx.sign(adminKeypair);
       addLog("info", "Sending transaction...");
-      const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+      const sig = await connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+      });
       await connection.confirmTransaction(sig);
       addLog("success", "Confirmed");
-      setResult({ type: "success", message: `Protocol initialized! Tx: ${sig}` });
+      setResult({
+        type: "success",
+        message: `Protocol initialized! Tx: ${sig}`,
+      });
     } catch (err: any) {
       addLog("error", err.message);
       setResult({ type: "error", message: err.message });
@@ -103,18 +122,28 @@ export default function InitializeProtocolTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Initialize Protocol (Test)</h2>
-          <p className="text-sm text-gray-400">Creates the ProtocolConfig account. Must be done once.</p>
-          <button onClick={handleInit} disabled={loading}
-            className="px-6 py-2 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50">
+          <p className="text-sm text-gray-400">
+            Creates the ProtocolConfig account. Must be done once.
+          </p>
+          <button
+            onClick={handleInit}
+            disabled={loading}
+            className="px-6 py-2 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50"
+          >
             {loading ? "Initializing..." : "Initialize Protocol"}
           </button>
           {result && (
-            <div className={`p-3 rounded-lg text-sm ${result.type === "success" ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}>
+            <div
+              className={`p-3 rounded-lg text-sm ${result.type === "success" ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}
+            >
               {result.message}
             </div>
           )}
@@ -123,8 +152,12 @@ export default function InitializeProtocolTest() {
               <h3 className="text-sm font-semibold mb-2">Execution Log</h3>
               <div className="bg-black/30 rounded-lg p-4 max-h-64 overflow-y-auto space-y-1 text-xs font-mono">
                 {logs.map((entry, i) => (
-                  <div key={i} className={`${entry.type === "error" ? "text-red-400" : entry.type === "success" ? "text-emerald-300" : entry.type === "warning" ? "text-yellow-300" : "text-gray-300"}`}>
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                  <div
+                    key={i}
+                    className={`${entry.type === "error" ? "text-red-400" : entry.type === "success" ? "text-emerald-300" : entry.type === "warning" ? "text-yellow-300" : "text-gray-300"}`}
+                  >
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

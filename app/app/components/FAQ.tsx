@@ -26,7 +26,8 @@ const items: FAQItem[] = [
         >
           TXODDS
         </a>
-        . Every eligible fixture is put to a community vote, and the option with the most votes — including Skip — becomes the protocol's decision.
+        . Every eligible fixture is put to a community vote, and the option with
+        the most votes — including Skip — becomes the protocol's decision.
       </>
     ),
   },
@@ -42,7 +43,8 @@ const items: FAQItem[] = [
         >
           TXODDS
         </a>{" "}
-        is a global leader in sports betting data, providing real-time data feeds and sports trading infrastructure.{" "}
+        is a global leader in sports betting data, providing real-time data
+        feeds and sports trading infrastructure.{" "}
         <a
           href="https://txline-docs.txodds.com/documentation/quickstart"
           target="_blank"
@@ -51,7 +53,10 @@ const items: FAQItem[] = [
         >
           TxLINE
         </a>{" "}
-        is their blockchain-ready, high-performance data solution that provides cryptographically verifiable, on-chain proof of live sports data and settled matches, ensuring the absolute integrity and transparency of our prediction process.
+        is their blockchain-ready, high-performance data solution that provides
+        cryptographically verifiable, on-chain proof of live sports data and
+        settled matches, ensuring the absolute integrity and transparency of our
+        prediction process.
       </>
     ),
   },
@@ -76,7 +81,9 @@ const items: FAQItem[] = [
         >
           TXODDS
         </a>
-        ' cryptographic verification proof of the real result, and the protocol settles the prediction automatically — no manual intervention, no centralized bookmaker.
+        ' cryptographic verification proof of the real result, and the protocol
+        settles the prediction automatically — no manual intervention, no
+        centralized bookmaker.
       </>
     ),
   },
@@ -138,4 +145,3 @@ export default function FAQ() {
     </div>
   );
 }
-

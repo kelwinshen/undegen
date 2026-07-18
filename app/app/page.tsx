@@ -213,21 +213,23 @@ export default function Live() {
 
   if (!liveBatchState) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-bg1 text-center px-6">
-        <div className="text-gray-300 text-lg font-semibold">
-          No live batch right now
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-6">
+        <div className="rounded-2xl backdrop-blur-sm border border-border-low bg-card/30 dark:bg-card/10 p-8 max-w-md w-full space-y-3">
+          <div className="text-muted text-lg font-semibold">
+            No live batch right now
+          </div>
+          <p className="text-muted text-sm max-w-sm mx-auto">
+            Nothing is currently in consensus voting. Check{" "}
+            <a href="/upcoming" className="underline hover:text-foreground">
+              Upcoming
+            </a>{" "}
+            to join the next batch, or{" "}
+            <a href="/history" className="underline hover:text-foreground">
+              History
+            </a>{" "}
+            for past results.
+          </p>
         </div>
-        <p className="text-gray-500 text-sm max-w-sm">
-          Nothing is currently in consensus voting. Check{" "}
-          <a href="/upcoming" className="underline hover:text-gray-300">
-            Upcoming
-          </a>{" "}
-          to join the next batch, or{" "}
-          <a href="/history" className="underline hover:text-gray-300">
-            History
-          </a>{" "}
-          for past results.
-        </p>
       </div>
     );
   }

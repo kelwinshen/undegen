@@ -1,6 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef, PropsWithChildren } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  PropsWithChildren,
+} from "react";
 import { useWalletConnection } from "@solana/react-hooks";
 import {
   joinBatchOnChain,
@@ -23,7 +31,6 @@ import {
   Option,
   Fixture,
 } from "../services/undegenProgram";
-
 
 interface UndegenProgramContextType {
   // Blockchain States
@@ -78,7 +85,9 @@ interface UndegenProgramContextType {
   refreshState: () => Promise<void>;
 }
 
-const UndegenProgramContext = createContext<UndegenProgramContextType | null>(null);
+const UndegenProgramContext = createContext<UndegenProgramContextType | null>(
+  null
+);
 
 export function UndegenProgramProvider({ children }: PropsWithChildren) {
   const { status, wallet } = useWalletConnection();
@@ -90,7 +99,9 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
   const [isLoading, setIsLoading] = useState(true);
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [votes, setVotes] = useState<Record<string, number>>({});
-  const [matchDecisions, setMatchDecisions] = useState<Record<number, VoteResult>>({});
+  const [matchDecisions, setMatchDecisions] = useState<
+    Record<number, VoteResult>
+  >({});
   const [selectedBatchId, setSelectedBatchId] = useState(-1);
   const [usdcBalance, setUsdcBalance] = useState(0);
   const didAutoSelectLiveBatch = useRef(false);
@@ -115,7 +126,9 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
       if (!didAutoSelectLiveBatch.current) {
         const activeBatches = realBatches.filter((b) => b.phase === "Active");
         if (activeBatches.length > 0) {
-          const liveBatch = activeBatches.reduce((a, b) => (b.batchId > a.batchId ? b : a));
+          const liveBatch = activeBatches.reduce((a, b) =>
+            b.batchId > a.batchId ? b : a
+          );
           setSelectedBatchId(liveBatch.batchId);
         } else if (realBatches.length > 0) {
           setSelectedBatchId(realBatches[0].batchId);
@@ -158,10 +171,14 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (selectedBatchId < 0) return;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = subscribeToBatchAccount(selectedBatchId, walletAddress, () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => loadState(true), 400);
-    });
+    const unsubscribe = subscribeToBatchAccount(
+      selectedBatchId,
+      walletAddress,
+      () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => loadState(true), 400);
+      }
+    );
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       unsubscribe();
@@ -206,12 +223,14 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
       return;
     }
     let cancelled = false;
-    fetchLiveMatchForBatch(selectedBatchId, batchState, options).then(({ fixture, votes, decision }) => {
-      if (cancelled) return;
-      setFixtures(fixture ? [fixture] : []);
-      setVotes(votes);
-      setMatchDecisions(decision ? { [decision.fixtureId]: decision } : {});
-    });
+    fetchLiveMatchForBatch(selectedBatchId, batchState, options).then(
+      ({ fixture, votes, decision }) => {
+        if (cancelled) return;
+        setFixtures(fixture ? [fixture] : []);
+        setVotes(votes);
+        setMatchDecisions(decision ? { [decision.fixtureId]: decision } : {});
+      }
+    );
     return () => {
       cancelled = true;
     };
@@ -220,28 +239,41 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
   // Actions
   const deposit = async (amount: number, batchId?: number) => {
     const targetBatchId = batchId ?? selectedBatchId;
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
     const sig = await joinBatchOnChain(targetBatchId, amount, wallet);
-    console.log(`[join_batch] Deposited ${amount} to Batch ${targetBatchId}. Tx: ${sig}`);
+    console.log(
+      `[join_batch] Deposited ${amount} to Batch ${targetBatchId}. Tx: ${sig}`
+    );
     await refreshState();
   };
 
   const withdraw = async (amount?: number, batchId?: number) => {
     const targetBatchId = batchId ?? selectedBatchId;
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
-    const targetAmount = amount ?? batches.find((b) => b.batchId === targetBatchId)?.userDeposited ?? 0;
-    if (targetAmount <= 0) throw new Error("Nothing to unstake from this batch.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
+    const targetAmount =
+      amount ??
+      batches.find((b) => b.batchId === targetBatchId)?.userDeposited ??
+      0;
+    if (targetAmount <= 0)
+      throw new Error("Nothing to unstake from this batch.");
     const sig = await leaveBatchOnChain(targetBatchId, targetAmount, wallet);
-    console.log(`[leave_batch] Withdrew ${targetAmount} from Batch ${targetBatchId}. Tx: ${sig}`);
+    console.log(
+      `[leave_batch] Withdrew ${targetAmount} from Batch ${targetBatchId}. Tx: ${sig}`
+    );
     await refreshState();
   };
 
   const claim = async (batchId?: number) => {
     const targetBatchId = batchId ?? selectedBatchId;
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
     const targetBatch = batches.find((b) => b.batchId === targetBatchId);
-    if (!targetBatch || targetBatch.userDeposited <= 0) throw new Error("Nothing to claim from this batch.");
-    if (targetBatch.userWithdrawn) throw new Error("Already claimed from this batch.");
+    if (!targetBatch || targetBatch.userDeposited <= 0)
+      throw new Error("Nothing to claim from this batch.");
+    if (targetBatch.userWithdrawn)
+      throw new Error("Already claimed from this batch.");
     const sig = await claimOnChain(targetBatchId, wallet);
     console.log(`[claim] Claimed Batch ${targetBatchId}. Tx: ${sig}`);
     await refreshState();
@@ -249,17 +281,23 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
 
   const claimAndJoinLottery = async (batchId?: number) => {
     const targetBatchId = batchId ?? selectedBatchId;
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
     const targetBatch = batches.find((b) => b.batchId === targetBatchId);
-    if (!targetBatch || targetBatch.userDeposited <= 0) throw new Error("Nothing to claim from this batch.");
-    if (targetBatch.userWithdrawn) throw new Error("Already claimed from this batch.");
+    if (!targetBatch || targetBatch.userDeposited <= 0)
+      throw new Error("Nothing to claim from this batch.");
+    if (targetBatch.userWithdrawn)
+      throw new Error("Already claimed from this batch.");
     const sig = await claimAndJoinLotteryOnChain(targetBatchId, wallet);
-    console.log(`[claim_and_join_lottery] Claimed Batch ${targetBatchId} into the lottery. Tx: ${sig}`);
+    console.log(
+      `[claim_and_join_lottery] Claimed Batch ${targetBatchId} into the lottery. Tx: ${sig}`
+    );
     await refreshState();
   };
 
   const buyLotteryTicket = async (amount: number) => {
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
     if (amount <= 0) throw new Error("Enter an amount to wager.");
     const sig = await buyTicketOnChain(amount, wallet);
     console.log(`[buy_ticket] Bought a ${amount} USDC ticket. Tx: ${sig}`);
@@ -267,33 +305,49 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
   };
 
   const claimLotteryPrize = async (roundId: bigint) => {
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
     const sig = await claimPrizeOnChain(roundId, wallet);
     console.log(`[claim_prize] Claimed Round ${roundId}. Tx: ${sig}`);
     await refreshState();
   };
 
   const vote = async (fixtureId: number, optionId: string) => {
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
     const batchState = batches.find((b) => b.batchId === selectedBatchId);
-    const index = await resolveVoteIndex(selectedBatchId, fixtureId, optionId, batchState, options);
+    const index = await resolveVoteIndex(
+      selectedBatchId,
+      fixtureId,
+      optionId,
+      batchState,
+      options
+    );
     const sig = await castVoteOnChain(selectedBatchId, index, wallet);
-    console.log(`[cast_vote] Voted index ${index} on fixture ${fixtureId}. Tx: ${sig}`);
+    console.log(
+      `[cast_vote] Voted index ${index} on fixture ${fixtureId}. Tx: ${sig}`
+    );
     await refreshState();
   };
 
   const voteBySlotIndex = async (index: number) => {
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
     const sig = await castVoteOnChain(selectedBatchId, index, wallet);
-    console.log(`[cast_vote] Voted index ${index} directly on Batch ${selectedBatchId}. Tx: ${sig}`);
+    console.log(
+      `[cast_vote] Voted index ${index} directly on Batch ${selectedBatchId}. Tx: ${sig}`
+    );
     await refreshState();
   };
 
   const settleDefault = async (batchId?: number) => {
     const targetBatchId = batchId ?? selectedBatchId;
-    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    if (!wallet?.account?.address)
+      throw new Error("Connect your wallet first.");
     const sig = await settleDefaultOnChain(targetBatchId, wallet);
-    console.log(`[settle_default] Settled Batch ${targetBatchId} as default win. Tx: ${sig}`);
+    console.log(
+      `[settle_default] Settled Batch ${targetBatchId} as default win. Tx: ${sig}`
+    );
     await refreshState();
   };
 
@@ -330,7 +384,19 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
       settleDefault,
       refreshState,
     }),
-    [batches, options, fixtures, votes, matchDecisions, isLoading, selectedBatchId, isConnected, walletAddress, status, usdcBalance]
+    [
+      batches,
+      options,
+      fixtures,
+      votes,
+      matchDecisions,
+      isLoading,
+      selectedBatchId,
+      isConnected,
+      walletAddress,
+      status,
+      usdcBalance,
+    ]
   );
 
   return (
@@ -343,7 +409,9 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
 export function useUndegenProgram() {
   const context = useContext(UndegenProgramContext);
   if (!context) {
-    throw new Error("useUndegenProgram must be used within an UndegenProgramProvider");
+    throw new Error(
+      "useUndegenProgram must be used within an UndegenProgramProvider"
+    );
   }
   return context;
 }

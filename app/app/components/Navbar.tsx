@@ -220,7 +220,9 @@ export default function Navbar() {
                         </svg>
                       </button>
                       {addressCopied && (
-                        <p className="text-[10px] text-foreground mt-1">Copied!</p>
+                        <p className="text-[10px] text-foreground mt-1">
+                          Copied!
+                        </p>
                       )}
                       <p className="text-[10px] text-muted font-bold tracking-wider uppercase mt-2">
                         USDC Balance

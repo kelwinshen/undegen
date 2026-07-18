@@ -21,7 +21,8 @@ import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
 import Header from "@/app/components/Header";
 
-const YIELD_VAULT_PROGRAM_ID_STR = "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
+const YIELD_VAULT_PROGRAM_ID_STR =
+  "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
 const DEVNET_RPC = "https://api.devnet.solana.com";
 const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
@@ -72,19 +73,14 @@ export default function TickYield() {
   const [vaultData, setVaultData] = useState<any>(null);
 
   const addLog = (msg: string) =>
-    setLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${msg}`,
-    ]);
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
     if (!secretKeyEnv)
       throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
-      return Keypair.fromSecretKey(
-        Uint8Array.from(JSON.parse(secretKeyEnv)),
-      );
+      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
     return Keypair.fromSecretKey(bs58.decode(secretKeyEnv));
   };
@@ -103,17 +99,24 @@ export default function TickYield() {
 
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("vault_config"), mint.toBuffer()],
-        yieldVaultProgramId,
+        yieldVaultProgramId
       );
       setVaultConfigPda(pda);
       addLog(`Vault Config PDA: ${pda.toBase58()}`);
 
       const accountInfo = await connection.getAccountInfo(pda);
       if (!accountInfo) {
-        throw new Error("Vault config account not found. Has the vault been initialized?");
+        throw new Error(
+          "Vault config account not found. Has the vault been initialized?"
+        );
       }
 
-      if (!uint8ArrayEqual(accountInfo.data.slice(0, 8), VAULT_CONFIG_DISCRIMINATOR)) {
+      if (
+        !uint8ArrayEqual(
+          accountInfo.data.slice(0, 8),
+          VAULT_CONFIG_DISCRIMINATOR
+        )
+      ) {
         throw new Error("Account is not a VaultConfig.");
       }
 
@@ -149,12 +152,12 @@ export default function TickYield() {
       const vaultTokenAccount = await getAssociatedTokenAddress(
         mint,
         vaultConfigPda,
-        true,
+        true
       );
 
       const [reserveTokenAccount] = PublicKey.findProgramAddressSync(
         [Buffer.from("reserve"), mint.toBuffer()],
-        yieldVaultProgramId,
+        yieldVaultProgramId
       );
 
       addLog(`Vault Token Account: ${vaultTokenAccount.toBase58()}`);

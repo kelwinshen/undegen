@@ -699,9 +699,15 @@ const PixelBlast: React.FC<PixelBlastProps> = ({
         const t = threeRef.current;
         const target = windowEvents ? window : t.renderer.domElement;
         if (t.onPointerDown)
-          target.removeEventListener("pointerdown", t.onPointerDown as EventListener);
+          target.removeEventListener(
+            "pointerdown",
+            t.onPointerDown as EventListener
+          );
         if (t.onPointerMove)
-          target.removeEventListener("pointermove", t.onPointerMove as EventListener);
+          target.removeEventListener(
+            "pointermove",
+            t.onPointerMove as EventListener
+          );
         t.resizeObserver?.disconnect();
         cancelAnimationFrame(t.raf!);
         t.quad?.geometry.dispose();

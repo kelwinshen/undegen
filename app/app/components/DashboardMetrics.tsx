@@ -76,7 +76,9 @@ export default function DashboardMetrics({
         {!isConnected && !isLobby && (
           <div className="p-3  rounded-lg text-center">
             <p className="text-xs text-muted">Wallet</p>
-            <p className="text-sm text-amber-600 dark:text-yellow-300">Not connected</p>
+            <p className="text-sm text-amber-600 dark:text-yellow-300">
+              Not connected
+            </p>
           </div>
         )}
       </div>

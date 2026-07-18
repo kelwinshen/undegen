@@ -1,28 +1,35 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
-const API_BASE = 'https://txline-dev.txodds.com';
+const API_BASE = "https://txline-dev.txodds.com";
 
 const STATUS_MAP: Record<string, string> = {
-  NS: 'Not Started',   NS2: 'Not Started',
-  I: 'In Play',        I2: 'In Play',
-  HT: 'Half Time',     HT2: 'Half Time',
-  F: 'Finished',       F2: 'Finished',  END: 'Finished',
-  FET: 'Finished Extra Time',
-  FPE: 'Finished Penalties',
-  ET1: 'Extra Time 1', ET2: 'Extra Time 2',
-  P: 'Penalties',      PE: 'Penalties Ended',
-  WET: 'Waiting Extra Time',
-  WPE: 'Waiting Penalties',
+  NS: "Not Started",
+  NS2: "Not Started",
+  I: "In Play",
+  I2: "In Play",
+  HT: "Half Time",
+  HT2: "Half Time",
+  F: "Finished",
+  F2: "Finished",
+  END: "Finished",
+  FET: "Finished Extra Time",
+  FPE: "Finished Penalties",
+  ET1: "Extra Time 1",
+  ET2: "Extra Time 2",
+  P: "Penalties",
+  PE: "Penalties Ended",
+  WET: "Waiting Extra Time",
+  WPE: "Waiting Penalties",
 };
 
 const STAT_KEY_PARTICIPANT1_GOALS = 1002;
 const STAT_KEY_PARTICIPANT2_GOALS = 1003;
 
 function extractStatus(statusObj: any): string {
-  if (!statusObj) return 'Unknown';
-  if (typeof statusObj === 'string') return statusObj;
+  if (!statusObj) return "Unknown";
+  if (typeof statusObj === "string") return statusObj;
   const keys = Object.keys(statusObj);
-  return keys.length > 0 ? keys[0] : 'Unknown';
+  return keys.length > 0 ? keys[0] : "Unknown";
 }
 
 function extractGoals(entry: any): { p1: number; p2: number } | null {
@@ -41,10 +48,10 @@ function extractGoals(entry: any): { p1: number; p2: number } | null {
 
   // Fallback to stats map
   const stats = entry.stats;
-  if (stats && typeof stats === 'object') {
+  if (stats && typeof stats === "object") {
     const p1 = stats[STAT_KEY_PARTICIPANT1_GOALS];
     const p2 = stats[STAT_KEY_PARTICIPANT2_GOALS];
-    if (typeof p1 === 'number' && typeof p2 === 'number') {
+    if (typeof p1 === "number" && typeof p2 === "number") {
       return { p1, p2 };
     }
   }
@@ -54,17 +61,17 @@ function extractGoals(entry: any): { p1: number; p2: number } | null {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const fixtureIdsParam = searchParams.get('fixtureIds');
+  const fixtureIdsParam = searchParams.get("fixtureIds");
 
   if (!fixtureIdsParam) {
     return NextResponse.json({ scores: [] });
   }
 
-  const fixtureIds = fixtureIdsParam.split(',').map(Number).filter(Boolean);
+  const fixtureIds = fixtureIdsParam.split(",").map(Number).filter(Boolean);
 
   const headers = {
     Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
-    'X-Api-Token': process.env.API_TOKEN || '',
+    "X-Api-Token": process.env.API_TOKEN || "",
   };
 
   try {
@@ -76,7 +83,7 @@ export async function GET(request: Request) {
           const url = `${API_BASE}/api/scores/snapshot/${fixtureId}?t=${Date.now()}`;
           const scoreRes = await fetch(url, {
             headers,
-            cache: 'no-store',
+            cache: "no-store",
           });
           const scoreData = await scoreRes.json();
 

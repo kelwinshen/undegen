@@ -118,17 +118,19 @@ export default function UpcomingBatchesPage() {
 
   if (!focusedBatch) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3  text-center px-6">
-        <div className="text-muted text-lg font-semibold">
-          No open batches right now
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-6">
+        <div className="rounded-2xl backdrop-blur-sm border border-border-low bg-card/30 dark:bg-card/10 p-8 max-w-md w-full space-y-3">
+          <div className="text-muted text-lg font-semibold">
+            No open batches right now
+          </div>
+          <p className="text-muted text-sm max-w-sm mx-auto">
+            Check back soon, or view{" "}
+            <a href="/history" className="underline hover:text-foreground">
+              History
+            </a>{" "}
+            for past results.
+          </p>
         </div>
-        <p className="text-muted text-sm max-w-sm">
-          Check back soon, or view{" "}
-          <a href="/history" className="underline hover:text-foreground">
-            History
-          </a>{" "}
-          for past results.
-        </p>
       </div>
     );
   }

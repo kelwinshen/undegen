@@ -64,8 +64,7 @@ export default function WithdrawSection({
         </h2>
         <p className="text-xs text-muted max-w-xl leading-relaxed">
           Your principal and earnings are ready to claim together in a single
-          transaction, or wager your earnings straight into the weekly
-          lottery.
+          transaction, or wager your earnings straight into the weekly lottery.
         </p>
       </div>
 
@@ -93,7 +92,9 @@ export default function WithdrawSection({
               className="py-3 px-6 border border-border hover:border-foreground/50 hover:bg-foreground/5 dark:hover:bg-white/5 active:scale-[0.99] font-medium rounded-xl text-xs tracking-wider uppercase transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 text-foreground"
             >
               {isClaiming ? (
-                <span className="inline-block animate-pulse">Processing...</span>
+                <span className="inline-block animate-pulse">
+                  Processing...
+                </span>
               ) : (
                 <span>Unstake & Claim Earn</span>
               )}
@@ -105,11 +106,15 @@ export default function WithdrawSection({
             <button
               onClick={handleJoinLotteryClick}
               disabled={isProcessing || !lotteryAvailable}
-              title={lotteryAvailable ? undefined : "No open lottery round right now"}
+              title={
+                lotteryAvailable ? undefined : "No open lottery round right now"
+              }
               className="py-3 px-6 border border-border-low font-medium rounded-xl text-xs tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 text-foreground hover:border-foreground/50 hover:bg-foreground/5 dark:hover:bg-white/5 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border-low disabled:hover:bg-transparent cursor-pointer"
             >
               {isJoiningLottery ? (
-                <span className="inline-block animate-pulse">Processing...</span>
+                <span className="inline-block animate-pulse">
+                  Processing...
+                </span>
               ) : (
                 <span>Unstake & Join Lottery with Earn</span>
               )}

@@ -21,15 +21,27 @@ const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
-const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+);
 
-const JOIN_BATCH_DISCRIMINATOR = Buffer.from([81, 186, 86, 76, 184, 199, 194, 96]);
+const JOIN_BATCH_DISCRIMINATOR = Buffer.from([
+  81, 186, 86, 76, 184, 199, 194, 96,
+]);
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
-const PROTOCOL_CONFIG_DISCRIMINATOR = Buffer.from([207, 91, 250, 28, 152, 179, 215, 209]);
-const VAULT_CONFIG_DISCRIMINATOR = Buffer.from([99, 86, 43, 216, 184, 102, 119, 77]);
+const PROTOCOL_CONFIG_DISCRIMINATOR = Buffer.from([
+  207, 91, 250, 28, 152, 179, 215, 209,
+]);
+const VAULT_CONFIG_DISCRIMINATOR = Buffer.from([
+  99, 86, 43, 216, 184, 102, 119, 77,
+]);
 
-const INIT_VAULT_DISCRIMINATOR = Buffer.from([48, 191, 163, 44, 71, 129, 63, 164]);
+const INIT_VAULT_DISCRIMINATOR = Buffer.from([
+  48, 191, 163, 44, 71, 129, 63, 164,
+]);
 
 const ATA_SEED = Buffer.from([
   6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206, 235, 121, 172,
@@ -56,10 +68,17 @@ const BatchStatusLayout = borsh.struct([
   borsh.publicKey("mint"),
   borsh.u8("bump"),
   borsh.publicKey("vault_position"),
-  borsh.u8("status"),       // ← index of BatchStatus enum
+  borsh.u8("status"), // ← index of BatchStatus enum
 ]);
 
-const BATCH_STATUS_NAMES = ["Lobby", "Locked", "AwaitingCollateral", "Active", "Settled", "Cancelled"];
+const BATCH_STATUS_NAMES = [
+  "Lobby",
+  "Locked",
+  "AwaitingCollateral",
+  "Active",
+  "Settled",
+  "Cancelled",
+];
 
 function writeUInt64LE(value: bigint): Buffer {
   const buffer = Buffer.alloc(8);
@@ -67,7 +86,10 @@ function writeUInt64LE(value: bigint): Buffer {
   return buffer;
 }
 
-function getAssociatedTokenAddress(owner: PublicKey, mint: PublicKey): PublicKey {
+function getAssociatedTokenAddress(
+  owner: PublicKey,
+  mint: PublicKey
+): PublicKey {
   const [ata] = PublicKey.findProgramAddressSync(
     [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
     ASSOCIATED_TOKEN_PROGRAM_ID
@@ -82,7 +104,10 @@ export default function JoinBatchTest() {
   const [batchIdInput, setBatchIdInput] = useState("");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [latestBatchId, setLatestBatchId] = useState<number | null>(null);
 
@@ -92,14 +117,17 @@ export default function JoinBatchTest() {
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
-    if (!secretKeyEnv) throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
+    if (!secretKeyEnv)
+      throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
       return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
     return Keypair.fromSecretKey(bs58.decode(secretKeyEnv));
   };
 
-  const sendTxAsOperator = async (ix: TransactionInstruction): Promise<string> => {
+  const sendTxAsOperator = async (
+    ix: TransactionInstruction
+  ): Promise<string> => {
     const connection = new Connection(DEVNET_RPC, "confirmed");
     const signer = getOperatorKeypair();
     const tx = new Transaction().add(ix);
@@ -107,12 +135,16 @@ export default function JoinBatchTest() {
     tx.recentBlockhash = blockhash;
     tx.feePayer = signer.publicKey;
     tx.sign(signer);
-    const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+    });
     await connection.confirmTransaction(sig);
     return sig;
   };
 
-  const initializeVaultIfNeeded = async (connection: Connection): Promise<void> => {
+  const initializeVaultIfNeeded = async (
+    connection: Connection
+  ): Promise<void> => {
     const mint = new PublicKey(DEVNET_USDC_MINT);
     const yieldVaultProgramId = YIELD_VAULT_PROGRAM_ID;
     const [vaultConfigPda] = PublicKey.findProgramAddressSync(
@@ -121,7 +153,10 @@ export default function JoinBatchTest() {
     );
 
     const vaultConfigInfo = await connection.getAccountInfo(vaultConfigPda);
-    if (vaultConfigInfo && vaultConfigInfo.data.slice(0, 8).equals(VAULT_CONFIG_DISCRIMINATOR)) {
+    if (
+      vaultConfigInfo &&
+      vaultConfigInfo.data.slice(0, 8).equals(VAULT_CONFIG_DISCRIMINATOR)
+    ) {
       addLog("success", "Yield vault config already exists.");
       return;
     }
@@ -145,7 +180,11 @@ export default function JoinBatchTest() {
       { pubkey: vaultTokenAccountPda, isSigner: false, isWritable: true },
       { pubkey: reserveTokenAccountPda, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      {
+        pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,
+        isSigner: false,
+        isWritable: false,
+      },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ];
 
@@ -228,9 +267,12 @@ export default function JoinBatchTest() {
       addLog("info", `Batch PDA: ${batchPda.toBase58()}`);
 
       const accountInfo = await connection.getAccountInfo(batchPda);
-      if (!accountInfo) throw new Error("Batch account not found. Use 'Load Latest Batch ID'.");
-      if (!accountInfo.owner.equals(undegenProgramId)) throw new Error("Batch PDA not owned by Undegen.");
-      if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) throw new Error("Batch not initialized.");
+      if (!accountInfo)
+        throw new Error("Batch account not found. Use 'Load Latest Batch ID'.");
+      if (!accountInfo.owner.equals(undegenProgramId))
+        throw new Error("Batch PDA not owned by Undegen.");
+      if (!accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR))
+        throw new Error("Batch not initialized.");
 
       // Borsh decode batch status
       const batchDecoded = BatchStatusLayout.decode(accountInfo.data.slice(8));
@@ -243,14 +285,21 @@ export default function JoinBatchTest() {
 
       // 3. Build and send join transaction
       const rawAmount = BigInt(Math.floor(depositAmount * 1e6));
-      const dataInst = Buffer.concat([JOIN_BATCH_DISCRIMINATOR, writeUInt64LE(rawAmount)]);
+      const dataInst = Buffer.concat([
+        JOIN_BATCH_DISCRIMINATOR,
+        writeUInt64LE(rawAmount),
+      ]);
 
       const userTokenAccount = getAssociatedTokenAddress(user, mint);
       const batchTokenAccount = getAssociatedTokenAddress(batchPda, mint);
       const vaultTokenAccount = getAssociatedTokenAddress(vaultConfigPda, mint);
 
       const [vaultPositionPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("position"), vaultConfigPda.toBuffer(), batchPda.toBuffer()],
+        [
+          Buffer.from("position"),
+          vaultConfigPda.toBuffer(),
+          batchPda.toBuffer(),
+        ],
         yieldVaultProgramId
       );
 
@@ -277,11 +326,19 @@ export default function JoinBatchTest() {
         { pubkey: userPositionPda, isSigner: false, isWritable: true },
         { pubkey: yieldVaultProgramId, isSigner: false, isWritable: false },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        {
+          pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,
+          isSigner: false,
+          isWritable: false,
+        },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ];
 
-      const ix = new TransactionInstruction({ programId: undegenProgramId, keys, data: dataInst });
+      const ix = new TransactionInstruction({
+        programId: undegenProgramId,
+        keys,
+        data: dataInst,
+      });
       const tx = new Transaction().add(ix);
       const { blockhash } = await connection.getLatestBlockhash();
       tx.recentBlockhash = blockhash;
@@ -291,19 +348,32 @@ export default function JoinBatchTest() {
       const provider = (window as any).solana;
       if (provider) {
         const signedTx = await provider.signTransaction(tx);
-        const sig = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
+        const sig = await connection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: false,
+        });
         addLog("info", `Sent. Signature: ${sig}`);
         await connection.confirmTransaction(sig);
         addLog("success", "Confirmed");
-        setResult({ type: "success", message: `Joined batch with ${depositAmount} USDC. Tx: ${sig}` });
+        setResult({
+          type: "success",
+          message: `Joined batch with ${depositAmount} USDC. Tx: ${sig}`,
+        });
       } else if (wallet.signTransaction) {
         const signed = await wallet.signTransaction(tx as any);
-        const rawTx = signed instanceof Uint8Array ? signed : (signed as any).serialize?.() ?? signed;
-        const sig = await connection.sendRawTransaction(rawTx, { skipPreflight: false });
+        const rawTx =
+          signed instanceof Uint8Array
+            ? signed
+            : ((signed as any).serialize?.() ?? signed);
+        const sig = await connection.sendRawTransaction(rawTx, {
+          skipPreflight: false,
+        });
         addLog("info", `Sent. Signature: ${sig}`);
         await connection.confirmTransaction(sig);
         addLog("success", "Confirmed");
-        setResult({ type: "success", message: `Joined batch with ${depositAmount} USDC. Tx: ${sig}` });
+        setResult({
+          type: "success",
+          message: `Joined batch with ${depositAmount} USDC. Tx: ${sig}`,
+        });
       } else {
         throw new Error("Wallet does not support signTransaction");
       }
@@ -319,17 +389,23 @@ export default function JoinBatchTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Join Batch (Test)</h2>
           <p className="text-sm text-gray-400">
-            Enter a batch ID and deposit USDC. The yield vault is auto‑initialized if missing.
-            The batch must be in <strong>Lobby</strong> status.
+            Enter a batch ID and deposit USDC. The yield vault is
+            auto‑initialized if missing. The batch must be in{" "}
+            <strong>Lobby</strong> status.
           </p>
           {!connected && (
-            <p className="text-xs text-yellow-300">Connect your wallet (devnet) to join a batch.</p>
+            <p className="text-xs text-yellow-300">
+              Connect your wallet (devnet) to join a batch.
+            </p>
           )}
           <div className="flex gap-2 items-end">
             <div className="flex-1">
@@ -351,7 +427,9 @@ export default function JoinBatchTest() {
             </button>
           </div>
           {latestBatchId !== null && (
-            <p className="text-xs text-gray-400">Latest batch ID: {latestBatchId}</p>
+            <p className="text-xs text-gray-400">
+              Latest batch ID: {latestBatchId}
+            </p>
           )}
           <input
             type="number"
@@ -390,13 +468,14 @@ export default function JoinBatchTest() {
                       entry.type === "error"
                         ? "text-red-400"
                         : entry.type === "success"
-                        ? "text-emerald-300"
-                        : entry.type === "warning"
-                        ? "text-yellow-300"
-                        : "text-gray-300"
+                          ? "text-emerald-300"
+                          : entry.type === "warning"
+                            ? "text-yellow-300"
+                            : "text-gray-300"
                     }`}
                   >
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

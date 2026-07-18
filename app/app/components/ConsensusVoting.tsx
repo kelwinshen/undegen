@@ -146,8 +146,10 @@ function formatCountdown(diffMs: number): string {
 // counting down to actual kickoff, until the match itself has started.
 function formatVotingDeadline(startTimeMs: number, nowMs: number): string {
   const voteDeadline = startTimeMs - VOTE_CUTOFF_MS;
-  if (nowMs < voteDeadline) return `Voting ends in ${formatCountdown(voteDeadline - nowMs)}`;
-  if (nowMs < startTimeMs) return `Match starts in ${formatCountdown(startTimeMs - nowMs)}`;
+  if (nowMs < voteDeadline)
+    return `Voting ends in ${formatCountdown(voteDeadline - nowMs)}`;
+  if (nowMs < startTimeMs)
+    return `Match starts in ${formatCountdown(startTimeMs - nowMs)}`;
   return "Voting closed";
 }
 
@@ -156,7 +158,9 @@ function formatVotingDeadline(startTimeMs: number, nowMs: number): string {
 // has already locked regardless of where the time-based cutoff sits.
 function formatMatchCountdown(startTimeMs: number, nowMs: number): string {
   const diff = startTimeMs - nowMs;
-  return diff > 0 ? `Match starts in ${formatCountdown(diff)}` : "Waiting for The Result";
+  return diff > 0
+    ? `Match starts in ${formatCountdown(diff)}`
+    : "Waiting for The Result";
 }
 
 function getFlagEmoji(name: string): string {
@@ -230,8 +234,7 @@ function renderMatchTextWithFlags(matchText: string): React.ReactNode {
 function confidenceLabel(ratio: number): { text: string; color: string } {
   if (ratio >= 0.7)
     return { text: "Very High", color: "text-foreground font-semibold" };
-  if (ratio >= 0.5)
-    return { text: "High", color: "text-foreground" };
+  if (ratio >= 0.5) return { text: "High", color: "text-foreground" };
   if (ratio >= 0.3)
     return { text: "Medium", color: "text-amber-600 dark:text-yellow-400" };
   return { text: "Low", color: "text-red-600 dark:text-red-400" };
@@ -277,7 +280,9 @@ export default function ConsensusVoting({
   const [votedSlot, setVotedSlot] = useState<number | null>(null);
   const [slotVoteError, setSlotVoteError] = useState<string | null>(null);
   const [settlingDefault, setSettlingDefault] = useState(false);
-  const [settleDefaultError, setSettleDefaultError] = useState<string | null>(null);
+  const [settleDefaultError, setSettleDefaultError] = useState<string | null>(
+    null
+  );
 
   // Seed from the real on-chain vote, not just this session's local state —
   // otherwise a reload forgets you already voted and lets you "vote" again
@@ -381,7 +386,14 @@ export default function ConsensusVoting({
   };
 
   const handleVoteSlot = async (slotIndex: number) => {
-    if (isEnded || !canVote || isVotingCompleted || !onVoteSlot || votingSlot !== null) return;
+    if (
+      isEnded ||
+      !canVote ||
+      isVotingCompleted ||
+      !onVoteSlot ||
+      votingSlot !== null
+    )
+      return;
     setSlotVoteError(null);
     setVotingSlot(slotIndex);
     try {
@@ -440,7 +452,8 @@ export default function ConsensusVoting({
     const sharedKickoffTime =
       matchStartTime && matchStartTime > 0
         ? matchStartTime
-        : (betTermProposals.find((p) => p.kickoffTime != null)?.kickoffTime ?? null);
+        : (betTermProposals.find((p) => p.kickoffTime != null)?.kickoffTime ??
+          null);
     return (
       <div className="p-6 rounded-2xl backdrop-blur-sm border border-border-low text-center space-y-4">
         <div>
@@ -491,162 +504,196 @@ export default function ConsensusVoting({
           </div>
         )}
 
-        {betTermProposals.length > 0 && (() => {
-          // Weight-based standing across every slot, skip included (index 4)
-          // — mirrors the resolved-fixture view's percentage/leader math so a
-          // proposal that hasn't matched a live option yet still shows real
-          // consensus, not just its own odds.
-          const weights = voteWeights ?? [];
-          const totalWeight = weights.reduce((sum, w) => sum + (w || 0), 0);
-          const skipWeight = weights[4] ?? 0;
-          let leadingSlot: number | null = null;
-          if (!isEnded && totalWeight > 0) {
-            let maxWeight = -1;
-            for (let i = 0; i < 5; i++) {
-              const w = weights[i] ?? 0;
-              if (w > maxWeight) {
-                maxWeight = w;
-                leadingSlot = i;
+        {betTermProposals.length > 0 &&
+          (() => {
+            // Weight-based standing across every slot, skip included (index 4)
+            // — mirrors the resolved-fixture view's percentage/leader math so a
+            // proposal that hasn't matched a live option yet still shows real
+            // consensus, not just its own odds.
+            const weights = voteWeights ?? [];
+            const totalWeight = weights.reduce((sum, w) => sum + (w || 0), 0);
+            const skipWeight = weights[4] ?? 0;
+            let leadingSlot: number | null = null;
+            if (!isEnded && totalWeight > 0) {
+              let maxWeight = -1;
+              for (let i = 0; i < 5; i++) {
+                const w = weights[i] ?? 0;
+                if (w > maxWeight) {
+                  maxWeight = w;
+                  leadingSlot = i;
+                }
               }
             }
-          }
-          const skipId = "__skip__";
-          const isSkipVoted = votedSlot === 4;
-          const isSkipChosen = chosenSlot === 4;
-          const skipDisabled = isEnded || !canVote || isVotingCompleted || isSkipVoted || !onVoteSlot;
-          // Once consensus has locked (AwaitingCollateral), the decided slot
-          // comes from the real on-chain winner, not raw weight — falls back
-          // to leadingSlot only if winningVoteIndex hasn't synced yet.
-          const decidedSlot = isVotingCompleted ? (winningVoteIndex ?? leadingSlot) : null;
+            const skipId = "__skip__";
+            const isSkipVoted = votedSlot === 4;
+            const isSkipChosen = chosenSlot === 4;
+            const skipDisabled =
+              isEnded ||
+              !canVote ||
+              isVotingCompleted ||
+              isSkipVoted ||
+              !onVoteSlot;
+            // Once consensus has locked (AwaitingCollateral), the decided slot
+            // comes from the real on-chain winner, not raw weight — falls back
+            // to leadingSlot only if winningVoteIndex hasn't synced yet.
+            const decidedSlot = isVotingCompleted
+              ? (winningVoteIndex ?? leadingSlot)
+              : null;
 
-          return (
-          <div className="space-y-2 text-left">
-            {betTermProposals.map((proposal) => {
-              const isVoted = votedSlot === proposal.slotIndex;
-              const isChosen = chosenSlot === proposal.slotIndex;
-              const disabled = isEnded || !canVote || isVotingCompleted || isVoted || !onVoteSlot;
-              const weight = weights[proposal.slotIndex] ?? 0;
-              const percentage = totalWeight > 0 ? (weight / totalWeight) * 100 : 0;
-              const isLeading = !isVotingCompleted && leadingSlot === proposal.slotIndex;
-              const isWinner = isVotingCompleted && decidedSlot === proposal.slotIndex;
-              return (
+            return (
+              <div className="space-y-2 text-left">
+                {betTermProposals.map((proposal) => {
+                  const isVoted = votedSlot === proposal.slotIndex;
+                  const isChosen = chosenSlot === proposal.slotIndex;
+                  const disabled =
+                    isEnded ||
+                    !canVote ||
+                    isVotingCompleted ||
+                    isVoted ||
+                    !onVoteSlot;
+                  const weight = weights[proposal.slotIndex] ?? 0;
+                  const percentage =
+                    totalWeight > 0 ? (weight / totalWeight) * 100 : 0;
+                  const isLeading =
+                    !isVotingCompleted && leadingSlot === proposal.slotIndex;
+                  const isWinner =
+                    isVotingCompleted && decidedSlot === proposal.slotIndex;
+                  return (
+                    <button
+                      key={proposal.slotIndex}
+                      onClick={() =>
+                        !disabled &&
+                        setChosenSlot(isChosen ? null : proposal.slotIndex)
+                      }
+                      disabled={disabled}
+                      className={`w-full text-left p-3 rounded-lg border transition ${
+                        disabled
+                          ? "border-border-low bg-foreground/[0.01] cursor-not-allowed opacity-70"
+                          : isChosen
+                            ? "border-foreground bg-foreground/5 cursor-pointer"
+                            : "border-border-low hover:border-gray-500 cursor-pointer"
+                      } ${isLeading || isWinner ? "shadow-[0_0_12px_rgba(0,0,0,0.05)] dark:shadow-[0_0_12px_rgba(255,255,255,0.15)] border-foreground/30 dark:border-white/40" : ""}`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-foreground">
+                            {renderMatchTextWithFlags(proposal.matchText)}
+                          </span>
+                          {isWinner && (
+                            <span className="text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-semibold">
+                              Winner
+                            </span>
+                          )}
+                          {isLeading && (
+                            <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
+                              Leading
+                            </span>
+                          )}
+                          {isVoted && (
+                            <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
+                              Voted
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted">
+                            {percentage.toFixed(2)}%
+                          </span>
+                          {proposal.multiplier !== "—" && (
+                            <span className="text-sm font-bold text-foreground">
+                              {proposal.multiplier}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted mt-1">
+                        {proposal.predicate}
+                      </p>
+                      <div className="mt-2 w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-1">
+                        <div
+                          className={`h-1 rounded-full ${isLeading || isWinner ? "bg-foreground dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.15)] dark:shadow-[0_0_6px_rgba(255,255,255,0.4)]" : "bg-foreground/20 dark:bg-white/40"}`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+
                 <button
-                  key={proposal.slotIndex}
-                  onClick={() => !disabled && setChosenSlot(isChosen ? null : proposal.slotIndex)}
-                  disabled={disabled}
+                  key={skipId}
+                  onClick={() =>
+                    !skipDisabled && setChosenSlot(isSkipChosen ? null : 4)
+                  }
+                  disabled={skipDisabled}
                   className={`w-full text-left p-3 rounded-lg border transition ${
-                    disabled
+                    skipDisabled
                       ? "border-border-low bg-foreground/[0.01] cursor-not-allowed opacity-70"
-                      : isChosen
+                      : isSkipChosen
                         ? "border-foreground bg-foreground/5 cursor-pointer"
                         : "border-border-low hover:border-gray-500 cursor-pointer"
-                  } ${isLeading || isWinner ? "shadow-[0_0_12px_rgba(0,0,0,0.05)] dark:shadow-[0_0_12px_rgba(255,255,255,0.15)] border-foreground/30 dark:border-white/40" : ""}`}
+                  } ${leadingSlot === 4 || decidedSlot === 4 ? "shadow-[0_0_12px_rgba(0,0,0,0.05)] dark:shadow-[0_0_12px_rgba(255,255,255,0.15)] border-foreground/30 dark:border-white/40" : ""}`}
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">{renderMatchTextWithFlags(proposal.matchText)}</span>
-                      {isWinner && (
+                      <span className="text-sm font-medium text-muted">
+                        Skip this match
+                      </span>
+                      {decidedSlot === 4 && (
                         <span className="text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-semibold">
                           Winner
                         </span>
                       )}
-                      {isLeading && (
+                      {!isVotingCompleted && leadingSlot === 4 && (
                         <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
                           Leading
                         </span>
                       )}
-                      {isVoted && (
+                      {isSkipVoted && (
                         <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
                           Voted
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted">{percentage.toFixed(2)}%</span>
-                      {proposal.multiplier !== "—" && (
-                        <span className="text-sm font-bold text-foreground">{proposal.multiplier}</span>
-                      )}
-                    </div>
+                    <span className="text-xs text-muted">
+                      {totalWeight > 0
+                        ? ((skipWeight / totalWeight) * 100).toFixed(2)
+                        : "0.00"}
+                      %
+                    </span>
                   </div>
-                  <p className="text-xs text-muted mt-1">{proposal.predicate}</p>
                   <div className="mt-2 w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-1">
                     <div
-                      className={`h-1 rounded-full ${isLeading || isWinner ? "bg-foreground dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.15)] dark:shadow-[0_0_6px_rgba(255,255,255,0.4)]" : "bg-foreground/20 dark:bg-white/40"}`}
-                      style={{ width: `${percentage}%` }}
+                      className={`h-1 rounded-full ${leadingSlot === 4 || decidedSlot === 4 ? "bg-foreground dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.15)] dark:shadow-[0_0_6px_rgba(255,255,255,0.4)]" : "bg-foreground/20 dark:bg-white/40"}`}
+                      style={{
+                        width: `${totalWeight > 0 ? (skipWeight / totalWeight) * 100 : 0}%`,
+                      }}
                     />
                   </div>
                 </button>
-              );
-            })}
 
-            <button
-              key={skipId}
-              onClick={() => !skipDisabled && setChosenSlot(isSkipChosen ? null : 4)}
-              disabled={skipDisabled}
-              className={`w-full text-left p-3 rounded-lg border transition ${
-                skipDisabled
-                  ? "border-border-low bg-foreground/[0.01] cursor-not-allowed opacity-70"
-                  : isSkipChosen
-                    ? "border-foreground bg-foreground/5 cursor-pointer"
-                    : "border-border-low hover:border-gray-500 cursor-pointer"
-              } ${leadingSlot === 4 || decidedSlot === 4 ? "shadow-[0_0_12px_rgba(0,0,0,0.05)] dark:shadow-[0_0_12px_rgba(255,255,255,0.15)] border-foreground/30 dark:border-white/40" : ""}`}
-            >
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-muted">Skip this match</span>
-                  {decidedSlot === 4 && (
-                    <span className="text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-semibold">
-                      Winner
-                    </span>
-                  )}
-                  {!isVotingCompleted && leadingSlot === 4 && (
-                    <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
-                      Leading
-                    </span>
-                  )}
-                  {isSkipVoted && (
-                    <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
-                      Voted
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-muted">
-                  {totalWeight > 0 ? ((skipWeight / totalWeight) * 100).toFixed(2) : "0.00"}%
-                </span>
-              </div>
-              <div className="mt-2 w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-1">
-                <div
-                  className={`h-1 rounded-full ${leadingSlot === 4 || decidedSlot === 4 ? "bg-foreground dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.15)] dark:shadow-[0_0_6px_rgba(255,255,255,0.4)]" : "bg-foreground/20 dark:bg-white/40"}`}
-                  style={{ width: `${totalWeight > 0 ? (skipWeight / totalWeight) * 100 : 0}%` }}
-                />
-              </div>
-            </button>
+                {!isVotingCompleted && chosenSlot !== null && (
+                  <button
+                    onClick={() => handleVoteSlot(chosenSlot)}
+                    disabled={votingSlot !== null}
+                    className="w-full py-2.5 px-4 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 cursor-pointer bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {votingSlot === chosenSlot
+                      ? "Casting vote..."
+                      : votedSlot !== null
+                        ? "Change Vote"
+                        : "Vote"}
+                  </button>
+                )}
 
-            {!isVotingCompleted && chosenSlot !== null && (
-              <button
-                onClick={() => handleVoteSlot(chosenSlot)}
-                disabled={votingSlot !== null}
-                className="w-full py-2.5 px-4 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 cursor-pointer bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {votingSlot === chosenSlot
-                  ? "Casting vote..."
-                  : votedSlot !== null
-                    ? "Change Vote"
-                    : "Vote"}
-              </button>
-            )}
-
-            {slotVoteError && (
-              <div className="p-2.5 rounded-lg text-xs text-center bg-red-500/10 border border-red-500/30 text-red-500">
-                {slotVoteError}
+                {slotVoteError && (
+                  <div className="p-2.5 rounded-lg text-xs text-center bg-red-500/10 border border-red-500/30 text-red-500">
+                    {slotVoteError}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          );
-        })()}
+            );
+          })()}
       </div>
     );
   }
-
-  
 }

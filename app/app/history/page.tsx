@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import Image from "next/image";
+import logoOnly from "../assets/logo-only.png";
 import WithdrawSection from "../components/WithdrawSection";
 import SyndicateSidebar from "../components/SyndicateSidebar";
 import HowItWorks from "../components/HowItWorks";
@@ -227,25 +229,58 @@ export default function HistoryPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg1">
-        <div className="animate-pulse text-gray-400">Loading...</div>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <motion.div
+          animate={{
+            opacity: [0.3, 1, 0.3],
+            scale: [0.95, 1.05, 0.95],
+          }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="relative w-16 h-16"
+        >
+          <Image
+            src={logoOnly}
+            alt="Undegen Logo"
+            fill
+            className="object-contain"
+            priority
+          />
+        </motion.div>
+        <motion.div
+          animate={{ opacity: [0.4, 0.8, 0.4] }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.2,
+          }}
+          className="text-sm font-semibold tracking-widest text-muted uppercase font-sans"
+        >
+          Loading...
+        </motion.div>
       </div>
     );
   }
 
   if (!focusedBatch) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-bg1 text-center px-6">
-        <div className="text-muted text-lg font-semibold">
-          No ended batches yet
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-6">
+        <div className="rounded-2xl backdrop-blur-sm border border-border-low bg-card/30 dark:bg-card/10 p-8 max-w-md w-full space-y-3">
+          <div className="text-muted text-lg font-semibold">
+            No ended batches yet
+          </div>
+          <p className="text-muted text-sm max-w-sm mx-auto">
+            Check back once a batch settles, or view{" "}
+            <a href="/upcoming" className="underline hover:text-foreground">
+              Upcoming
+            </a>{" "}
+            to join the next one.
+          </p>
         </div>
-        <p className="text-muted text-sm max-w-sm">
-          Check back once a batch settles, or view{" "}
-          <a href="/upcoming" className="underline hover:text-foreground">
-            Upcoming
-          </a>{" "}
-          to join the next one.
-        </p>
       </div>
     );
   }

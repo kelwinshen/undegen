@@ -61,14 +61,23 @@ const BatchLayout = borsh.struct([
   borsh.option(borsh.bool(), "outcome"),
 ]);
 
-const BATCH_STATUS_NAMES = ["Lobby", "Locked", "AwaitingCollateral", "Active", "Settled", "Cancelled"];
+const BATCH_STATUS_NAMES = [
+  "Lobby",
+  "Locked",
+  "AwaitingCollateral",
+  "Active",
+  "Settled",
+  "Cancelled",
+];
 
 function decodeBatch(data: Buffer): any {
-  // Solana accounts have a fixed size allocated on-chain (e.g. from INIT_SPACE + padding). 
+  // Solana accounts have a fixed size allocated on-chain (e.g. from INIT_SPACE + padding).
   // Borsh will successfully decode up to the end of your defined struct layout and safely
   // ignore any trailing allocation headroom. We check for a minimum required bound instead.
   if (data.length < 327) {
-    throw new Error(`Unexpected account data size: ${data.length} bytes. Expected at least 327 bytes based on the IDL layout.`);
+    throw new Error(
+      `Unexpected account data size: ${data.length} bytes. Expected at least 327 bytes based on the IDL layout.`
+    );
   }
 
   const decoded = BatchLayout.decode(data);
@@ -79,7 +88,8 @@ function decodeBatch(data: Buffer): any {
     operator: decoded.operator.toBase58(),
     mint: decoded.mint.toBase58(),
     vault_position: decoded.vault_position.toBase58(),
-    status: BATCH_STATUS_NAMES[decoded.statusIdx] ?? `Unknown(${decoded.statusIdx})`,
+    status:
+      BATCH_STATUS_NAMES[decoded.statusIdx] ?? `Unknown(${decoded.statusIdx})`,
     total_deposited: decoded.total_deposited.toString(),
     bet_size: decoded.bet_size.toString(),
     accumulated_winnings: decoded.accumulated_winnings.toString(),
@@ -107,7 +117,10 @@ export default function BatchDetailsTest() {
 
   const [batchId, setBatchId] = useState(initialBatchId);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [batchData, setBatchData] = useState<any>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
@@ -154,7 +167,10 @@ export default function BatchDetailsTest() {
       const decoded = decodeBatch(data);
       setBatchData(decoded);
 
-      addLog("success", `Batch decoded successfully via Borsh (${data.length} bytes processed).`);
+      addLog(
+        "success",
+        `Batch decoded successfully via Borsh (${data.length} bytes processed).`
+      );
       setResult({ type: "success", message: "Data fetched." });
     } catch (err: any) {
       addLog("error", err.message);
@@ -172,7 +188,10 @@ export default function BatchDetailsTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
@@ -195,7 +214,9 @@ export default function BatchDetailsTest() {
             </button>
           </div>
           {result && (
-            <div className={`p-3 rounded-lg text-sm ${result.type === "success" ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}>
+            <div
+              className={`p-3 rounded-lg text-sm ${result.type === "success" ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}
+            >
               {result.message}
             </div>
           )}
@@ -210,20 +231,36 @@ export default function BatchDetailsTest() {
                       {value.map((terms: any, i: number) => (
                         <div key={i} className="ml-4 text-xs">
                           <span className="text-gray-500">[{i}] </span>
-                          <span className="text-emerald-300">fixture: {terms.fixture_id}</span>
-                          <span className="text-emerald-300">, period: {terms.period}</span>
+                          <span className="text-emerald-300">
+                            fixture: {terms.fixture_id}
+                          </span>
+                          <span className="text-emerald-300">
+                            , period: {terms.period}
+                          </span>
                           {terms.stat_a_key !== "0" && (
-                            <span className="text-emerald-300">, stat_a: {terms.stat_a_key}</span>
+                            <span className="text-emerald-300">
+                              , stat_a: {terms.stat_a_key}
+                            </span>
                           )}
                           {terms.stat_b_key && (
-                            <span className="text-emerald-300">, stat_b: {terms.stat_b_key}</span>
+                            <span className="text-emerald-300">
+                              , stat_b: {terms.stat_b_key}
+                            </span>
                           )}
                           {terms.op && (
-                            <span className="text-emerald-300">, op: {terms.op}</span>
+                            <span className="text-emerald-300">
+                              , op: {terms.op}
+                            </span>
                           )}
-                          <span className="text-emerald-300">, thresh: {terms.predicate_threshold}</span>
-                          <span className="text-emerald-300">, comp: {terms.predicate_comparison}</span>
-                          <span className="text-emerald-300">, neg: {terms.negation}</span>
+                          <span className="text-emerald-300">
+                            , thresh: {terms.predicate_threshold}
+                          </span>
+                          <span className="text-emerald-300">
+                            , comp: {terms.predicate_comparison}
+                          </span>
+                          <span className="text-emerald-300">
+                            , neg: {terms.negation}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -243,8 +280,12 @@ export default function BatchDetailsTest() {
               <h3 className="text-sm font-semibold mb-2">Debug Log</h3>
               <div className="bg-black/30 rounded-lg p-4 max-h-64 overflow-y-auto space-y-1 text-xs font-mono">
                 {logs.map((entry, i) => (
-                  <div key={i} className={`${entry.type === "error" ? "text-red-400" : entry.type === "success" ? "text-emerald-300" : entry.type === "warning" ? "text-yellow-300" : "text-gray-300"}`}>
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                  <div
+                    key={i}
+                    className={`${entry.type === "error" ? "text-red-400" : entry.type === "success" ? "text-emerald-300" : entry.type === "warning" ? "text-yellow-300" : "text-gray-300"}`}
+                  >
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

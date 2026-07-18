@@ -16,7 +16,9 @@ export default function BottomNavbar() {
           <Link
             href="/"
             className={`flex flex-col items-center justify-center gap-1 group cursor-pointer transition-colors ${
-              pathname === "/" ? "text-foreground" : "text-muted hover:text-foreground"
+              pathname === "/"
+                ? "text-foreground"
+                : "text-muted hover:text-foreground"
             }`}
           >
             <div className="p-1 rounded-lg transition-transform duration-200 group-active:scale-90">
@@ -43,7 +45,9 @@ export default function BottomNavbar() {
           <Link
             href="/upcoming"
             className={`flex flex-col items-center justify-center gap-1 group cursor-pointer transition-colors ${
-              pathname === "/upcoming" ? "text-foreground" : "text-muted hover:text-foreground"
+              pathname === "/upcoming"
+                ? "text-foreground"
+                : "text-muted hover:text-foreground"
             }`}
           >
             <div className="p-1 rounded-lg transition-transform duration-200 group-active:scale-90">
@@ -72,7 +76,9 @@ export default function BottomNavbar() {
           <Link
             href="/history"
             className={`flex flex-col items-center justify-center gap-1 group cursor-pointer transition-colors ${
-              pathname === "/history" ? "text-foreground" : "text-muted hover:text-foreground"
+              pathname === "/history"
+                ? "text-foreground"
+                : "text-muted hover:text-foreground"
             }`}
           >
             <div className="p-1 rounded-lg transition-transform duration-200 group-active:scale-90">
@@ -99,7 +105,9 @@ export default function BottomNavbar() {
           <Link
             href="/news"
             className={`flex flex-col items-center justify-center gap-1 group cursor-pointer transition-colors ${
-              pathname === "/news" ? "text-foreground" : "text-muted hover:text-foreground"
+              pathname === "/news"
+                ? "text-foreground"
+                : "text-muted hover:text-foreground"
             }`}
           >
             <div className="p-1 rounded-lg transition-transform duration-200 group-active:scale-90">
@@ -128,7 +136,9 @@ export default function BottomNavbar() {
           <Link
             href="/lottery"
             className={`flex flex-col items-center justify-center gap-1 group cursor-pointer transition-colors ${
-              pathname === "/lottery" ? "text-foreground" : "text-muted hover:text-foreground"
+              pathname === "/lottery"
+                ? "text-foreground"
+                : "text-muted hover:text-foreground"
             }`}
           >
             <div className="p-1 rounded-lg transition-transform duration-200 group-active:scale-90">

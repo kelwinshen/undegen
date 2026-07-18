@@ -34,9 +34,7 @@ const CLAIM_OPERATOR_YIELD_DISCRIMINATOR = new Uint8Array([
   109, 46, 2, 238, 212, 86, 94, 216,
 ]);
 
-const BATCH_DISCRIMINATOR = new Uint8Array([
-  156, 194, 70, 44, 22, 88, 137, 44,
-]);
+const BATCH_DISCRIMINATOR = new Uint8Array([156, 194, 70, 44, 22, 88, 137, 44]);
 
 function concatUint8Arrays(...arrays: Uint8Array[]): Uint8Array {
   const totalLen = arrays.reduce((sum, a) => sum + a.length, 0);
@@ -59,7 +57,7 @@ function writeUInt64LE(value: number | bigint | string): Uint8Array {
   new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigUint64(
     0,
     BigInt(value),
-    true,
+    true
   );
   return buf;
 }
@@ -70,11 +68,8 @@ const BetTermLayout = borsh.struct([
   borsh.u32("stat_a_key"),
   borsh.option(borsh.u32(), "stat_b_key"),
   borsh.option(
-    borsh.rustEnum([
-      borsh.struct([], "Add"),
-      borsh.struct([], "Subtract"),
-    ]),
-    "op",
+    borsh.rustEnum([borsh.struct([], "Add"), borsh.struct([], "Subtract")]),
+    "op"
   ),
   borsh.i32("predicate_threshold"),
   borsh.u8("predicate_comparison"),
@@ -146,19 +141,14 @@ export default function ClaimOperatorYield() {
   const [batchData, setBatchData] = useState<any>(null);
 
   const addLog = (msg: string) =>
-    setLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${msg}`,
-    ]);
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
     if (!secretKeyEnv)
       throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
-      return Keypair.fromSecretKey(
-        Uint8Array.from(JSON.parse(secretKeyEnv)),
-      );
+      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
     return Keypair.fromSecretKey(bs58.decode(secretKeyEnv));
   };
@@ -182,7 +172,7 @@ export default function ClaimOperatorYield() {
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("batch"), Buffer.from(batchIdBuffer)],
-        programId,
+        programId
       );
       setBatchPda(pda);
       addLog(`Batch PDA: ${pda.toBase58()}`);
@@ -200,7 +190,7 @@ export default function ClaimOperatorYield() {
       if (accountInfo.data.length < MIN_BATCH_DATA_LEN) {
         throw new Error(
           `Batch account data too short (${accountInfo.data.length} bytes). ` +
-          `Expected at least ${MIN_BATCH_DATA_LEN}.`,
+            `Expected at least ${MIN_BATCH_DATA_LEN}.`
         );
       }
 
@@ -211,7 +201,7 @@ export default function ClaimOperatorYield() {
       } catch (decodeErr: any) {
         throw new Error(
           `Failed to decode batch: ${decodeErr.message}. ` +
-          `Data length: ${dataBuffer.length}.`,
+            `Data length: ${dataBuffer.length}.`
         );
       }
 
@@ -243,23 +233,23 @@ export default function ClaimOperatorYield() {
 
       const operatorTokenAccount = await getAssociatedTokenAddress(
         mint,
-        operator.publicKey,
+        operator.publicKey
       );
       const batchTokenAccount = await getAssociatedTokenAddress(
         mint,
         batchPda,
-        true,
+        true
       );
 
       // vault_config PDA under yield vault program
       const [vaultConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("vault_config"), mint.toBuffer()],
-        yieldVaultProgramId,
+        yieldVaultProgramId
       );
       const vaultTokenAccount = await getAssociatedTokenAddress(
         mint,
         vaultConfigPda,
-        true,
+        true
       );
 
       const vaultPosition = batchData.vault_position;
@@ -408,7 +398,8 @@ export default function ClaimOperatorYield() {
                         className={`p-3 bg-bg1 rounded-lg border border-border-low ${isEmpty ? "opacity-50" : ""}`}
                       >
                         <span className="text-sm font-semibold text-gray-200">
-                          Slot {idx + 1} {isEmpty ? "(empty)" : `– Fixture ${term.fixture_id}`}
+                          Slot {idx + 1}{" "}
+                          {isEmpty ? "(empty)" : `– Fixture ${term.fixture_id}`}
                         </span>
                         {!isEmpty && (
                           <p className="text-xs text-gray-400 mt-1">

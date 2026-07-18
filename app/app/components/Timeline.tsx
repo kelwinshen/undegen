@@ -16,7 +16,7 @@ interface TimelineProps {
 export const Timeline = ({
   data,
   title = "Changelog from my journey",
-  description = "I've been working on Aceternity for the past 2 years. Here's a timeline of my journey."
+  description = "I've been working on Aceternity for the past 2 years. Here's a timeline of my journey.",
 }: TimelineProps) => {
   const ref = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
