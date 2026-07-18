@@ -99,6 +99,11 @@ interface ConsensusVotingProps {
   // current bet as a default user-win once the operator has gone silent past
   // the proof deadline. Callable by anyone, not just the depositor.
   onSettleDefault?: () => Promise<void>;
+  // Reports a successful vote/settle as a message the page shows as a bottom
+  // pop-up — same pattern as the lottery and history pages' on-chain action
+  // toasts. Failures still surface via the existing inline slotVoteError/
+  // settleDefaultError text next to the relevant button, not through this.
+  onResult?: (message: string) => void;
 }
 
 const MAX_WEEKLY_BETS = 5;
@@ -202,6 +207,26 @@ function getFlagEmoji(name: string): string {
   return matchedKey ? flags[matchedKey] : "";
 }
 
+// "England vs France" -> flag + name on each side. Falls back to the plain
+// string when it isn't a two-team "X vs Y" match (e.g. the "Fixture <id>"
+// placeholder shown before TxOdds resolves real participant names).
+function renderMatchTextWithFlags(matchText: string): React.ReactNode {
+  const parts = matchText.split(" vs ");
+  if (parts.length !== 2) return matchText;
+  const [team1, team2] = parts;
+  const flag1 = getFlagEmoji(team1);
+  const flag2 = getFlagEmoji(team2);
+  return (
+    <>
+      {flag1 && <span className="mr-1">{flag1}</span>}
+      {team1}
+      <span className="text-muted font-normal mx-1">vs</span>
+      {flag2 && <span className="mr-1">{flag2}</span>}
+      {team2}
+    </>
+  );
+}
+
 function confidenceLabel(ratio: number): { text: string; color: string } {
   if (ratio >= 0.7)
     return { text: "Very High", color: "text-foreground font-semibold" };
@@ -236,6 +261,7 @@ export default function ConsensusVoting({
   realAcceptedCount,
   skippedCount,
   onSettleDefault,
+  onResult,
 }: ConsensusVotingProps) {
   const [now, setNow] = useState(() => Date.now());
   const [expandedFixtureIds, setExpandedFixtureIds] = useState<Set<number>>(
@@ -361,6 +387,7 @@ export default function ConsensusVoting({
     try {
       await onVoteSlot(slotIndex);
       setVotedSlot(slotIndex);
+      onResult?.("Vote cast!");
     } catch (e: any) {
       setSlotVoteError(e?.message || "Vote failed.");
     } finally {
@@ -374,6 +401,7 @@ export default function ConsensusVoting({
     setSettlingDefault(true);
     try {
       await onSettleDefault();
+      onResult?.("Batch settled as a default win!");
     } catch (e: any) {
       setSettleDefaultError(e?.message || "Settlement failed.");
     } finally {
@@ -516,7 +544,7 @@ export default function ConsensusVoting({
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">{proposal.matchText}</span>
+                      <span className="text-sm font-semibold text-foreground">{renderMatchTextWithFlags(proposal.matchText)}</span>
                       {isWinner && (
                         <span className="text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-semibold">
                           Winner
@@ -620,622 +648,5 @@ export default function ConsensusVoting({
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {selectedDate && (
-        <div className="flex backdrop-blur-sm  justify-between items-center rounded-2xl border border-border-low p-4">
-          <span className="text-sm text-muted">
-            Viewing matches for {new Date(selectedDate ?? "").toLocaleDateString()}
-          </span>
-          <button
-            onClick={() => setSelectedDate(null)}
-            className="text-xs font-semibold bg-foreground/5 hover:bg-foreground/10 px-3 py-1.5 rounded-lg border border-border-low text-muted hover:text-foreground transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>Show All Matches</span>
-          </button>
-        </div>
-      )}
-
-      <div>
-        <div className="p-4 rounded-2xl backdrop-blur-sm border border-border-low space-y-3">
-          <div className="flex items-center justify-between text-xs text-muted">
-            <span>Accepted Predictions</span>
-            <span className="font-mono">
-              {acceptedBetsCount} / {MAX_WEEKLY_BETS}
-            </span>
-          </div>
-          <div className="w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-2">
-            <div
-              className="bg-foreground dark:bg-white h-2 rounded-full transition-all shadow-[0_0_6px_rgba(0,0,0,0.15)] dark:shadow-[0_0_6px_rgba(255,255,255,0.4)]"
-              style={{
-                width: `${(acceptedBetsCount / MAX_WEEKLY_BETS) * 100}%`,
-              }}
-            />
-          </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
-            <span>Skipped: {skippedMatchesCount}</span>
-            <span>
-              Remaining: {remainingCapacity} prediction
-              {remainingCapacity !== 1 ? "s" : ""}
-            </span>
-            <span>
-              Status:{" "}
-              {acceptedBetsCount === MAX_WEEKLY_BETS ? "Full" : "Active"}
-            </span>
-          </div>
-
-          <div className="mt-2">
-            <div className="flex justify-between text-xs text-muted mb-1">
-              <span>Weekly Treasury Budget</span>
-              <span className="font-mono">
-                {weeklyYieldPool.toLocaleString()} USDC
-              </span>
-            </div>
-            <div className="w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-foreground dark:bg-white h-2 rounded-full"
-                style={{
-                  width: `${(allocatedBudget / weeklyYieldPool) * 100}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-muted mt-1">
-              <span>Allocated: {allocatedBudget.toFixed(0)} USDC</span>
-              <span>Remaining: {remainingBudget.toFixed(0)} USDC</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {!canVote && (
-        <div className="p-3 bg-foreground/5 border border-border-low rounded-lg text-sm text-muted">
-          You haven&apos;t joined this batch — viewing consensus only. Stake
-          during a batch&apos;s Lobby phase to vote.
-        </div>
-      )}
-
-      {canVote && isVotingCompleted && (() => {
-        const localMatchStartTime = matchStartTime ?? 0;
-        const kickoffTime =
-          localMatchStartTime > 0 ? localMatchStartTime : fixtures[0]?.startTime;
-        const canSettleDefault =
-          isActive && !!onSettleDefault && kickoffTime != null && now - kickoffTime >= SETTLE_DEFAULT_AFTER_MS;
-        return (
-          <div className="space-y-2">
-            <div className="p-3 bg-foreground/5 border border-border-low rounded-lg text-sm text-foreground">
-              {isActive ? "Active" : "Voting is ended"} —{" "}
-              {kickoffTime ? formatMatchCountdown(kickoffTime, now) : "the match will be starting soon."}
-            </div>
-            {canSettleDefault && (
-              <>
-                <button
-                  onClick={handleSettleDefault}
-                  disabled={settlingDefault}
-                  className="w-full py-2.5 px-4 rounded-lg border border-border-strong text-sm font-bold hover:bg-foreground/5 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                >
-                  {settlingDefault ? "Settling…" : "Get Default Result"}
-                </button>
-                {settleDefaultError && (
-                  <p className="text-xs text-red-500">{settleDefaultError}</p>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })()}
-
-      {canVote && !isVotingCompleted && remainingBets === 0 && (
-        <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-sm text-amber-600 dark:text-yellow-300">
-          Weekly prediction budget exhausted. Remaining fixtures are
-          automatically skipped.
-        </div>
-      )}
-
-      <MiniCalendar
-        fixtures={fixtures}
-        liveScores={activeScores}
-        selectedDate={selectedDate}
-        setSelectedDate={setSelectedDate}
-      />
-
-      {filteredFixtures.length === 0 ? (
-        <div className="p-8 rounded-2xl border border-border-low text-center backdrop-blur-sm">
-          <p className="text-muted mb-2">No matches scheduled for this date</p>
-          <button
-            onClick={() => setSelectedDate(null)}
-            className="text-xs font-semibold bg-foreground/10 hover:bg-foreground/15 px-3 py-1.5 rounded-lg border border-border text-foreground transition active:scale-95"
-          >
-            Show All Matches
-          </button>
-        </div>
-      ) : (
-        filteredFixtures.map((fixture) => {
-          const matchStarted = fixture.startTime <= now;
-          const voteDeadlinePassed = fixture.startTime - VOTE_CUTOFF_MS <= now;
-          const isVotingClosed = voteDeadlinePassed || isEnded || isVotingCompleted;
-          const decision = matchDecisions[fixture.fixtureId];
-          const userVoteForMatch = userVotes[fixture.fixtureId];
-          const isExpanded = expandedFixtureIds.has(fixture.fixtureId);
-          const score = activeScores[fixture.fixtureId];
-
-          const skipId = `${fixture.fixtureId}-skip`;
-          const skipVotes = simulatedVotes[skipId] || 0;
-          const totalVotes =
-            fixture.options.reduce(
-              (sum, opt) => sum + (simulatedVotes[opt.id] || 0),
-              0
-            ) + skipVotes;
-
-          let leaderId: string | null = null;
-          let maxVotes = -1;
-          if (!isVotingClosed) {
-            fixture.options.forEach((opt) => {
-              const v = simulatedVotes[opt.id] || 0;
-              if (v > maxVotes) {
-                maxVotes = v;
-                leaderId = opt.id;
-              }
-            });
-            if (skipVotes > maxVotes) {
-              leaderId = skipId;
-              maxVotes = skipVotes;
-            }
-          }
-
-          let communityDecisionText = "";
-          let communityDecisionOdds = 0;
-          let winningOptionForCalc: Option | undefined;
-          if (decision) {
-            if (decision.isSkip) communityDecisionText = "Skip";
-            else {
-              winningOptionForCalc = fixture.options.find(
-                (o) => o.id === decision.winningOptionId
-              );
-              if (winningOptionForCalc) {
-                communityDecisionText = winningOptionForCalc.label;
-                communityDecisionOdds = winningOptionForCalc.odds;
-              }
-            }
-          }
-
-          const votingDeadlineText = formatVotingDeadline(
-            fixture.startTime,
-            now
-          );
-          const leadingRatio = totalVotes > 0 ? maxVotes / totalVotes : 0;
-          const confidence = confidenceLabel(leadingRatio);
-
-          let settlementStage = "Voting Open";
-          if (isVotingClosed && !decision) settlementStage = "Consensus Locked";
-          else if (decision && !score) settlementStage = "Awaiting Result";
-          else if (score && score.status !== "Finished")
-            settlementStage = "Match Live";
-          else if (score && score.status === "Finished")
-            settlementStage = "Settled";
-
-          const stateBadge = !matchStarted
-            ? "Upcoming"
-            : score && score.status === "Finished"
-              ? "Finished"
-              : "Live";
-
-          let treasuryChange = 0;
-          let outcomeText = "";
-          if (
-            decision &&
-            decision.accepted &&
-            settlementStage === "Settled" &&
-            winningOptionForCalc
-          ) {
-            const won = decision.won ?? false;
-            if (won) {
-              treasuryChange =
-                perBetAllocation * (winningOptionForCalc.odds - 1);
-              outcomeText = "Prediction Won";
-            } else {
-              treasuryChange = -perBetAllocation;
-              outcomeText = "Prediction Lost";
-            }
-          }
-
-          const userVotedInMatch = !!userVoteForMatch;
-          const userAlignedWithLeader =
-            userVotedInMatch && userVoteForMatch === leaderId;
-          const userAlignedWithConsensus =
-            decision && userVoteForMatch === decision.winningOptionId;
-
-          return (
-            <div
-              key={fixture.fixtureId}
-              className={`rounded-2xl backdrop-blur-sm border transition-colors ${
-                userVoteForMatch && !isVotingClosed
-                  ? "border-foreground ring-1 ring-foreground/20"
-                  : "border-border-low"
-              }`}
-            >
-              <button
-                onClick={() => toggleExpanded(fixture.fixtureId)}
-                className={`w-full px-5 py-4 flex items-center justify-between  text-left group hover:bg-foreground/5 transition-colors rounded-2xl ${
-                  isExpanded ? "rounded-b-none" : ""
-                }`}
-              >
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-lg font-semibold flex items-center gap-1.5 flex-wrap">
-                      <span>{getFlagEmoji(fixture.participant1)}</span>
-                      <span>{fixture.participant1}</span>
-                      <span className="text-muted font-normal text-sm mx-0.5">
-                        vs
-                      </span>
-                      <span>{getFlagEmoji(fixture.participant2)}</span>
-                      <span>{fixture.participant2}</span>
-                    </h3>
-                    <div className="flex items-center gap-2 ml-4 shrink-0">
-                      {batchWeek && (
-                        <span className="text-[10px] bg-foreground/5 border border-border-low text-muted px-2 py-0.5 rounded-full font-semibold">
-                          {batchWeek}
-                        </span>
-                      )}
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          stateBadge === "Live"
-                            ? "bg-neutral-200 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-200 animate-pulse"
-                            : stateBadge === "Finished"
-                              ? "bg-neutral-100 text-neutral-800 dark:bg-gray-700 dark:text-gray-300"
-                              : "bg-neutral-100 text-neutral-600 dark:bg-gray-800 dark:text-gray-400"
-                        }`}
-                      >
-                        {stateBadge}
-                      </span>
-                      {isVotingClosed ? null : userVoteForMatch ? (
-                        <span className="text-xs bg-foreground/10 text-foreground px-2 py-0.5 rounded-full font-medium border border-border">
-                          Voted
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted">
-                    {formatStartTime(fixture.startTime)}
-                    <span className="mx-1">·</span>
-                    <span
-                      className={`font-medium ${isVotingClosed ? "text-red-600 dark:text-red-400" : "text-foreground"}`}
-                    >
-                      {votingDeadlineText}
-                    </span>
-                  </p>
-                  {score && matchStarted && (
-                    <div className="mt-2 flex items-center gap-2 text-xs">
-                      <span
-                        className={`px-2 py-0.5 rounded ${
-                          score.status === "Finished"
-                            ? "bg-neutral-100 text-neutral-800 dark:bg-gray-700 dark:text-gray-300"
-                            : "bg-neutral-200 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-200 animate-pulse"
-                        }`}
-                      >
-                        {score.status}
-                      </span>
-                      <span className="font-mono text-foreground">
-                        {score.p1Goals} - {score.p2Goals}
-                      </span>
-                      <span className="text-muted">Live via TXODDS</span>
-                    </div>
-                  )}
-                </div>
-                <svg
-                  className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 ml-3 ${isExpanded ? "rotate-180" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </button>
-
-              <div
-                className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"}`}
-              >
-                <div className="px-5 pb-5 space-y-4">
-                  {decision && (
-                    <div className="p-3 border border-border-low rounded-lg">
-                      <p className="text-xs text-muted">Community Decision</p>
-                      <div className="flex justify-between items-center mt-1">
-                        <span className="text-sm font-medium text-foreground">
-                          ✓ {communityDecisionText}
-                        </span>
-                        {!decision.isSkip && (
-                          <span className="text-sm font-bold text-foreground">
-                            {communityDecisionOdds.toFixed(2)}x
-                          </span>
-                        )}
-                      </div>
-                      {decision.accepted && (
-                        <p className="text-xs text-muted mt-1">
-                          Protocol bet placed
-                        </p>
-                      )}
-                      {!decision.isSkip && !decision.accepted && (
-                        <p className="text-xs text-amber-600 dark:text-yellow-400 mt-1">
-                          No allocation — budget full
-                        </p>
-                      )}
-                      {settlementStage === "Settled" && decision.accepted && (
-                        <div className="mt-2 pt-2 border-t border-border-low">
-                          <div className="flex justify-between text-xs">
-                            <span
-                              className={`${decision.won ? "text-foreground font-semibold" : "text-red-600 dark:text-red-400"}`}
-                            >
-                              {outcomeText}
-                            </span>
-                            <span className="font-mono">
-                              {treasuryChange >= 0 ? "+" : ""}
-                              {treasuryChange.toFixed(2)} USDC
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Principal always protected
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {!isVotingClosed && userVotedInMatch && (
-                    <div className="text-xs text-muted">
-                      {userAlignedWithLeader ? (
-                        <span className="text-foreground font-semibold">
-                          ✓ You&apos;re aligned with the current consensus.
-                        </span>
-                      ) : (
-                        <span>
-                          Community currently favors another prediction.
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    {fixture.options.map((opt) => {
-                      const disabled =
-                        isVotingClosed ||
-                        !canVote ||
-                        isVotingCompleted ||
-                        (remainingBets === 0 &&
-                          !isVotingClosed &&
-                          !userVoteForMatch);
-                      const chosenOptionId =
-                        chosenVotes[fixture.fixtureId] ?? userVoteForMatch;
-                      const isSelected = chosenOptionId === opt.id;
-                      const voteCount = simulatedVotes[opt.id] || 0;
-                      const percentage =
-                        totalVotes > 0 ? (voteCount / totalVotes) * 100 : 0;
-                      const isLeading = !isVotingClosed && leaderId === opt.id;
-                      const isCommunityWinner =
-                        decision &&
-                        decision.winningOptionId === opt.id &&
-                        !decision.isSkip;
-
-                      const glowClass = isLeading
-                        ? "shadow-[0_0_12px_rgba(0,0,0,0.05)] dark:shadow-[0_0_12px_rgba(255,255,255,0.15)] border-foreground/30 dark:border-white/40"
-                        : "";
-                      const barColor = isLeading
-                        ? "bg-foreground dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.15)] dark:shadow-[0_0_6px_rgba(255,255,255,0.4)]"
-                        : "bg-foreground/20 dark:bg-white/40";
-
-                      return (
-                        <button
-                          key={opt.id}
-                          onClick={() =>
-                            handleChoose(fixture.fixtureId, opt.id)
-                          }
-                          disabled={disabled}
-                          className={`w-full text-left p-3 rounded-lg border transition ${glowClass} ${
-                            disabled && !isVotingClosed
-                              ? "border-border-low bg-foreground/[0.01] dark:border-gray-800 dark:bg-gray-900/50 cursor-not-allowed opacity-70"
-                              : isSelected
-                                ? "border-foreground bg-foreground/5 dark:border-white dark:bg-white/10"
-                                : "border-border-low hover:border-gray-500"
-                          }`}
-                        >
-                          <div className="flex justify-between items-center gap-4">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">
-                                {opt.label}
-                              </span>
-                              {isLeading && (
-                                <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
-                                  Leading
-                                </span>
-                              )}
-                              {isCommunityWinner && (
-                                <span className="text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-semibold">
-                                  Winner
-                                </span>
-                              )}
-                              {userVoteForMatch === opt.id && (
-                                <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
-                                  Your Vote
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted">
-                                {percentage.toFixed(2)}%
-                              </span>
-                              <span className="text-xs text-muted">
-                                {voteCount}
-                              </span>
-                              <span className="text-lg font-bold text-foreground whitespace-nowrap">
-                                {opt.odds.toFixed(2)}x
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-2 w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-1">
-                            <div
-                              className={`h-1 rounded-full ${barColor}`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      onClick={() => handleChoose(fixture.fixtureId, skipId)}
-                      disabled={
-                        isVotingClosed ||
-                        !canVote ||
-                        isVotingCompleted ||
-                        (remainingBets === 0 &&
-                          !isVotingClosed &&
-                          !userVoteForMatch)
-                      }
-                      className={`w-full text-left p-3 rounded-lg border transition ${
-                        isVotingClosed ||
-                        !canVote ||
-                        isVotingCompleted ||
-                        (remainingBets === 0 &&
-                          !isVotingClosed &&
-                          !userVoteForMatch)
-                          ? "border-border-low bg-foreground/[0.01] dark:border-gray-800 dark:bg-gray-900/50 cursor-not-allowed opacity-70"
-                          : (chosenVotes[fixture.fixtureId] ??
-                                userVoteForMatch) === skipId
-                            ? "border-foreground bg-foreground/5 dark:border-white dark:bg-white/10"
-                            : "border-border-low hover:border-gray-500"
-                      } ${!isVotingClosed && leaderId === skipId ? "shadow-[0_0_12px_rgba(0,0,0,0.05)] dark:shadow-[0_0_12px_rgba(255,255,255,0.15)] border-foreground/30 dark:border-white/40" : ""}`}
-                    >
-                      <div className="flex justify-between items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm text-muted">
-                            Skip this match
-                          </span>
-                          {!isVotingClosed && leaderId === skipId && (
-                            <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
-                              Leading
-                            </span>
-                          )}
-                          {userVoteForMatch === skipId && (
-                            <span className="text-[10px] bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full font-semibold border border-border">
-                              Your Vote
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted">
-                            {totalVotes > 0
-                              ? ((skipVotes / totalVotes) * 100).toFixed(2) +
-                                "%"
-                              : "0.00%"}
-                          </span>
-                          <span className="text-xs text-muted">
-                            {skipVotes}
-                          </span>
-                          <span className="text-sm text-muted">—</span>
-                        </div>
-                      </div>
-                      <div className="mt-2 w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-1">
-                        <div
-                          className={`h-1 rounded-full ${leaderId === skipId ? "bg-foreground dark:bg-white shadow-[0_0_6px_rgba(0,0,0,0.15)] dark:shadow-[0_0_6px_rgba(255,255,255,0.4)]" : "bg-foreground/20 dark:bg-white/40"}`}
-                          style={{
-                            width: `${totalVotes > 0 ? (skipVotes / totalVotes) * 100 : 0}%`,
-                          }}
-                        />
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* Vote Button */}
-                  {!isVotingClosed &&
-                    chosenVotes[fixture.fixtureId] !== undefined && (
-                      <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <button
-                          onClick={() => {
-                            const optionId = chosenVotes[fixture.fixtureId];
-                            if (optionId) {
-                              handleVote(fixture.fixtureId, optionId);
-                            }
-                          }}
-                          disabled={
-                            chosenVotes[fixture.fixtureId] === userVoteForMatch
-                          }
-                          className={`w-full py-2.5 px-4 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 ${
-                            chosenVotes[fixture.fixtureId] === userVoteForMatch
-                              ? "bg-foreground/10 text-muted border border-border-low cursor-not-allowed"
-                              : "bg-foreground text-background hover:bg-foreground/90 hover:scale-[1.01] shadow-md"
-                          }`}
-                        >
-                          {chosenVotes[fixture.fixtureId] ===
-                          userVoteForMatch ? (
-                            <>
-                              <span>🔒</span> You already voted this
-                            </>
-                          ) : (
-                            <>
-                              <span>🗳️</span> Vote
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-
-                  {totalVotes > 0 && (
-                    <div className="flex items-center justify-between text-xs text-gray-500 mt-2">
-                      <span>{totalVotes} participants voted</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-1 text-xs text-neutral-400 dark:text-gray-600 mt-2">
-                    <span
-                      className={
-                        settlementStage === "Voting Open"
-                          ? "text-foreground font-semibold"
-                          : ""
-                      }
-                    >
-                      Voting Open
-                    </span>
-                    <span className="mx-1">→</span>
-                    <span
-                      className={
-                        settlementStage === "Consensus Locked"
-                          ? "text-foreground font-semibold"
-                          : ""
-                      }
-                    >
-                      Locked
-                    </span>
-                    <span className="mx-1">→</span>
-                    <span
-                      className={
-                        settlementStage === "Awaiting Result" ||
-                        settlementStage === "Match Live"
-                          ? "text-foreground font-semibold"
-                          : ""
-                      }
-                    >
-                      Live
-                    </span>
-                    <span className="mx-1">→</span>
-                    <span
-                      className={
-                        settlementStage === "Settled"
-                          ? "text-foreground font-semibold"
-                          : ""
-                      }
-                    >
-                      Settled
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
+  
 }

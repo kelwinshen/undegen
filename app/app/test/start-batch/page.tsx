@@ -12,8 +12,9 @@ import {
 import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
 import Header from "@/app/components/Header";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
-const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
 const START_BATCH_DISCRIMINATOR = Buffer.from([147, 69, 236, 227, 64, 168, 57, 68]);
@@ -91,7 +92,7 @@ export default function StartBatchTest() {
   const fetchLatestBatchId = async () => {
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const [configPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("protocol_config")],
         programId
@@ -141,7 +142,7 @@ export default function StartBatchTest() {
 
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const operator = getOperatorKeypair();
 
       const batchIdBuffer = Buffer.alloc(8);

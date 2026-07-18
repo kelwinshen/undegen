@@ -1,5 +1,5 @@
 {
-  "address": "AH9Uibbi3vvUq3PkdTZTz3revx4GoPEN3bJeXh8A57HL",
+  "address": "BkMhRmJCsnZ2bW9RkjK3mPQTEbtY6gpnX8H7AJQRrmbh",
   "metadata": {
     "name": "lottery",
     "version": "0.1.0",
@@ -193,16 +193,75 @@
       "args": []
     },
     {
-      "name": "draw_winner",
+      "name": "initialize_lottery",
       "discriminator": [
-        250,
-        103,
-        118,
-        147,
-        219,
-        235,
-        169,
-        220
+        113,
+        199,
+        243,
+        247,
+        73,
+        217,
+        33,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "lottery_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "request_randomness",
+      "discriminator": [
+        213,
+        5,
+        173,
+        166,
+        37,
+        236,
+        31,
+        18
       ],
       "accounts": [
         {
@@ -268,65 +327,81 @@
               }
             ]
           }
+        },
+        {
+          "name": "randomness",
+          "docs": [
+            "admin via the Switchboard SDK ahead of time. Ownership and authority are",
+            "enforced by the `randomness_commit` CPI itself."
+          ],
+          "writable": true
+        },
+        {
+          "name": "queue"
+        },
+        {
+          "name": "oracle",
+          "writable": true
+        },
+        {
+          "name": "recent_slothashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "switchboard_program",
+          "address": "Aio4gaXjXzJNVLtzwtNVmSqGKpANtXhybbkhtAC94ji2"
         }
       ],
       "args": []
     },
     {
-      "name": "initialize_lottery",
+      "name": "reveal_winner",
       "discriminator": [
-        113,
-        199,
-        243,
-        247,
-        73,
-        217,
-        33,
-        11
+        234,
+        209,
+        237,
+        109,
+        16,
+        196,
+        64,
+        254
       ],
       "accounts": [
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
         {
           "name": "mint"
         },
         {
-          "name": "lottery_config",
+          "name": "round",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
                   114,
-                  121,
-                  95,
-                  99,
                   111,
+                  117,
                   110,
-                  102,
-                  105,
-                  103
+                  100
                 ]
               },
               {
                 "kind": "account",
                 "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "Round"
               }
             ]
           }
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "randomness",
+          "docs": [
+            "`round.randomness_account` and parsed via `read_revealed_value`."
+          ]
         }
       ],
       "args": []
@@ -573,6 +648,31 @@
       "code": 6007,
       "name": "Unauthorized",
       "msg": "Unauthorized"
+    },
+    {
+      "code": 6008,
+      "name": "RoundNotExpired",
+      "msg": "Round cannot be drawn until its 7-day duration has elapsed"
+    },
+    {
+      "code": 6009,
+      "name": "RandomnessNotRequested",
+      "msg": "Round is not waiting on randomness"
+    },
+    {
+      "code": 6010,
+      "name": "RandomnessAccountMismatch",
+      "msg": "Randomness account does not match the one committed for this round"
+    },
+    {
+      "code": 6011,
+      "name": "RandomnessNotResolved",
+      "msg": "Switchboard randomness has not been revealed in this slot yet"
+    },
+    {
+      "code": 6012,
+      "name": "RandomnessCommitFailed",
+      "msg": "Failed to commit the Switchboard randomness request"
     }
   ],
   "types": [
@@ -670,6 +770,14 @@
             "type": "u64"
           },
           {
+            "name": "start_time",
+            "type": "i64"
+          },
+          {
+            "name": "randomness_account",
+            "type": "pubkey"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -683,6 +791,9 @@
         "variants": [
           {
             "name": "Open"
+          },
+          {
+            "name": "RandomnessRequested"
           },
           {
             "name": "Drawn"
@@ -704,6 +815,14 @@
       "name": "LOTTERY_CONFIG_SEED",
       "type": "bytes",
       "value": "[108, 111, 116, 116, 101, 114, 121, 95, 99, 111, 110, 102, 105, 103]"
+    },
+    {
+      "name": "ROUND_DURATION_SECONDS",
+      "docs": [
+        "Minimum time a round must stay open before the admin can request the draw."
+      ],
+      "type": "i64",
+      "value": "604800"
     },
     {
       "name": "ROUND_SEED",

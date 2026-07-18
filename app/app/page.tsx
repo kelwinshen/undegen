@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import ConsensusVoting from "./components/ConsensusVoting";
 import SyndicateSidebar from "./components/SyndicateSidebar";
 import BatchTimer from "./components/BatchTimer";
@@ -32,6 +33,14 @@ export default function Live() {
   } = useUndegenProgram();
 
   const [userVotes, setUserVotes] = useState<Record<number, string>>({});
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
   // Per-batch voting/match status for the sidebar's Live Batches list — each
   // Active batch's fixture mapping is fetched independently of whichever
   // batch is currently selected/focused, since that only drives `fixtures`.
@@ -75,7 +84,7 @@ export default function Live() {
   }, [batches, selectedBatchId]);
 
   useEffect(() => {
-    if (!liveBatchState || fixtures.length > 0) {
+    if (!liveBatchState) {
       setBetTermProposals([]);
       return;
     }
@@ -86,7 +95,7 @@ export default function Live() {
     return () => {
       cancelled = true;
     };
-  }, [liveBatchState, fixtures, options]);
+  }, [liveBatchState, options]);
 
   const weeklyYieldPool = liveBatchState?.weeklyYieldPool ?? 0;
   const apyBps = liveBatchState?.apyBps ?? 0;
@@ -173,6 +182,22 @@ export default function Live() {
 
   return (
     <div className="relative min-h-screen overflow-x-clip bg-transparent text-foreground">
+      <AnimatePresence>
+        {toastMessage && (
+          <div className="fixed bottom-24 left-4 right-4 z-50 flex justify-center pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              className="bg-card/95 dark:bg-[#111218]/95 border border-border-strong text-foreground text-xs font-bold tracking-wider py-3 px-6 rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 pointer-events-auto"
+            >
+              <span className="h-2 w-2 rounded-full bg-foreground animate-pulse" />
+              {toastMessage}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <main className="relative z-10 mx-auto flex max-w-6xl min-h-screen  flex-col gap-8 border-border-low px-6 pt-28 pb-28 md:pb-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -197,6 +222,7 @@ export default function Live() {
               betTermProposals={betTermProposals}
               onVoteSlot={voteBySlotIndex}
               onSettleDefault={() => settleDefault(liveBatchState.batchId)}
+              onResult={setToastMessage}
               userVotedIndex={liveBatchState.userVotedIndex}
               voteWeights={liveBatchState.voteWeights}
               // Voting is done once consensus locked, whether the operator has

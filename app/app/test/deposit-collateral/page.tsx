@@ -23,8 +23,9 @@ import {
 import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
 import Header from "@/app/components/Header";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
-const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const ALT_ADDRESS_STR = "ETHPWDGA8zLAaxbBMvuJ2Acxy4UNSfi751DqH593tMLY";
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
@@ -334,7 +335,7 @@ function DepositCollateralContent() {
     setLoading(true);
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("batch"), batchIdBuffer],
@@ -405,7 +406,7 @@ function DepositCollateralContent() {
 
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const operator = getOperatorKeypair();
       const mint = batchData.mint;
       const operatorTokenAccount = await getAssociatedTokenAddress(

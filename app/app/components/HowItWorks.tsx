@@ -154,6 +154,55 @@ export default function HowItWorks() {
         </div>
       ),
     },
+    {
+      title: "5. Wager the Weekly Lottery",
+      content: (
+        <div className="space-y-4">
+          <p className="text-neutral-600 dark:text-neutral-400 text-sm md:text-base leading-relaxed">
+            Instead of claiming your earnings straight to your wallet, wager
+            them into the protocol&apos;s shared weekly lottery — one jackpot,
+            open to anyone. Every ticket buys a range of numbers proportional
+            to its size, so the more of the pool you cover, the better your
+            odds. One random draw each week hands the entire jackpot to a
+            single winner.
+          </p>
+          <div className="max-w-md border border-border-low rounded-xl overflow-hidden">
+            <div className="p-4 bg-foreground/5 dark:bg-white/5 space-y-1">
+              <div className="flex justify-between items-center text-xs font-semibold text-neutral-400">
+                <span>WEEKLY LOTTERY · WEEK #12</span>
+                <span className="text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider">
+                  Open
+                </span>
+              </div>
+              <span className="text-2xl font-black text-foreground font-mono block pt-1">
+                4,820 USDC
+              </span>
+              <span className="text-[10px] text-neutral-400 uppercase tracking-wider">
+                Current Jackpot
+              </span>
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-4 border-t border-border-low">
+              <div>
+                <span className="text-[10px] text-neutral-400 block font-medium uppercase tracking-wider">
+                  Your Tickets
+                </span>
+                <span className="text-lg font-bold text-foreground">
+                  50 USDC
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-neutral-400 block font-medium uppercase tracking-wider">
+                  Win Chance
+                </span>
+                <span className="text-lg font-bold text-foreground">
+                  1.04%
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ),
+    },
   ];
 
   return (

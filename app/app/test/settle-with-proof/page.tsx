@@ -19,12 +19,14 @@ import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_I
 import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
 import Header from "@/app/components/Header";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
+import yieldVaultIdl from "@/app/lib/idl/yield_vault.json";
 
-const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const ALT_ADDRESS_STR = "9iTNvzhM6opWF1BPA84Qx39Py2EFTVLXtmojp1d9NJSv";
 const DEVNET_RPC = "https://api.devnet.solana.com";
 const TXODDS_PROGRAM_ID = new PublicKey("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
-const YIELD_VAULT_PROGRAM_ID = new PublicKey("EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS");
+const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
 
 const SETTLE_WITH_PROOF_DISCRIMINATOR = Buffer.from([37, 77, 147, 139, 128, 174, 33, 158]);
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
@@ -176,7 +178,7 @@ function SettleWithProofPageContent() {
     setLoading(true);
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync([Buffer.from("batch"), batchIdBuffer], programId);
       setBatchPda(pda);
@@ -263,7 +265,7 @@ function SettleWithProofPageContent() {
     setResult(null);
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const operator = getOperatorKeypair();
       const mint = batchData.mint;
 

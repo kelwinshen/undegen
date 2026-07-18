@@ -14,9 +14,11 @@ import {
 } from "@solana/web3.js";
 import * as borsh from "@coral-xyz/borsh";
 import Header from "@/app/components/Header";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
+import yieldVaultIdl from "@/app/lib/idl/yield_vault.json";
 
-const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
-const YIELD_VAULT_PROGRAM_ID_STR = "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
+const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -155,7 +157,7 @@ export default function ClaimTest() {
     setLoading(true);
     try {
       const connection = new Connection(DEVNET_RPC);
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("batch"), Buffer.from(batchIdBuffer)],
@@ -227,8 +229,8 @@ export default function ClaimTest() {
 
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
-      const yieldVaultProgramId = new PublicKey(YIELD_VAULT_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
+      const yieldVaultProgramId = YIELD_VAULT_PROGRAM_ID;
       const user = new PublicKey(wallet.account.address);
       const mint = new PublicKey(batchData.mint);
 

@@ -12,7 +12,9 @@ import {
 import * as borsh from "@coral-xyz/borsh";
 import Header from "@/app/components/Header";
 
-const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
+
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
 const CAST_VOTE_DISCRIMINATOR = Buffer.from([20, 212, 15, 189, 69, 180, 69, 151]);
@@ -255,7 +257,7 @@ export default function CastVoteTest() {
 
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
 
       const batchIdBuffer = Buffer.alloc(8);
       new DataView(batchIdBuffer.buffer).setBigUint64(0, BigInt(id), true);
@@ -388,7 +390,7 @@ export default function CastVoteTest() {
 
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
 
       const [userPositionPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_position"), batchPda.toBuffer(), userPubkey.toBuffer()],

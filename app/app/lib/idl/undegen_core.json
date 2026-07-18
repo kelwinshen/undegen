@@ -1,5 +1,5 @@
 {
-  "address": "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY",
+  "address": "7HqLyczSoYYkru9xQ2QwiAN3kp156h2fr4z8EMeNJs3X",
   "metadata": {
     "name": "undegen_core",
     "version": "0.1.0",
@@ -566,7 +566,7 @@
         {
           "name": "batch_token_account",
           "docs": [
-            "Batch's ATA — intermediate account for vault withdrawal"
+            "Batch's ATA \u2014 intermediate account for vault withdrawal"
           ],
           "writable": true,
           "pda": {
@@ -2133,7 +2133,7 @@
     {
       "code": 6021,
       "name": "NothingToGrow",
-      "msg": "No yield generated yet — tick the vault before proposing a match"
+      "msg": "No yield generated yet \u2014 tick the vault before proposing a match"
     },
     {
       "code": 6022,
@@ -2148,7 +2148,7 @@
     {
       "code": 6024,
       "name": "LobbyExpired",
-      "msg": "Lobby has expired — batch was not started within 24h of creation"
+      "msg": "Lobby has expired \u2014 batch was not started within 24h of creation"
     },
     {
       "code": 6025,
@@ -2158,7 +2158,7 @@
     {
       "code": 6026,
       "name": "StaleScoreProof",
-      "msg": "Score proof does not extend past match completion — stale data"
+      "msg": "Score proof does not extend past match completion \u2014 stale data"
     }
   ],
   "types": [

@@ -26,6 +26,21 @@ export default function TestHub() {
               </div>
             </div>
 
+            {/* Lottery */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">Lottery</h3>
+              <div className="space-y-2">
+                <Link href="/test/initialize-lottery" className="block p-3 bg-bg1 border border-border-low rounded-lg hover:border-emerald-400 transition-colors">
+                  <span className="text-sm font-medium">Initialize Lottery</span>
+                  <p className="text-xs text-gray-400 mt-1">Create the LotteryConfig account for the USDC mint (required once).</p>
+                </Link>
+                <Link href="/test/start-round" className="block p-3 bg-bg1 border border-border-low rounded-lg hover:border-emerald-400 transition-colors">
+                  <span className="text-sm font-medium">Start Round</span>
+                  <p className="text-xs text-gray-400 mt-1">Start the next lottery round and create its jackpot token account.</p>
+                </Link>
+              </div>
+            </div>
+
             {/* Yield Vault */}
             <div>
               <h3 className="text-sm font-semibold text-gray-300 mb-2">Yield Vault</h3>

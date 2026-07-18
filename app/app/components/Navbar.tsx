@@ -25,13 +25,11 @@ export default function Navbar() {
   const isConnecting = status === "connecting";
 
   // State for menus
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false);
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [addressCopied, setAddressCopied] = useState(false);
 
   // Refs for click outside
-  const menuRef = useRef<HTMLDivElement>(null);
   const walletDropdownRef = useRef<HTMLDivElement>(null);
 
   // Formatting address
@@ -49,9 +47,6 @@ export default function Navbar() {
   // Handle click outside to close dropdowns
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
       if (
         walletDropdownRef.current &&
         !walletDropdownRef.current.contains(event.target as Node)
@@ -156,60 +151,6 @@ export default function Navbar() {
               >
                 LOTTERY
               </Link>
-
-              {/* Hamburger menu dropdown trigger */}
-              <div className="relative" ref={menuRef}>
-                <button
-                  onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="p-2 -m-2 text-muted hover:text-foreground cursor-pointer focus:outline-none flex items-center"
-                  aria-label="Toggle menu"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M4 6h16M4 12h16M4 18h16"
-                    />
-                  </svg>
-                </button>
-
-                {/* Hamburger Dropdown Menu */}
-                {isMenuOpen && (
-                  <div className="absolute left-0 mt-3 w-40 bg-background border border-border-strong rounded-lg shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <Link
-                      href="/"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="block px-4 py-2.5 text-xs font-bold tracking-widest text-muted hover:text-foreground hover:bg-foreground/5 transition-colors"
-                    >
-                      MATCH
-                    </Link>
-                    <button
-                      onClick={() => setIsMenuOpen(false)}
-                      className="w-full text-left block px-4 py-2.5 text-xs font-bold tracking-widest text-muted hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-                    >
-                      MENU #1
-                    </button>
-                    <button
-                      onClick={() => setIsMenuOpen(false)}
-                      className="w-full text-left block px-4 py-2.5 text-xs font-bold tracking-widest text-muted hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-                    >
-                      MENU #1
-                    </button>
-                    <button
-                      onClick={() => setIsMenuOpen(false)}
-                      className="w-full text-left block px-4 py-2.5 text-xs font-bold tracking-widest text-muted hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-                    >
-                      MENU #1
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 

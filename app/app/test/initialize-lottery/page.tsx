@@ -13,17 +13,20 @@ import {
 import bs58 from "bs58";
 import * as borsh from "@coral-xyz/borsh";
 import Header from "@/app/components/Header";
-import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
+import lotteryIdl from "@/app/lib/idl/lottery.json";
 
-const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
+const LOTTERY_PROGRAM_ID = new PublicKey(lotteryIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
+const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
-const INIT_PROTOCOL_DISCRIMINATOR = Buffer.from([188, 233, 252, 106, 134, 146, 202, 91]);
+const INIT_LOTTERY_DISCRIMINATOR = Buffer.from([113, 199, 243, 247, 73, 217, 33, 11]);
+const LOTTERY_CONFIG_DISCRIMINATOR = Buffer.from([174, 54, 184, 175, 81, 20, 237, 24]);
 
-// Borsh layout for ProtocolConfig (consistent with other pages)
-const ProtocolConfigLayout = borsh.struct([
+// Borsh layout for LotteryConfig (consistent with app/services/undegenProgram.ts)
+const LotteryConfigLayout = borsh.struct([
   borsh.publicKey("admin"),
-  borsh.u64("next_batch_id"),
+  borsh.publicKey("mint"),
+  borsh.u64("current_round_id"),
   borsh.u8("bump"),
 ]);
 
@@ -33,13 +36,50 @@ type LogEntry = {
   message: string;
 };
 
-export default function InitializeProtocolTest() {
+export default function InitializeLotteryTest() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [existingConfig, setExistingConfig] = useState<{ admin: string; currentRoundId: string } | null>(null);
 
   const addLog = (type: LogEntry["type"], message: string) => {
     setLogs((prev) => [...prev, { time: Date.now(), type, message }]);
+  };
+
+  const handleCheck = async () => {
+    setLogs([]);
+    setExistingConfig(null);
+    setResult(null);
+    setLoading(true);
+    try {
+      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const mint = new PublicKey(DEVNET_USDC_MINT);
+      const [lotteryConfigPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("lottery_config"), mint.toBuffer()],
+        LOTTERY_PROGRAM_ID
+      );
+      addLog("info", `LotteryConfig PDA: ${lotteryConfigPda.toBase58()}`);
+
+      const info = await connection.getAccountInfo(lotteryConfigPda);
+      if (!info || !info.data.slice(0, 8).equals(LOTTERY_CONFIG_DISCRIMINATOR)) {
+        addLog("warning", "LotteryConfig not found — not yet initialized.");
+        setResult({ type: "error", message: "LotteryConfig does not exist yet." });
+        return;
+      }
+
+      const decoded = LotteryConfigLayout.decode(info.data.slice(8));
+      setExistingConfig({
+        admin: (decoded.admin as PublicKey).toBase58(),
+        currentRoundId: decoded.current_round_id.toString(),
+      });
+      addLog("success", "LotteryConfig already exists.");
+      setResult({ type: "success", message: "LotteryConfig found." });
+    } catch (err: any) {
+      addLog("error", err.message);
+      setResult({ type: "error", message: err.message });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleInit = async () => {
@@ -64,21 +104,22 @@ export default function InitializeProtocolTest() {
       addLog("success", `Admin: ${adminKeypair.publicKey.toBase58()}`);
 
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = UNDEGEN_PROGRAM_ID;
-      const [configPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("protocol_config")],
-        programId
+      const mint = new PublicKey(DEVNET_USDC_MINT);
+      const [lotteryConfigPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("lottery_config"), mint.toBuffer()],
+        LOTTERY_PROGRAM_ID
       );
-      addLog("info", `Config PDA: ${configPda.toBase58()}`);
+      addLog("info", `LotteryConfig PDA: ${lotteryConfigPda.toBase58()}`);
 
       const ix = new TransactionInstruction({
-        programId,
+        programId: LOTTERY_PROGRAM_ID,
         keys: [
           { pubkey: adminKeypair.publicKey, isSigner: true, isWritable: true },
-          { pubkey: configPda, isSigner: false, isWritable: true },
+          { pubkey: mint, isSigner: false, isWritable: false },
+          { pubkey: lotteryConfigPda, isSigner: false, isWritable: true },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         ],
-        data: INIT_PROTOCOL_DISCRIMINATOR,
+        data: INIT_LOTTERY_DISCRIMINATOR,
       });
 
       const tx = new Transaction().add(ix);
@@ -90,7 +131,7 @@ export default function InitializeProtocolTest() {
       const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
       await connection.confirmTransaction(sig);
       addLog("success", "Confirmed");
-      setResult({ type: "success", message: `Protocol initialized! Tx: ${sig}` });
+      setResult({ type: "success", message: `Lottery initialized! Tx: ${sig}` });
     } catch (err: any) {
       addLog("error", err.message);
       setResult({ type: "error", message: err.message });
@@ -107,12 +148,24 @@ export default function InitializeProtocolTest() {
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
-          <h2 className="text-xl font-bold">Initialize Protocol (Test)</h2>
-          <p className="text-sm text-gray-400">Creates the ProtocolConfig account. Must be done once.</p>
-          <button onClick={handleInit} disabled={loading}
-            className="px-6 py-2 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50">
-            {loading ? "Initializing..." : "Initialize Protocol"}
-          </button>
+          <h2 className="text-xl font-bold">Initialize Lottery (Test)</h2>
+          <p className="text-sm text-gray-400">Creates the LotteryConfig account for the devnet USDC mint. Must be done once before start_round.</p>
+          <div className="flex gap-2">
+            <button onClick={handleCheck} disabled={loading}
+              className="px-6 py-2 border border-border-low rounded-lg hover:border-emerald-400 transition disabled:opacity-50">
+              {loading ? "Checking..." : "Check Status"}
+            </button>
+            <button onClick={handleInit} disabled={loading}
+              className="px-6 py-2 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50">
+              {loading ? "Initializing..." : "Initialize Lottery"}
+            </button>
+          </div>
+          {existingConfig && (
+            <div className="p-3 rounded-lg text-sm bg-bg1 border border-border-low space-y-1">
+              <p>Admin: <span className="font-mono text-xs">{existingConfig.admin}</span></p>
+              <p>Current Round ID: <span className="font-mono">{existingConfig.currentRoundId}</span></p>
+            </div>
+          )}
           {result && (
             <div className={`p-3 rounded-lg text-sm ${result.type === "success" ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}>
               {result.message}

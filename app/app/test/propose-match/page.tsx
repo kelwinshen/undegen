@@ -14,8 +14,9 @@ import {
 import bs58 from "bs58";
 import * as borsh from "@coral-xyz/borsh";
 import Header from "@/app/components/Header";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
-const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 
 const PROPOSE_MATCH_DISCRIMINATOR = Buffer.from([148, 147, 248, 246, 13, 197, 75, 93]);
@@ -241,7 +242,7 @@ export default function ProposeMatchTest() {
 
     try {
       const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
 
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
@@ -374,7 +375,7 @@ export default function ProposeMatchTest() {
         ]);
 
         const ix = new TransactionInstruction({
-          programId: new PublicKey(UNDEGEN_PROGRAM_ID_STR),
+          programId: UNDEGEN_PROGRAM_ID,
           keys: [
             { pubkey: getOperatorKeypair().publicKey, isSigner: true, isWritable: false },
             { pubkey: batchPda, isSigner: false, isWritable: true },

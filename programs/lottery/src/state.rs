@@ -18,6 +18,8 @@ pub struct Round {
     pub total_pool: u64,
     pub status: RoundStatus,
     pub winning_number: u64,
+    pub start_time: i64,
+    pub randomness_account: Pubkey,
     pub bump: u8,
 }
 
@@ -36,6 +38,7 @@ pub struct Entry {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
 pub enum RoundStatus {
     Open,
+    RandomnessRequested,
     Drawn,
     Settled,
 }

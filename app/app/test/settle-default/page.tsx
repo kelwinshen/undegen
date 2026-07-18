@@ -20,8 +20,9 @@ import {
 import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
 import Header from "@/app/components/Header";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
-const UNDEGEN_PROGRAM_ID_STR = "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY";
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const DEVNET_RPC = "https://api.devnet.solana.com";
 const LOOKUP_TABLE_ADDRESS_STR =
   process.env.NEXT_PUBLIC_LOOKUP_TABLE_ADDRESS || "";
@@ -176,7 +177,7 @@ export default function SettleDefault() {
     setLoading(true);
     try {
       const connection = new Connection(DEVNET_RPC);
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("batch"), Buffer.from(batchIdBuffer)],
@@ -233,7 +234,7 @@ export default function SettleDefault() {
 
     try {
       const connection = new Connection(DEVNET_RPC);
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
       const mint = batchData.mint;
 
       const [collateralPda] = PublicKey.findProgramAddressSync(

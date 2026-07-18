@@ -8,6 +8,7 @@ import {
   claimOnChain,
   claimAndJoinLotteryOnChain,
   buyTicketOnChain,
+  claimPrizeOnChain,
   castVoteOnChain,
   settleDefaultOnChain,
   resolveVoteIndex,
@@ -15,6 +16,8 @@ import {
   fetchLatestBatchId,
   fetchLiveMatchForBatch,
   fetchUsdcBalance,
+  subscribeToUsdcAccount,
+  subscribeToBatchAccount,
   BatchState,
   VoteResult,
   Option,
@@ -59,6 +62,10 @@ interface UndegenProgramContextType {
   // currently Open round (real `buy_ticket`). No relationship to any
   // undegen_core batch; anyone with a connected wallet can call this.
   buyLotteryTicket: (amount: number) => Promise<void>;
+  // Claims a Drawn round's jackpot for this wallet (real `claim_prize`).
+  // Reverts unless this wallet's ticket range covers the round's
+  // winning_number and it hasn't already been claimed.
+  claimLotteryPrize: (roundId: bigint) => Promise<void>;
   vote: (fixtureId: number, optionId: string) => Promise<void>;
   // For proposals recovered straight from bet_terms (describeBatchBetTerms) —
   // the slot index (0-3) is already known, so there's no optionId to resolve.
@@ -130,7 +137,10 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
   // weights, and odds stay live without the user ever having to reload —
   // silent so it never re-triggers the loading skeleton, just swaps in
   // whatever changed. /api/txodds is cached server-side (30s TTL) so this
-  // doesn't hammer TxOdds even though it re-fetches on every tick.
+  // doesn't hammer TxOdds even though it re-fetches on every tick. This is a
+  // fallback safety net for every OTHER batch in the list (there could be 30+
+  // of them — too many to hold one WebSocket subscription each); the batch
+  // the user is actually looking at also gets a real-time push below.
   useEffect(() => {
     const interval = setInterval(() => {
       loadState(true);
@@ -138,18 +148,50 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
     return () => clearInterval(interval);
   }, [walletAddress, isConnected]);
 
-  // Real USDC balance for the connected wallet.
+  // Real-time push for the selected batch: subscribes to its Batch account
+  // and (if connected) this wallet's UserPosition account for it, so a
+  // deposit/vote/settlement — this wallet's or anyone else's — shows up the
+  // instant it lands on-chain instead of waiting for the next 15s poll tick.
+  // Debounced because one transaction can touch both accounts at once,
+  // firing this twice back-to-back. Re-subscribes whenever the selected
+  // batch or the connected wallet changes (switching wallet accounts included).
+  useEffect(() => {
+    if (selectedBatchId < 0) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeToBatchAccount(selectedBatchId, walletAddress, () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => loadState(true), 400);
+    });
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, [selectedBatchId, walletAddress]);
+
+  // Real USDC balance for the connected wallet — fetched immediately, kept
+  // live via a WebSocket subscription on the ATA (fires the instant a
+  // deposit/withdrawal/transfer changes it), and backed by a slow poll in
+  // case the socket silently drops (public devnet RPC can do that). Switching
+  // wallet accounts re-runs this whole effect: the old subscription is torn
+  // down and a fresh one opens for the new address.
   useEffect(() => {
     if (!walletAddress) {
       setUsdcBalance(0);
       return;
     }
     let cancelled = false;
-    fetchUsdcBalance(walletAddress).then((balance) => {
-      if (!cancelled) setUsdcBalance(balance);
-    });
+    const refresh = () => {
+      fetchUsdcBalance(walletAddress).then((balance) => {
+        if (!cancelled) setUsdcBalance(balance);
+      });
+    };
+    refresh();
+    const unsubscribe = subscribeToUsdcAccount(walletAddress, refresh);
+    const interval = setInterval(refresh, 20000);
     return () => {
       cancelled = true;
+      unsubscribe();
+      clearInterval(interval);
     };
   }, [walletAddress]);
 
@@ -224,6 +266,13 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
     await refreshState();
   };
 
+  const claimLotteryPrize = async (roundId: bigint) => {
+    if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
+    const sig = await claimPrizeOnChain(roundId, wallet);
+    console.log(`[claim_prize] Claimed Round ${roundId}. Tx: ${sig}`);
+    await refreshState();
+  };
+
   const vote = async (fixtureId: number, optionId: string) => {
     if (!wallet?.account?.address) throw new Error("Connect your wallet first.");
     const batchState = batches.find((b) => b.batchId === selectedBatchId);
@@ -275,6 +324,7 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
       claim,
       claimAndJoinLottery,
       buyLotteryTicket,
+      claimLotteryPrize,
       vote,
       voteBySlotIndex,
       settleDefault,

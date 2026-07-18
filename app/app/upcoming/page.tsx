@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { useUndegenProgram } from "../context/UndegenProgramContext";
 import LobbyPhase from "../components/LobbyPhase";
 import SyndicateSidebar from "../components/SyndicateSidebar";
@@ -18,6 +19,15 @@ export default function UpcomingBatchesPage() {
     selectedBatchId,
     setSelectedBatchId,
   } = useUndegenProgram();
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   const lobbyBatches = useMemo(
     () =>
@@ -82,6 +92,22 @@ export default function UpcomingBatchesPage() {
 
   return (
     <div className="relative min-h-screen overflow-x-clip bg-transparent text-foreground">
+      <AnimatePresence>
+        {toastMessage && (
+          <div className="fixed bottom-24 left-4 right-4 z-50 flex justify-center pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              className="bg-card/95 dark:bg-[#111218]/95 border border-border-strong text-foreground text-xs font-bold tracking-wider py-3 px-6 rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 pointer-events-auto"
+            >
+              <span className="h-2 w-2 rounded-full bg-foreground animate-pulse" />
+              {toastMessage}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <main className="relative z-10 mx-auto flex max-w-6xl min-h-screen flex-col gap-8 border-border-low px-6 pt-28 pb-28 md:pb-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -117,6 +143,7 @@ export default function UpcomingBatchesPage() {
               walletBalance={usdcBalance}
               onDeposit={(amount) => deposit(amount, focusedBatch.batchId)}
               onWithdraw={(amount) => withdraw(amount, focusedBatch.batchId)}
+              onResult={setToastMessage}
             />
           </div>
 

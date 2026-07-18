@@ -265,7 +265,7 @@ export default function HistoryPage() {
                         : "bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-500/20"
                     }`}
                   >
-                    {focusedBatch.userWithdrawn ? "Unstaked" : "Claimable"}
+                    {focusedBatch.userWithdrawn ? "Claimed" : "Claimable"}
                   </span>
                 </div>
 
@@ -373,7 +373,7 @@ export default function HistoryPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-foreground">Batch Summary</h2>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-neutral-100 text-neutral-800 border border-neutral-200 dark:bg-neutral-500/10 dark:text-neutral-400 dark:border-neutral-500/20">
-                  Settled
+                  Completed
                 </span>
               </div>
 

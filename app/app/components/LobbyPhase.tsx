@@ -38,6 +38,10 @@ interface LobbyPhaseProps {
   walletBalance: number;
   onDeposit: (amount: number) => Promise<void>;
   onWithdraw: (amount: number) => Promise<void>;
+  // Reports the outcome of a deposit/withdraw attempt (success or error
+  // message) up to the page, which shows it as a bottom pop-up — same
+  // pattern as the lottery and history pages' on-chain action toasts.
+  onResult?: (message: string) => void;
 }
 
 export default function LobbyPhase({
@@ -51,6 +55,7 @@ export default function LobbyPhase({
   walletBalance,
   onDeposit,
   onWithdraw,
+  onResult,
 }: LobbyPhaseProps) {
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -59,7 +64,6 @@ export default function LobbyPhase({
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const [actionResult, setActionResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const poolSharePct = totalDeposited > 0 ? (userDeposited / totalDeposited) * 100 : 0;
   // Mirrors the on-chain bet_size math in start_batch.rs: annual yield / 52
   // weeks, split evenly across the batch's 5 weekly bets.
@@ -96,14 +100,13 @@ export default function LobbyPhase({
     if (isExpired) return;
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount < minimumDeposit) return;
-    setActionResult(null);
     setIsDepositing(true);
     try {
       await onDeposit(amount);
       setDepositAmount("");
-      setActionResult({ type: "success", message: `Staked ${amount.toLocaleString()} USDC.` });
+      onResult?.(`Staked ${amount.toLocaleString()} USDC.`);
     } catch (e: any) {
-      setActionResult({ type: "error", message: e?.message || "Stake failed." });
+      onResult?.(e?.message || "Stake failed.");
     } finally {
       setIsDepositing(false);
     }
@@ -115,14 +118,13 @@ export default function LobbyPhase({
     // get blocked on-chain.
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount <= 0 || amount > userDeposited) return;
-    setActionResult(null);
     setIsWithdrawing(true);
     try {
       await onWithdraw(amount);
       setWithdrawAmount("");
-      setActionResult({ type: "success", message: `Unstaked ${amount.toLocaleString()} USDC.` });
+      onResult?.(`Unstaked ${amount.toLocaleString()} USDC.`);
     } catch (e: any) {
-      setActionResult({ type: "error", message: e?.message || "Unstake failed." });
+      onResult?.(e?.message || "Unstake failed.");
     } finally {
       setIsWithdrawing(false);
     }
@@ -157,10 +159,7 @@ export default function LobbyPhase({
       <div className="flex justify-center mt-4">
         <div className="inline-flex rounded-full bg-neutral-900/30 dark:bg-neutral-950/50 p-1 border border-border-low">
           <button
-            onClick={() => {
-              setActiveTab("deposit");
-              setActionResult(null);
-            }}
+            onClick={() => setActiveTab("deposit")}
             className={`rounded-full px-6 py-1.5 text-xs font-semibold transition ${
               activeTab === "deposit"
                 ? "bg-foreground text-background shadow-sm"
@@ -170,10 +169,7 @@ export default function LobbyPhase({
             Stake
           </button>
           <button
-            onClick={() => {
-              setActiveTab("withdraw");
-              setActionResult(null);
-            }}
+            onClick={() => setActiveTab("withdraw")}
             className={`rounded-full px-6 py-1.5 text-xs font-semibold transition ${
               activeTab === "withdraw"
                 ? "bg-foreground text-background shadow-sm"
@@ -305,18 +301,6 @@ export default function LobbyPhase({
                   : "Unstake"}
           </button>
         )}
-
-        {actionResult && (
-          <div
-            className={`p-2.5 rounded-lg text-xs text-center ${
-              actionResult.type === "success"
-                ? "bg-foreground/10 border border-border text-foreground"
-                : "bg-red-500/10 border border-red-500/30 text-red-500"
-            }`}
-          >
-            {actionResult.message}
-          </div>
-        )}
       </div>
 
       {/* Divider */}
@@ -330,6 +314,38 @@ export default function LobbyPhase({
 
         <div className="space-y-4">
           <div className="space-y-3.5">
+            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Your Position</p>
+
+            <div className="flex justify-between items-center relative">
+              <div className="relative group">
+                <span className="text-muted border-b border-dashed border-neutral-700/50 pb-0.5 cursor-help">
+                  Your Stake
+                </span>
+                <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
+                  Your active stake amount committed and earning yield in this batch.
+                </div>
+              </div>
+              <span className="font-bold text-foreground">
+                {userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center relative">
+              <div className="relative group">
+                <span className="text-muted border-b border-dashed border-neutral-700/50 pb-0.5 cursor-help">
+                  Your Pool Share
+                </span>
+                <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
+                  Your stake as a share of this batch's total pool.
+                </div>
+              </div>
+              <span className="font-bold text-foreground">
+                {poolSharePct.toFixed(5)}%
+              </span>
+            </div>
+          </div>
+
+          <div className="border-t border-border-low/60 pt-3.5 space-y-3.5">
             <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Pool</p>
 
             <div className="flex justify-between items-center relative">
@@ -399,38 +415,6 @@ export default function LobbyPhase({
               </div>
               <span className="font-bold text-foreground">
                 {participantCount}
-              </span>
-            </div>
-          </div>
-
-          <div className="border-t border-border-low/60 pt-3.5 space-y-3.5">
-            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Your Position</p>
-
-            <div className="flex justify-between items-center relative">
-              <div className="relative group">
-                <span className="text-muted border-b border-dashed border-neutral-700/50 pb-0.5 cursor-help">
-                  Your Stake
-                </span>
-                <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
-                  Your active stake amount committed and earning yield in this batch.
-                </div>
-              </div>
-              <span className="font-bold text-foreground">
-                {userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center relative">
-              <div className="relative group">
-                <span className="text-muted border-b border-dashed border-neutral-700/50 pb-0.5 cursor-help">
-                  Your Pool Share
-                </span>
-                <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
-                  Your stake as a share of this batch's total pool.
-                </div>
-              </div>
-              <span className="font-bold text-foreground">
-                {poolSharePct.toFixed(5)}%
               </span>
             </div>
           </div>

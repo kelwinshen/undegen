@@ -5,24 +5,36 @@ import { motion, AnimatePresence } from "motion/react";
 
 const items = [
   {
-    q: "What happens if the community prediction loses?",
-    a: "Only that week's yield is lost. Your original stake remains safe and continues generating yield for future weeks.",
+    q: "What happens if the community's prediction loses?",
+    a: "Only the yield allocated to that prediction is forfeited. Your deposited principal is never placed at risk and is always fully protected — you keep 100% of it regardless of outcome.",
   },
   {
     q: "How are the predictions chosen?",
-    a: "We fetch real odds from the TXODDS market intelligence feed and curate the highest available outcomes across upcoming matches. The list is frozen daily.",
+    a: "Undegen continuously pulls upcoming fixtures and prediction markets from TXODDS. Every eligible fixture is put to a community vote, and the option with the most votes — including Skip — becomes the protocol's decision.",
   },
   {
     q: "Who pays the winnings?",
-    a: "The protocol treasury covers the payout. Undegen acts as a prediction market, not a bookmaker. The treasury is funded by protocol fees.",
+    a: "The Operator does. Before an approved prediction's match begins, the Operator must post USDC collateral equal to the maximum potential payout. If the prediction wins, that collateral funds the reward; if it loses, the Operator reclaims it.",
+  },
+  {
+    q: "What if the Operator doesn't post collateral or disappears?",
+    a: "If collateral isn't posted in time, the prediction is cancelled and the Operator's commission is reduced. If the Operator later fails to submit settlement proof, the protocol automatically defaults in favor of participants — the Operator forfeits their collateral plus an additional penalty.",
+  },
+  {
+    q: "How is a prediction actually settled?",
+    a: "Trustlessly, on-chain. Once a match ends, the Operator submits TXODDS' cryptographic verification proof of the real result, and the protocol settles the prediction automatically — no manual intervention, no centralized bookmaker.",
   },
   {
     q: "Can I unstake my principal anytime?",
-    a: "Yes, after the 7‑day lock period. You can unstake your full original stake plus any unspent yield.",
+    a: "Yes, while your batch is still in its Lobby phase you can deposit or withdraw freely. Once the batch locks for the week, principal stays locked until the batch settles — at which point you claim your full stake back alongside any rewards.",
+  },
+  {
+    q: "What's the Weekly Jackpot?",
+    a: "An optional, principal-free way to chase extra upside. After a batch settles, you can claim your rewards immediately or wager some/all of them into the shared jackpot for a chance at a much larger payout, decided by verifiable on-chain randomness. Your deposited principal is never eligible — only rewards you've already earned.",
   },
   {
     q: "What makes Undegen different from sports betting?",
-    a: "You never risk your principal. You’re always staking, and the community’s pooled yield makes collective predictions. It’s a treasury‑governed syndicate with zero personal downside.",
+    a: "You're never placing a personal bet. You stake stablecoins, the community collectively decides where the protocol's generated yield gets deployed, and only that yield is ever at risk — your principal stays protected the entire time.",
   },
 ];
 

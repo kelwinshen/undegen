@@ -122,6 +122,7 @@ export async function GET(request: Request) {
             marketType: market.SuperOddsType,
             outcome,
             period: periodPrefix,
+            competition: f.Competition,
             label: buildReadableLabel(
               f.Participant1,
               f.Participant2,

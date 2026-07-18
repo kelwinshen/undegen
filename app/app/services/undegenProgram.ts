@@ -34,6 +34,7 @@ export interface Option {
   marketType?: string;
   outcome?: string;
   period?: number;
+  competition?: string;
 }
 
 // A real-world match, resolved either from live TxOdds data or reconstructed
@@ -152,6 +153,7 @@ const LEAVE_BATCH_DISCRIMINATOR = Buffer.from([238, 161, 41, 130, 22, 134, 9, 15
 const CLAIM_DISCRIMINATOR = Buffer.from([62, 198, 214, 193, 213, 159, 108, 210]);
 const CLAIM_AND_JOIN_LOTTERY_DISCRIMINATOR = Buffer.from([172, 154, 144, 50, 228, 215, 185, 209]);
 const BUY_TICKET_DISCRIMINATOR = Buffer.from([11, 24, 17, 193, 168, 116, 164, 169]);
+const CLAIM_PRIZE_DISCRIMINATOR = Buffer.from([157, 233, 139, 121, 246, 62, 234, 235]);
 const LOTTERY_CONFIG_DISCRIMINATOR = Buffer.from([174, 54, 184, 175, 81, 20, 237, 24]);
 const LOTTERY_ROUND_DISCRIMINATOR = Buffer.from([87, 127, 165, 51, 73, 78, 116, 174]);
 const LOTTERY_ENTRY_DISCRIMINATOR = Buffer.from([63, 18, 152, 113, 215, 246, 221, 250]);
@@ -488,12 +490,16 @@ const LotteryConfigLayout = borsh.struct([
   borsh.u8("bump"),
 ]);
 
+// Order must match RoundStatus exactly (programs/lottery/src/state.rs) — a
+// borsh rustEnum's variants are matched positionally by index, not by name.
 const LotteryRoundStatusLayout = borsh.rustEnum([
   borsh.struct([], "Open"),
+  borsh.struct([], "RandomnessRequested"),
   borsh.struct([], "Drawn"),
   borsh.struct([], "Settled"),
 ]);
 
+// Field order must match the on-chain Round struct exactly (state.rs).
 const LotteryRoundLayout = borsh.struct([
   borsh.u64("round_id"),
   borsh.publicKey("mint"),
@@ -501,21 +507,55 @@ const LotteryRoundLayout = borsh.struct([
   borsh.u64("total_pool"),
   LotteryRoundStatusLayout.replicate("status"),
   borsh.u64("winning_number"),
+  borsh.i64("start_time"),
+  borsh.publicKey("randomness_account"),
   borsh.u8("bump"),
 ]);
+
+export type LotteryRoundStatus = "Open" | "RandomnessRequested" | "Drawn" | "Settled";
+
+// Minimum time a round must stay open before the admin can request the draw
+// (programs/lottery/src/constants.rs's ROUND_DURATION_SECONDS — also in the
+// IDL's `constants` array, but hardcoded here like every other on-chain
+// constant in this file rather than parsed out of the IDL at runtime).
+export const LOTTERY_ROUND_DURATION_SECONDS = 7 * 24 * 60 * 60;
 
 export interface LotteryRoundState {
   roundId: bigint;
   roundPda: string;
   jackpotTokenAccount: string;
   totalPool: number;
-  status: "Open" | "Drawn" | "Settled";
+  status: LotteryRoundStatus;
   winningNumber: bigint;
+  // ms epoch — when start_round created this round (Clock::get() at that
+  // instruction). Combined with LOTTERY_ROUND_DURATION_SECONDS, this is when
+  // request_randomness (and therefore reveal_winner) first becomes callable.
+  startTime: number;
+  // This wallet's ticket in this round, if any — null when not connected or
+  // no ticket was bought. isWinner mirrors claim_prize.rs's own range check
+  // so the UI never re-derives that logic independently.
+  myEntry: (LotteryEntryState & { isWinner: boolean }) | null;
 }
 
 export interface LotteryConfigState {
   admin: string;
   currentRoundId: bigint;
+}
+
+// Shared by fetchActiveLotteryRound and fetchAllLotteryRoundsOnChain so the
+// layout decode + unit conversion only lives in one place.
+function decodeLotteryRoundAccount(roundId: bigint, roundPda: PublicKey, data: Buffer): Omit<LotteryRoundState, "myEntry"> {
+  const round = LotteryRoundLayout.decode(data.slice(8));
+  const status = (Object.keys(round.status)[0] as LotteryRoundStatus) ?? "Settled";
+  return {
+    roundId,
+    roundPda: roundPda.toBase58(),
+    jackpotTokenAccount: (round.jackpot_token_account as PublicKey).toBase58(),
+    totalPool: Number(round.total_pool.toString()) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
+    status,
+    winningNumber: BigInt(round.winning_number.toString()),
+    startTime: Number(round.start_time.toString()) * 1000,
+  };
 }
 
 /** Whether LotteryConfig exists yet at all — false before anyone has called `initialize_lottery`. */
@@ -550,18 +590,10 @@ export async function fetchActiveLotteryRound(): Promise<LotteryRoundState | nul
   const roundInfo = await connection.getAccountInfo(roundPda);
   if (!roundInfo || !roundInfo.data.slice(0, 8).equals(LOTTERY_ROUND_DISCRIMINATOR)) return null;
 
-  const round = LotteryRoundLayout.decode(roundInfo.data.slice(8));
-  const status = (Object.keys(round.status)[0] as "Open" | "Drawn" | "Settled") ?? "Settled";
-  if (status !== "Open") return null;
+  const decoded = decodeLotteryRoundAccount(currentRoundId, roundPda, roundInfo.data);
+  if (decoded.status !== "Open") return null;
 
-  return {
-    roundId: currentRoundId,
-    roundPda: roundPda.toBase58(),
-    jackpotTokenAccount: (round.jackpot_token_account as PublicKey).toBase58(),
-    totalPool: Number(round.total_pool.toString()) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
-    status,
-    winningNumber: BigInt(round.winning_number.toString()),
-  };
+  return { ...decoded, myEntry: null };
 }
 
 const LotteryEntryLayout = borsh.struct([
@@ -581,23 +613,78 @@ export interface LotteryEntryState {
   claimed: boolean;
 }
 
-/** This user's ticket range in a given round, if they've bought one — null otherwise. */
-export async function fetchLotteryEntry(roundPda: string, userAddress: string): Promise<LotteryEntryState | null> {
+/**
+ * Bulk-fetch every round in `roundIds` (one `getMultipleAccountsInfo` for all
+ * Round PDAs, one for all Entry PDAs when `userAddress` is given) — same
+ * two-call shape as `fetchAllBatchesOnChain`, so a full round-history list
+ * doesn't cost one RPC round-trip per round. `roundIds` should be 1..
+ * `currentRoundId` (from `fetchLotteryConfig`); round 0 never exists since
+ * `current_round_id` starts at 1 after the first `start_round`.
+ */
+export async function fetchAllLotteryRoundsOnChain(
+  roundIds: bigint[],
+  userAddress: string | null
+): Promise<LotteryRoundState[]> {
+  if (roundIds.length === 0) return [];
   const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
-  const entryPda = deriveLotteryEntryPda(new PublicKey(roundPda), new PublicKey(userAddress));
-  const info = await connection.getAccountInfo(entryPda);
-  if (!info || !info.data.slice(0, 8).equals(LOTTERY_ENTRY_DISCRIMINATOR)) return null;
 
-  const entry = LotteryEntryLayout.decode(info.data.slice(8));
-  const amountRaw = BigInt(entry.amount.toString());
-  if (amountRaw <= BigInt(0)) return null;
+  const roundPdas = roundIds.map((id) => deriveLotteryRoundPda(id));
 
-  return {
-    amount: Number(amountRaw) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
-    startOffset: BigInt(entry.start_offset.toString()),
-    endOffset: BigInt(entry.end_offset.toString()),
-    claimed: Boolean(entry.claimed),
-  };
+  const CHUNK_SIZE = 100;
+  const roundAccountInfos: (import("@solana/web3.js").AccountInfo<Buffer> | null)[] = [];
+  for (let i = 0; i < roundPdas.length; i += CHUNK_SIZE) {
+    const chunk = roundPdas.slice(i, i + CHUNK_SIZE);
+    const infos = await connection.getMultipleAccountsInfo(chunk);
+    roundAccountInfos.push(...infos);
+  }
+
+  const decoded: Omit<LotteryRoundState, "myEntry">[] = [];
+  const decodedRoundPdas: PublicKey[] = [];
+  roundIds.forEach((roundId, i) => {
+    const info = roundAccountInfos[i];
+    if (!info) return;
+    if (!info.data.slice(0, 8).equals(LOTTERY_ROUND_DISCRIMINATOR)) return;
+    try {
+      decoded.push(decodeLotteryRoundAccount(roundId, roundPdas[i], info.data));
+      decodedRoundPdas.push(roundPdas[i]);
+    } catch {
+      // Unrecognized account size (e.g. a pre-migration Round created before
+      // start_time/randomness_account existed) — skip, don't crash the whole load.
+    }
+  });
+
+  const entriesByRoundPda = new Map<string, LotteryEntryState>();
+  if (userAddress) {
+    const user = new PublicKey(userAddress);
+    const entryPdas = decodedRoundPdas.map((roundPda) => deriveLotteryEntryPda(roundPda, user));
+    const entryInfos: (import("@solana/web3.js").AccountInfo<Buffer> | null)[] = [];
+    for (let i = 0; i < entryPdas.length; i += CHUNK_SIZE) {
+      const chunk = entryPdas.slice(i, i + CHUNK_SIZE);
+      const infos = await connection.getMultipleAccountsInfo(chunk);
+      entryInfos.push(...infos);
+    }
+    decodedRoundPdas.forEach((roundPda, i) => {
+      const info = entryInfos[i];
+      if (!info || !info.data.slice(0, 8).equals(LOTTERY_ENTRY_DISCRIMINATOR)) return;
+      const entry = LotteryEntryLayout.decode(info.data.slice(8));
+      const amountRaw = BigInt(entry.amount.toString());
+      if (amountRaw <= BigInt(0)) return;
+      entriesByRoundPda.set(roundPda.toBase58(), {
+        amount: Number(amountRaw) / 10 ** SOLANA_CONFIG.TOKEN_DECIMALS,
+        startOffset: BigInt(entry.start_offset.toString()),
+        endOffset: BigInt(entry.end_offset.toString()),
+        claimed: Boolean(entry.claimed),
+      });
+    });
+  }
+
+  return decoded.map((round) => {
+    const entry = entriesByRoundPda.get(round.roundPda) ?? null;
+    const myEntry = entry
+      ? { ...entry, isWinner: round.winningNumber >= entry.startOffset && round.winningNumber < entry.endOffset }
+      : null;
+    return { ...round, myEntry };
+  });
 }
 
 /**
@@ -636,6 +723,46 @@ export async function buyTicketOnChain(amount: number, wallet: WalletLike): Prom
   ];
 
   const ix = new TransactionInstruction({ programId: LOTTERY_PROGRAM_ID, keys, data });
+  const tx = new Transaction().add(ix);
+
+  return signAndSend(connection, tx, user, wallet);
+}
+
+/**
+ * Claim a Drawn round's jackpot (real `claim_prize` instruction, user-signed)
+ * — reverts unless this wallet's Entry range covers the round's
+ * winning_number and it hasn't been claimed yet. Ported from
+ * programs/lottery/src/instructions/claim_prize.rs's account list.
+ */
+export async function claimPrizeOnChain(roundId: bigint, wallet: WalletLike): Promise<string> {
+  const address = wallet.account?.address;
+  if (!address) throw new Error("Wallet not connected.");
+  const user = new PublicKey(address);
+
+  const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+
+  const roundPda = deriveLotteryRoundPda(roundId);
+  const roundInfo = await connection.getAccountInfo(roundPda);
+  if (!roundInfo || !roundInfo.data.slice(0, 8).equals(LOTTERY_ROUND_DISCRIMINATOR)) {
+    throw new Error(`Round ${roundId} not found on-chain.`);
+  }
+  const round = decodeLotteryRoundAccount(roundId, roundPda, roundInfo.data);
+
+  const jackpotTokenAccount = new PublicKey(round.jackpotTokenAccount);
+  const winnerTokenAccount = deriveAssociatedTokenAddress(user, USDC_MINT);
+  const entryPda = deriveLotteryEntryPda(roundPda, user);
+
+  const keys = [
+    { pubkey: user, isSigner: true, isWritable: true },
+    { pubkey: USDC_MINT, isSigner: false, isWritable: false },
+    { pubkey: roundPda, isSigner: false, isWritable: true },
+    { pubkey: jackpotTokenAccount, isSigner: false, isWritable: true },
+    { pubkey: winnerTokenAccount, isSigner: false, isWritable: true },
+    { pubkey: entryPda, isSigner: false, isWritable: true },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+  ];
+
+  const ix = new TransactionInstruction({ programId: LOTTERY_PROGRAM_ID, keys, data: CLAIM_PRIZE_DISCRIMINATOR });
   const tx = new Transaction().add(ix);
 
   return signAndSend(connection, tx, user, wallet);
@@ -689,6 +816,53 @@ export async function fetchUsdcBalance(userAddress: string): Promise<number> {
     // Most common cause: the ATA doesn't exist yet (wallet never received this mint).
     return 0;
   }
+}
+
+// Single long-lived connection reserved for real-time WebSocket account
+// subscriptions. web3.js only opens the socket lazily, the moment something
+// calls .onAccountChange on it, and keeps it alive as long as this connection
+// has active subscriptions — the throwaway `new Connection(...)` used by every
+// one-off RPC call above never subscribes, so it never pays for a socket.
+// Reusing one instance here (instead of a fresh Connection per subscribe call)
+// means switching batches/wallets reuses the same socket instead of opening a
+// new one every time.
+const realtimeConnection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+
+/**
+ * Pushes a signal — no payload, callers refetch via fetchUsdcBalance above so
+ * there's only one place owning the decode/decimals logic — the instant
+ * `userAddress`'s USDC associated token account changes on-chain (deposit,
+ * withdrawal, or any external transfer). Safe to call before the ATA exists:
+ * the subscription just fires the first time it's created. Returns an
+ * unsubscribe function; always call it (on wallet change or unmount) or the
+ * socket leaks a listener.
+ */
+export function subscribeToUsdcAccount(userAddress: string, onChange: () => void): () => void {
+  const user = new PublicKey(userAddress);
+  const ata = deriveAssociatedTokenAddress(user, USDC_MINT);
+  const subId = realtimeConnection.onAccountChange(ata, () => onChange(), SOLANA_CONFIG.COMMITMENT);
+  return () => {
+    realtimeConnection.removeAccountChangeListener(subId).catch(() => {});
+  };
+}
+
+/**
+ * Pushes a signal the instant `batchId`'s Batch account changes on-chain
+ * (any wallet's deposit/withdraw/vote/settlement — not just this one), plus
+ * `userAddress`'s UserPosition for it if given. Callers refetch via
+ * fetchBatchOnChain/fetchAllBatchesOnChain to reuse the real decode logic.
+ * Returns a single unsubscribe that tears down both listeners.
+ */
+export function subscribeToBatchAccount(batchId: number, userAddress: string | null, onChange: () => void): () => void {
+  const batchPda = deriveBatchPda(batchId);
+  const subIds = [realtimeConnection.onAccountChange(batchPda, () => onChange(), SOLANA_CONFIG.COMMITMENT)];
+  if (userAddress) {
+    const userPositionPda = deriveUserPositionPda(batchPda, new PublicKey(userAddress));
+    subIds.push(realtimeConnection.onAccountChange(userPositionPda, () => onChange(), SOLANA_CONFIG.COMMITMENT));
+  }
+  return () => {
+    subIds.forEach((id) => realtimeConnection.removeAccountChangeListener(id).catch(() => {}));
+  };
 }
 
 /**
@@ -996,13 +1170,64 @@ async function getFixtureCandidates(fixtureId: number, preloaded: Option[]): Pro
 // slot into a plain-English sentence ("Argentina goals > 0 (Full Time)")
 // using real participant names when known, without needing a matched option.
 function statName(key: number, team1: string, team2: string): string {
-  if (key === STAT_KEY_PART1_GOALS) return `${team1} goals`;
-  if (key === STAT_KEY_PART2_GOALS) return `${team2} goals`;
-  return `Stat ${key}`;
+  const baseKey = key % 1000;
+  const team = (baseKey % 2 === 1) ? team1 : team2;
+
+  let statType = "";
+  switch (baseKey) {
+    case 1:
+    case 2:
+      statType = "Goals";
+      break;
+    case 3:
+    case 4:
+      statType = "Yellow Cards";
+      break;
+    case 5:
+    case 6:
+      statType = "Red Cards";
+      break;
+    case 7:
+    case 8:
+      statType = "Corners";
+      break;
+    default:
+      statType = `Stat ${baseKey}`;
+  }
+
+  return `${team} ${statType}`;
 }
 
 function describeBetTerm(term: RawBetTerm, team1: string, team2: string): string {
-  const periodStr = term.period === 0 ? "Full Time" : "1st Half";
+  let periodStr = "";
+  switch (term.period) {
+    case 0:
+      periodStr = "Full Time";
+      break;
+    case 1000:
+      periodStr = "1st Half";
+      break;
+    case 2000:
+      periodStr = "Halftime";
+      break;
+    case 3000:
+      periodStr = "2nd Half";
+      break;
+    case 4000:
+      periodStr = "ET1";
+      break;
+    case 5000:
+      periodStr = "ET2";
+      break;
+    case 6000:
+      periodStr = "Penalty Shootout";
+      break;
+    case 7000:
+      periodStr = "ETTotal";
+      break;
+    default:
+      periodStr = `Period ${term.period}`;
+  }
   const compSymbol = term.predicateComparison === 0 ? ">" : term.predicateComparison === 1 ? "<" : "==";
   const expr =
     term.op && term.statBKey != null

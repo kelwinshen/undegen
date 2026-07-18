@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="mx-auto max-w-6xl px-6 pt-6 pb-24 md:py-8 flex flex-col md:flex-row items-center justify-between gap-4">
         {/* Left Side: Copyright */}
         <p className="text-sm text-muted">
-          &copy; 2077 Undegen. All rights reserved.
+          &copy; 2026 Undegen. All rights reserved.
         </p>
 
         {/* Right Side: Links */}

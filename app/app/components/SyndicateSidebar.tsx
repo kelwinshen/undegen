@@ -8,6 +8,35 @@ import { SOLANA_CONFIG } from "../lib/solanaConfig";
 // figure never silently disagrees with the stake/unstake percentage math.
 const AMOUNT_DECIMALS = SOLANA_CONFIG.TOKEN_DECIMALS;
 
+// How many "available" (not-yet-joined) rows a joined/available split shows
+// before a "Load More" button is needed — joined rows are always shown in
+// full since that list is bounded by what this one wallet has actually done.
+const PAGE_SIZE = 5;
+
+interface JoinedBatchItem {
+  batchId: number;
+  phase: string;
+  userDeposited: number;
+  poolShare: number;
+  weeklyYield: number;
+  weeklyYieldPool: number;
+  totalDeposited: number;
+  voteStatus?: "no-match" | "voting" | "voting-ended" | "active";
+  userWithdrawn?: boolean;
+}
+
+// Splits a batch list into "joined" (staked) and "available" (not staked),
+// each sorted by batchId ascending — shared by every joined/available list
+// in this component (desktop card + mobile drawer, Live + Upcoming) so the
+// split logic only lives in one place.
+function splitByJoined(items: JoinedBatchItem[]): { joined: JoinedBatchItem[]; available: JoinedBatchItem[] } {
+  const sorted = [...items].sort((a, b) => a.batchId - b.batchId);
+  return {
+    joined: sorted.filter((b) => b.userDeposited > 0),
+    available: sorted.filter((b) => b.userDeposited === 0),
+  };
+}
+
 interface SyndicateSidebarProps {
   isLoading: boolean;
   weeklyYieldPool: number;
@@ -24,17 +53,7 @@ interface SyndicateSidebarProps {
   isConnected: boolean;
   phase: string;
   batchRecord?: { wins: number; losses: number; skipped: number };
-  joinedBatches?: Array<{
-    batchId: number;
-    phase: string;
-    userDeposited: number;
-    poolShare: number;
-    weeklyYield: number;
-    weeklyYieldPool: number;
-    totalDeposited: number;
-    voteStatus?: "no-match" | "voting" | "voting-ended" | "active";
-    userWithdrawn?: boolean;
-  }>;
+  joinedBatches?: JoinedBatchItem[];
   currentBatchId: number;
   onNavigateToBatch?: (batchId: number) => void;
 }
@@ -62,6 +81,12 @@ export default function SyndicateSidebar({
   const isLobby = phase === "Lobby";
   const isEnded = phase === "Ended";
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // How many "available" rows are revealed so far in each joined/available
+  // split — shared between the desktop card and mobile drawer copies of the
+  // same list so "Load More" position stays in sync between them.
+  const [liveAvailableCount, setLiveAvailableCount] = useState(PAGE_SIZE);
+  const [lobbyAvailableCount, setLobbyAvailableCount] = useState(PAGE_SIZE);
+  const [historyAvailableCount, setHistoryAvailableCount] = useState(PAGE_SIZE);
 
   // Current Vault Growth = real compounded winnings plus whatever of the
   // batch's bet capital hasn't been put at risk yet (remainingBudget already
@@ -71,10 +96,6 @@ export default function SyndicateSidebar({
   // the weekly cadence (52 weeks/year), as a % of what's staked. Distinct
   // from the operator-set `apyBps` above (No-Risk APY, the guaranteed rate).
   const unrealizedGrowthApy = totalDeposited > 0 ? (totalFundGrowth * 52 * 100) / totalDeposited : 0;
-
-  // Joined batches surface first — they're the ones you can actually manage.
-  const sortJoinedFirst = (list: typeof joinedBatches) =>
-    [...list].sort((a, b) => (b.userDeposited > 0 ? 1 : 0) - (a.userDeposited > 0 ? 1 : 0));
 
   const voteStatusLabel = (status?: "no-match" | "voting" | "voting-ended" | "active") => {
     switch (status) {
@@ -93,138 +114,177 @@ export default function SyndicateSidebar({
     <>
       <div className="hidden lg:block p-6 rounded-2xl backdrop-blur-sm border border-border-low space-y-4 animate-in fade-in slide-in-from-top-2 duration-300 font-sans">
         {isEnded ? (
-          /* Batch History — every Ended batch, newest first, so switching
-             between past results/withdrawals works the same way the Lobby
-             and Live pickers do. */
+          /* Batch History — split into batches this wallet actually joined
+             ("My Batch History") vs the overall record, newest first within
+             each, so your own results aren't buried in every batch that's
+             ever ended. The overall half paginates via Load More. */
           joinedBatches &&
-          joinedBatches.some((b) => b.phase === "Ended") && (
-            <div className="space-y-2">
-              <h2 className="text-lg font-bold">Batch History</h2>
-              <div className="space-y-1.5">
-                {joinedBatches
-                  .filter((b) => b.phase === "Ended")
-                  .sort((a, b) => b.batchId - a.batchId)
-                  .map((b) => {
-                    const isCurrent = b.batchId === currentBatchId;
-                    const isJoined = b.userDeposited > 0;
-                    return (
-                      <button
-                        key={b.batchId}
-                        onClick={() => !isCurrent && onNavigateToBatch?.(b.batchId)}
-                        disabled={isCurrent}
-                        className={`w-full flex justify-between items-center p-2 rounded-lg border text-left transition ${
-                          isCurrent
-                            ? "border-foreground/15 bg-foreground/5 cursor-default"
-                            : isJoined
-                              ? "border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer"
-                              : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+          joinedBatches.some((b) => b.phase === "Ended") &&
+          (() => {
+            const historyBatches = joinedBatches
+              .filter((b) => b.phase === "Ended")
+              .sort((a, b) => b.batchId - a.batchId);
+            const joined = historyBatches.filter((b) => b.userDeposited > 0);
+            const available = historyBatches.filter((b) => b.userDeposited === 0);
+            const visibleAvailable = available.slice(0, historyAvailableCount);
+            const renderRow = (b: JoinedBatchItem) => {
+              const isCurrent = b.batchId === currentBatchId;
+              const isJoined = b.userDeposited > 0;
+              return (
+                <button
+                  key={b.batchId}
+                  onClick={() => !isCurrent && onNavigateToBatch?.(b.batchId)}
+                  disabled={isCurrent}
+                  className={`w-full flex justify-between items-center p-2 rounded-lg border text-left transition ${
+                    isCurrent
+                      ? "border-foreground/15 bg-foreground/5 cursor-default"
+                      : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-xs font-semibold ${isCurrent || isJoined ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
+                      >
+                        Batch #{b.batchId}
+                      </span>
+                    </div>
+                    {isJoined && (
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        <p className="text-[10px] text-muted font-sans">
+                          Staked:{" "}
+                          <span className="font-mono text-foreground">
+                            {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right flex items-center gap-1.5">
+                    {!isCurrent && (
+                      <span
+                        className={`text-[10px] font-bold rounded px-1.5 py-0.5 font-sans transition ${
+                          isJoined && !b.userWithdrawn
+                            ? "text-amber-700 dark:text-amber-400 border border-amber-500/30 bg-amber-500/10"
+                            : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
                         }`}
                       >
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`text-xs font-semibold ${isCurrent || isJoined ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
-                            >
-                              Batch #{b.batchId}
-                            </span>
-                          </div>
-                          {isJoined && (
-                            <div className="flex flex-col gap-0.5 mt-1">
-                              <p className="text-[10px] text-muted font-sans">
-                                Staked:{" "}
-                                <span className="font-mono text-foreground">
-                                  {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
-                                </span>
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right flex items-center gap-1.5">
-                          {isCurrent ? (
-                            <span className="text-[10px] font-bold text-foreground border border-foreground/30 rounded px-1.5 py-0.5 bg-foreground/10 font-sans">
-                              Selected
-                            </span>
-                          ) : (
-                            <span
-                              className={`text-[10px] font-bold rounded px-1.5 py-0.5 font-sans transition ${
-                                isJoined && !b.userWithdrawn
-                                  ? "text-amber-700 dark:text-amber-400 border border-amber-500/30 bg-amber-500/10"
-                                  : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
-                              }`}
-                            >
-                              {isJoined ? (b.userWithdrawn ? "Unstaked" : "Claimable") : "View ➜"}
-                            </span>
-                          )}
-                        </div>
+                        {isJoined ? (b.userWithdrawn ? "Completed" : "Claimable") : "View ➜"}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            };
+            return (
+              <>
+                {joined.length > 0 && (
+                  <div className="space-y-2">
+                    <h2 className="text-lg font-bold">My Batch History</h2>
+                    <div className="space-y-1.5">{joined.map(renderRow)}</div>
+                  </div>
+                )}
+                {available.length > 0 && (
+                  <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                    <h2 className="text-lg font-bold">Batch History</h2>
+                    <div className="space-y-1.5">{visibleAvailable.map(renderRow)}</div>
+                    {historyAvailableCount < available.length && (
+                      <button
+                        onClick={() => setHistoryAvailableCount((c) => c + PAGE_SIZE)}
+                        className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        Load More
                       </button>
-                    );
-                  })}
-              </div>
-            </div>
-          )
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()
         ) : !isLobby ? (
-          /* Live Batches — only batches already in progress. Lobby batches
-             (joined or not) belong on /upcoming, not here. Joined ones sort
-             to the top since those are the ones you can actually manage. */
+          /* Live Batches — split into what this wallet has staked into
+             ("My Live Batches") vs what's still available, so joined
+             batches are visibly grouped rather than just sorted first in
+             one long list. The available half paginates via Load More. */
           joinedBatches &&
-          joinedBatches.some((b) => b.phase === "Active") && (
-            <div className="space-y-2">
-              <h2 className="text-lg font-bold">Live Batches</h2>
-              <div className="space-y-1.5">
-                {sortJoinedFirst(joinedBatches.filter((b) => b.phase === "Active")).map((b) => {
-                  const isCurrent = b.batchId === currentBatchId;
-                  const isJoined = b.userDeposited > 0;
-                  return (
-                    <button
-                      key={b.batchId}
-                      onClick={() =>
-                        !isCurrent && onNavigateToBatch?.(b.batchId)
-                      }
-                      disabled={isCurrent}
-                      className={`w-full flex justify-between items-center p-2 rounded-lg border text-left transition ${
+          joinedBatches.some((b) => b.phase === "Active") &&
+          (() => {
+            const { joined, available } = splitByJoined(joinedBatches.filter((b) => b.phase === "Active"));
+            const visibleAvailable = available.slice(0, liveAvailableCount);
+            const renderRow = (b: JoinedBatchItem) => {
+              const isCurrent = b.batchId === currentBatchId;
+              const isJoined = b.userDeposited > 0;
+              return (
+                <button
+                  key={b.batchId}
+                  onClick={() =>
+                    !isCurrent && onNavigateToBatch?.(b.batchId)
+                  }
+                  disabled={isCurrent}
+                  className={`w-full flex justify-between items-center p-2 rounded-lg border text-left transition ${
+                    isCurrent
+                      ? "border-foreground/15 bg-foreground/5 cursor-default"
+                      : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-xs font-semibold ${isCurrent || isJoined ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
+                      >
+                        Batch #{b.batchId}
+                      </span>
+                    </div>
+                    {isJoined && (
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        <p className="text-[10px] text-muted font-sans">
+                          Staked:{" "}
+                          <span className="font-mono text-foreground">
+                            {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right flex items-center gap-1.5">
+                    <span
+                      className={`text-[10px] font-bold rounded px-1.5 py-0.5 font-sans transition ${
                         isCurrent
-                          ? "border-foreground/15 bg-foreground/5 cursor-default"
-                          : isJoined
-                            ? "border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer"
-                            : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                          ? "text-foreground border border-foreground/30 bg-foreground/10"
+                          : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
                       }`}
                     >
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`text-xs font-semibold ${isCurrent || isJoined ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
-                          >
-                            Batch #{b.batchId}
-                          </span>
-                        </div>
-                        {isJoined && (
-                          <div className="flex flex-col gap-0.5 mt-1">
-                            <p className="text-[10px] text-muted font-sans">
-                              Staked:{" "}
-                              <span className="font-mono text-foreground">
-                                {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
-                              </span>
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right flex items-center gap-1.5">
-                        <span
-                          className={`text-[10px] font-bold rounded px-1.5 py-0.5 font-sans transition ${
-                            isCurrent
-                              ? "text-foreground border border-foreground/30 bg-foreground/10"
-                              : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
-                          }`}
-                        >
-                          {voteStatusLabel(b.voteStatus)}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )
+                      {voteStatusLabel(b.voteStatus)}
+                    </span>
+                  </div>
+                </button>
+              );
+            };
+            return (
+              <>
+                {joined.length > 0 && (
+                  <div className="space-y-2">
+                    <h2 className="text-lg font-bold">My Live Batches</h2>
+                    <div className="space-y-1.5">{joined.map(renderRow)}</div>
+                  </div>
+                )}
+                {available.length > 0 && (
+                  <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                    <h2 className="text-lg font-bold">Live Batches</h2>
+                    <div className="space-y-1.5">{visibleAvailable.map(renderRow)}</div>
+                    {liveAvailableCount < available.length && (
+                      <button
+                        onClick={() => setLiveAvailableCount((c) => c + PAGE_SIZE)}
+                        className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        Load More
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()
         ) : (
           <>
             {/* Joined Batches — only ones that have actually started; a Lobby
@@ -251,7 +311,7 @@ export default function SyndicateSidebar({
                           className={`w-full flex justify-between items-center p-2 rounded-lg border text-left transition ${
                             isCurrent
                               ? "border-foreground/15 bg-foreground/5 cursor-default"
-                              : "border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer"
+                              : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
                           }`}
                         >
                           <div>
@@ -279,9 +339,12 @@ export default function SyndicateSidebar({
                 </div>
               )}
 
-            {/* Available Batches: not joined yet, plus Lobby batches you've
-                already deposited into but that haven't started (so they don't
-                count as "joined" above yet) — or all batches if not connected */}
+            {/* Upcoming/Lobby batches: split into what this wallet has
+                already staked into ("My Staked Batches") vs what's still
+                available, so a staked-but-not-yet-started batch doesn't get
+                lost wherever its batchId happens to land. Not connected =
+                nothing to split out, so it's just one paginated "All
+                Batches" list. */}
             {joinedBatches &&
               (isConnected
                 ? joinedBatches.some(
@@ -289,76 +352,87 @@ export default function SyndicateSidebar({
                       b.phase !== "Ended" &&
                       (b.userDeposited === 0 || b.phase === "Lobby")
                   )
-                : joinedBatches.some((b) => b.phase !== "Ended")) && (
-                <div
-                  className={`space-y-2 ${isConnected && joinedBatches.some((b) => b.userDeposited > 0 && b.phase !== "Ended" && b.phase !== "Lobby") ? "pt-2 border-t border-border-low" : ""}`}
-                >
-                  <h2 className="text-lg font-bold">
-                    {isConnected ? "Upcoming Batches" : "All Batches"}
-                  </h2>
-                  <div className="space-y-1.5">
-                    {joinedBatches
-                      .filter((b) => {
-                        if (isConnected && b.userDeposited > 0 && b.phase !== "Lobby") return false;
-                        if (b.phase === "Ended") return false;
-                        return true;
-                      })
-                      .sort((a, b) => a.batchId - b.batchId)
-                      .map((b) => {
-                      const isCurrent = b.batchId === currentBatchId;
-                      return (
-                        <button
-                          key={b.batchId}
-                          onClick={() =>
-                            !isCurrent && onNavigateToBatch?.(b.batchId)
-                          }
-                          disabled={isCurrent}
-                          className={`w-full flex justify-between items-center p-2 rounded-lg border text-left transition ${
-                            isCurrent
-                              ? "border-foreground/15 bg-foreground/5 cursor-default"
-                              : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`text-xs font-semibold ${isCurrent ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
-                              >
-                                Batch #{b.batchId}
+                : joinedBatches.some((b) => b.phase !== "Ended")) &&
+              (() => {
+                const eligible = joinedBatches.filter((b) => {
+                  if (isConnected && b.userDeposited > 0 && b.phase !== "Lobby") return false;
+                  if (b.phase === "Ended") return false;
+                  return true;
+                });
+                const { joined, available } = isConnected
+                  ? splitByJoined(eligible)
+                  : { joined: [] as JoinedBatchItem[], available: [...eligible].sort((a, b) => a.batchId - b.batchId) };
+                const visibleAvailable = available.slice(0, lobbyAvailableCount);
+                const renderRow = (b: JoinedBatchItem) => {
+                  const isCurrent = b.batchId === currentBatchId;
+                  return (
+                    <button
+                      key={b.batchId}
+                      onClick={() =>
+                        !isCurrent && onNavigateToBatch?.(b.batchId)
+                      }
+                      disabled={isCurrent}
+                      className={`w-full flex justify-between items-center p-2 rounded-lg border text-left transition ${
+                        isCurrent
+                          ? "border-foreground/15 bg-foreground/5 cursor-default"
+                          : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-xs font-semibold ${isCurrent ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
+                          >
+                            Batch #{b.batchId}
+                          </span>
+                        </div>
+                        {b.userDeposited > 0 && (
+                          <div className="flex flex-col gap-0.5 mt-1">
+                            <p className="text-[10px] text-muted font-sans">
+                              Staked:{" "}
+                              <span className="font-mono text-foreground">
+                                {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
                               </span>
-                            </div>
-                            {b.userDeposited > 0 && (
-                              <div className="flex flex-col gap-0.5 mt-1">
-                                <p className="text-[10px] text-muted font-sans">
-                                  Staked:{" "}
-                                  <span className="font-mono text-foreground">
-                                    {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
-                                  </span>
-                                </p>
-                              </div>
-                            )}
+                            </p>
                           </div>
-                          <div className="text-right flex items-center gap-1.5">
-                            {isCurrent ? (
-                              <span className="text-[10px] font-bold text-foreground border border-foreground/30 rounded px-1.5 py-0.5 bg-foreground/10 font-sans">
-                                Selected
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-bold text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 rounded px-1.5 py-0.5 bg-card dark:bg-neutral-950 font-sans transition">
-                                {b.userDeposited > 0
-                                  ? "Manage ➜"
-                                  : b.phase === "Lobby"
-                                    ? "Join ➜"
-                                    : "View ➜"}
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                        )}
+                      </div>
+                    </button>
+                  );
+                };
+                // The other, pre-existing "My Joined Batches" section above
+                // (already-started stakes) may or may not have rendered —
+                // only add a separating top border here if it did.
+                const myJoinedBatchesShown = joinedBatches.some(
+                  (b) => b.userDeposited > 0 && b.phase !== "Ended" && b.phase !== "Lobby"
+                );
+                return (
+                  <>
+                    {joined.length > 0 && (
+                      <div className={`space-y-2 ${isConnected && myJoinedBatchesShown ? "pt-2 border-t border-border-low" : ""}`}>
+                        <h2 className="text-lg font-bold">My Staked Batches</h2>
+                        <div className="space-y-1.5">{joined.map(renderRow)}</div>
+                      </div>
+                    )}
+                    {available.length > 0 && (
+                      <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                        <h2 className="text-lg font-bold">
+                          {isConnected ? "Available Batches" : "All Batches"}
+                        </h2>
+                        <div className="space-y-1.5">{visibleAvailable.map(renderRow)}</div>
+                        {lobbyAvailableCount < available.length && (
+                          <button
+                            onClick={() => setLobbyAvailableCount((c) => c + PAGE_SIZE)}
+                            className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            Load More
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
           </>
         )}
 
@@ -589,146 +663,189 @@ export default function SyndicateSidebar({
               {/* Batch list */}
               <div className="space-y-6 pb-24 overflow-y-auto flex-1 pr-1">
                 {isEnded ? (
-                  /* Batch History in Mobile Drawer — every Ended batch, newest first */
+                  /* Batch History in Mobile Drawer — same joined/overall
+                     split as the desktop card. */
                   joinedBatches &&
-                  joinedBatches.some((b) => b.phase === "Ended") && (
-                    <div className="space-y-2">
-                      <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
-                        Batch History
-                      </h2>
-                      <div className="space-y-2">
-                        {joinedBatches
-                          .filter((b) => b.phase === "Ended")
-                          .sort((a, b) => b.batchId - a.batchId)
-                          .map((b) => {
-                            const isCurrent = b.batchId === currentBatchId;
-                            const isJoined = b.userDeposited > 0;
-                            return (
-                              <button
-                                key={b.batchId}
-                                onClick={() => {
-                                  if (!isCurrent) {
-                                    onNavigateToBatch?.(b.batchId);
-                                    setIsDrawerOpen(false);
-                                  }
-                                }}
-                                disabled={isCurrent}
-                                className={`w-full flex justify-between items-center p-3 rounded-xl border text-left transition ${
-                                  isCurrent
-                                    ? "border-foreground/15 bg-foreground/5 cursor-default"
-                                    : isJoined
-                                      ? "border-border-low hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer"
-                                      : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                  joinedBatches.some((b) => b.phase === "Ended") &&
+                  (() => {
+                    const historyBatches = joinedBatches
+                      .filter((b) => b.phase === "Ended")
+                      .sort((a, b) => b.batchId - a.batchId);
+                    const joined = historyBatches.filter((b) => b.userDeposited > 0);
+                    const available = historyBatches.filter((b) => b.userDeposited === 0);
+                    const visibleAvailable = available.slice(0, historyAvailableCount);
+                    const renderRow = (b: JoinedBatchItem) => {
+                      const isCurrent = b.batchId === currentBatchId;
+                      const isJoined = b.userDeposited > 0;
+                      return (
+                        <button
+                          key={b.batchId}
+                          onClick={() => {
+                            if (!isCurrent) {
+                              onNavigateToBatch?.(b.batchId);
+                              setIsDrawerOpen(false);
+                            }
+                          }}
+                          disabled={isCurrent}
+                          className={`w-full flex justify-between items-center p-3 rounded-xl border text-left transition ${
+                            isCurrent
+                              ? "border-foreground/15 bg-foreground/5 cursor-default"
+                              : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`text-sm font-bold ${isCurrent || isJoined ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
+                              >
+                                Batch #{b.batchId}
+                              </span>
+                            </div>
+                            {isJoined && (
+                              <div className="flex flex-col gap-0.5 mt-1">
+                                <p className="text-xs text-muted font-sans">
+                                  Staked:{" "}
+                                  <span className="font-mono text-foreground">
+                                    {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+                                  </span>
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right flex items-center gap-1.5">
+                            {!isCurrent && (
+                              <span
+                                className={`text-xs font-bold rounded-lg px-2.5 py-1 font-sans transition ${
+                                  isJoined && !b.userWithdrawn
+                                    ? "text-amber-700 dark:text-amber-400 border border-amber-500/30 bg-amber-500/10"
+                                    : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
                                 }`}
                               >
-                                <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span
-                                      className={`text-sm font-bold ${isCurrent || isJoined ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
-                                    >
-                                      Batch #{b.batchId}
-                                    </span>
-                                  </div>
-                                  {isJoined && (
-                                    <div className="flex flex-col gap-0.5 mt-1">
-                                      <p className="text-xs text-muted font-sans">
-                                        Staked:{" "}
-                                        <span className="font-mono text-foreground">
-                                          {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
-                                        </span>
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="text-right flex items-center gap-1.5">
-                                  {isCurrent ? (
-                                    <span className="text-xs font-bold text-foreground border border-foreground/30 rounded-lg px-2.5 py-1 bg-foreground/10 font-sans">
-                                      Selected
-                                    </span>
-                                  ) : (
-                                    <span
-                                      className={`text-xs font-bold rounded-lg px-2.5 py-1 font-sans transition ${
-                                        isJoined && !b.userWithdrawn
-                                          ? "text-amber-700 dark:text-amber-400 border border-amber-500/30 bg-amber-500/10"
-                                          : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
-                                      }`}
-                                    >
-                                      {isJoined ? (b.userWithdrawn ? "Unstaked" : "Claimable") : "View ➜"}
-                                    </span>
-                                  )}
-                                </div>
+                                {isJoined ? (b.userWithdrawn ? "Completed" : "Claimable") : "View ➜"}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    };
+                    return (
+                      <>
+                        {joined.length > 0 && (
+                          <div className="space-y-2">
+                            <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
+                              My Batch History
+                            </h2>
+                            <div className="space-y-2">{joined.map(renderRow)}</div>
+                          </div>
+                        )}
+                        {available.length > 0 && (
+                          <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                            <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
+                              Batch History
+                            </h2>
+                            <div className="space-y-2">{visibleAvailable.map(renderRow)}</div>
+                            {historyAvailableCount < available.length && (
+                              <button
+                                onClick={() => setHistoryAvailableCount((c) => c + PAGE_SIZE)}
+                                className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
+                              >
+                                Load More
                               </button>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  )
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
                 ) : !isLobby ? (
-                  /* Live Batches in Mobile Drawer — joined ones sort to the top */
+                  /* Live Batches in Mobile Drawer — same joined/available
+                     split as the desktop card. */
                   joinedBatches &&
-                  joinedBatches.some((b) => b.phase === "Active") && (
-                    <div className="space-y-2">
-                      <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
-                        Live Batches
-                      </h2>
-                      <div className="space-y-2">
-                        {sortJoinedFirst(joinedBatches.filter((b) => b.phase === "Active")).map((b) => {
-                          const isCurrent = b.batchId === currentBatchId;
-                          const isJoined = b.userDeposited > 0;
-                          return (
-                            <button
-                              key={b.batchId}
-                              onClick={() => {
-                                if (!isCurrent) {
-                                  onNavigateToBatch?.(b.batchId);
-                                  setIsDrawerOpen(false);
-                                }
-                              }}
-                              disabled={isCurrent}
-                              className={`w-full flex justify-between items-center p-3 rounded-xl border text-left transition ${
+                  joinedBatches.some((b) => b.phase === "Active") &&
+                  (() => {
+                    const { joined, available } = splitByJoined(joinedBatches.filter((b) => b.phase === "Active"));
+                    const visibleAvailable = available.slice(0, liveAvailableCount);
+                    const renderRow = (b: JoinedBatchItem) => {
+                      const isCurrent = b.batchId === currentBatchId;
+                      const isJoined = b.userDeposited > 0;
+                      return (
+                        <button
+                          key={b.batchId}
+                          onClick={() => {
+                            if (!isCurrent) {
+                              onNavigateToBatch?.(b.batchId);
+                              setIsDrawerOpen(false);
+                            }
+                          }}
+                          disabled={isCurrent}
+                          className={`w-full flex justify-between items-center p-3 rounded-xl border text-left transition ${
+                            isCurrent
+                              ? "border-foreground/15 bg-foreground/5 cursor-default"
+                              : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`text-sm font-bold ${isCurrent || isJoined ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
+                              >
+                                Batch #{b.batchId}
+                              </span>
+                            </div>
+                            {isJoined && (
+                              <div className="flex flex-col gap-0.5 mt-1">
+                                <p className="text-xs text-muted font-sans">
+                                  Staked:{" "}
+                                  <span className="font-mono text-foreground">
+                                    {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+                                  </span>
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right flex items-center gap-1.5">
+                            <span
+                              className={`text-xs font-bold rounded-lg px-2.5 py-1 font-sans transition ${
                                 isCurrent
-                                  ? "border-foreground/15 bg-foreground/5 cursor-default"
-                                  : isJoined
-                                    ? "border-border-low hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer"
-                                    : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                                  ? "text-foreground border border-foreground/30 bg-foreground/10"
+                                  : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
                               }`}
                             >
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span
-                                    className={`text-sm font-bold ${isCurrent || isJoined ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
-                                  >
-                                    Batch #{b.batchId}
-                                  </span>
-                                </div>
-                                {isJoined && (
-                                  <div className="flex flex-col gap-0.5 mt-1">
-                                    <p className="text-xs text-muted font-sans">
-                                      Staked:{" "}
-                                      <span className="font-mono text-foreground">
-                                        {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
-                                      </span>
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="text-right flex items-center gap-1.5">
-                                <span
-                                  className={`text-xs font-bold rounded-lg px-2.5 py-1 font-sans transition ${
-                                    isCurrent
-                                      ? "text-foreground border border-foreground/30 bg-foreground/10"
-                                      : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
-                                  }`}
-                                >
-                                  {voteStatusLabel(b.voteStatus)}
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )
+                              {voteStatusLabel(b.voteStatus)}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    };
+                    return (
+                      <>
+                        {joined.length > 0 && (
+                          <div className="space-y-2">
+                            <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
+                              My Live Batches
+                            </h2>
+                            <div className="space-y-2">{joined.map(renderRow)}</div>
+                          </div>
+                        )}
+                        {available.length > 0 && (
+                          <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                            <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
+                              Live Batches
+                            </h2>
+                            <div className="space-y-2">{visibleAvailable.map(renderRow)}</div>
+                            {liveAvailableCount < available.length && (
+                              <button
+                                onClick={() => setLiveAvailableCount((c) => c + PAGE_SIZE)}
+                                className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
+                              >
+                                Load More
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
                 ) : (
                   <>
                     {/* Joined Batches in Mobile Drawer */}
@@ -787,7 +904,8 @@ export default function SyndicateSidebar({
                         </div>
                       )}
 
-                    {/* Available Batches in Mobile Drawer */}
+                    {/* Available Batches in Mobile Drawer — same
+                        joined/available split as the desktop card. */}
                     {joinedBatches &&
                       (isConnected
                         ? joinedBatches.some(
@@ -795,77 +913,89 @@ export default function SyndicateSidebar({
                               b.phase !== "Ended" &&
                               (b.userDeposited === 0 || b.phase === "Lobby")
                           )
-                        : joinedBatches.some((b) => b.phase !== "Ended")) && (
-                        <div className="space-y-2">
-                          <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
-                            {isConnected ? "Upcoming Batches" : "All Batches"}
-                          </h2>
-                          <div className="space-y-2">
-                            {joinedBatches
-                              .filter((b) => {
-                                if (isConnected && b.userDeposited > 0 && b.phase !== "Lobby") return false;
-                                if (b.phase === "Ended") return false;
-                                return true;
-                              })
-                              .sort((a, b) => a.batchId - b.batchId)
-                              .map((b) => {
-                              const isCurrent = b.batchId === currentBatchId;
-                              return (
-                                <button
-                                  key={b.batchId}
-                                  onClick={() => {
-                                    if (!isCurrent) {
-                                      onNavigateToBatch?.(b.batchId);
-                                      setIsDrawerOpen(false);
-                                    }
-                                  }}
-                                  disabled={isCurrent}
-                                  className={`w-full flex justify-between items-center p-3 rounded-xl border text-left transition ${
-                                    isCurrent
-                                      ? "border-foreground/15 bg-foreground/5 cursor-default"
-                                      : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
-                                  }`}
-                                >
-                                  <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span
-                                        className={`text-sm font-bold ${isCurrent ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
-                                      >
-                                        Batch #{b.batchId}
+                        : joinedBatches.some((b) => b.phase !== "Ended")) &&
+                      (() => {
+                        const eligible = joinedBatches.filter((b) => {
+                          if (isConnected && b.userDeposited > 0 && b.phase !== "Lobby") return false;
+                          if (b.phase === "Ended") return false;
+                          return true;
+                        });
+                        const { joined, available } = isConnected
+                          ? splitByJoined(eligible)
+                          : { joined: [] as JoinedBatchItem[], available: [...eligible].sort((a, b) => a.batchId - b.batchId) };
+                        const visibleAvailable = available.slice(0, lobbyAvailableCount);
+                        const myJoinedBatchesShown = joinedBatches.some(
+                          (b) => b.userDeposited > 0 && b.phase !== "Ended" && b.phase !== "Lobby"
+                        );
+                        const renderRow = (b: JoinedBatchItem) => {
+                          const isCurrent = b.batchId === currentBatchId;
+                          return (
+                            <button
+                              key={b.batchId}
+                              onClick={() => {
+                                if (!isCurrent) {
+                                  onNavigateToBatch?.(b.batchId);
+                                  setIsDrawerOpen(false);
+                                }
+                              }}
+                              disabled={isCurrent}
+                              className={`w-full flex justify-between items-center p-3 rounded-xl border text-left transition ${
+                                isCurrent
+                                  ? "border-foreground/15 bg-foreground/5 cursor-default"
+                                  : "border-border-low hover:border-border bg-foreground/[0.02] hover:bg-foreground/[0.05] dark:bg-neutral-900/50 dark:hover:bg-neutral-900/80 cursor-pointer group"
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`text-sm font-bold ${isCurrent ? "text-foreground" : "text-muted group-hover:text-foreground"}`}
+                                  >
+                                    Batch #{b.batchId}
+                                  </span>
+                                </div>
+                                {b.userDeposited > 0 && (
+                                  <div className="flex flex-col gap-0.5 mt-1">
+                                    <p className="text-xs text-muted font-sans">
+                                      Staked:{" "}
+                                      <span className="font-mono text-foreground">
+                                        {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
                                       </span>
-                                    </div>
-                                    {b.userDeposited > 0 && (
-                                      <div className="flex flex-col gap-0.5 mt-1">
-                                        <p className="text-xs text-muted font-sans">
-                                          Staked:{" "}
-                                          <span className="font-mono text-foreground">
-                                            {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
-                                          </span>
-                                        </p>
-                                      </div>
-                                    )}
+                                    </p>
                                   </div>
-                                  <div className="text-right flex items-center gap-1.5">
-                                    {isCurrent ? (
-                                      <span className="text-xs font-bold text-foreground border border-foreground/30 rounded-lg px-2.5 py-1 bg-foreground/10 font-sans">
-                                        Selected
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs font-bold text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 rounded-lg px-2.5 py-1 bg-card dark:bg-neutral-950 font-sans transition">
-                                        {b.userDeposited > 0
-                                          ? "Manage ➜"
-                                          : b.phase === "Lobby"
-                                            ? "Join ➜"
-                                            : "View ➜"}
-                                      </span>
-                                    )}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                                )}
+                              </div>
+                            </button>
+                          );
+                        };
+                        return (
+                          <>
+                            {joined.length > 0 && (
+                              <div className={`space-y-2 ${isConnected && myJoinedBatchesShown ? "pt-2 border-t border-border-low" : ""}`}>
+                                <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
+                                  My Staked Batches
+                                </h2>
+                                <div className="space-y-2">{joined.map(renderRow)}</div>
+                              </div>
+                            )}
+                            {available.length > 0 && (
+                              <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                                <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
+                                  {isConnected ? "Available Batches" : "All Batches"}
+                                </h2>
+                                <div className="space-y-2">{visibleAvailable.map(renderRow)}</div>
+                                {lobbyAvailableCount < available.length && (
+                                  <button
+                                    onClick={() => setLobbyAvailableCount((c) => c + PAGE_SIZE)}
+                                    className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
+                                  >
+                                    Load More
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                   </>
                 )}
               </div>
