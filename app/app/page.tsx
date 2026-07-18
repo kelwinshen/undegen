@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
@@ -60,6 +60,8 @@ export default function Live() {
   const [betTermProposals, setBetTermProposals] = useState<BetTermProposal[]>(
     []
   );
+  const betTermProposalsRequestId = useRef(0);
+  const latestAppliedBetTermProposalsRequestId = useRef(0);
 
   // Voting Session / No Match / Voting Ended, straight off the real on-chain
   // BatchStatus — same field app/test/batch-details reads, no Redis, no
@@ -99,13 +101,18 @@ export default function Live() {
       setBetTermProposals([]);
       return;
     }
-    let cancelled = false;
+    // Gate on the latest *applied* result, not the latest *started* one — a
+    // slow request (e.g. a Redis hiccup) can still resolve with good data
+    // after a newer poll tick has already kicked off its own request; as
+    // long as that newer one hasn't actually applied yet, this one should
+    // still win rather than being silently discarded.
+    const requestId = ++betTermProposalsRequestId.current;
     describeBatchBetTerms(liveBatchState, options).then((proposals) => {
-      if (!cancelled) setBetTermProposals(proposals);
+      if (requestId >= latestAppliedBetTermProposalsRequestId.current) {
+        latestAppliedBetTermProposalsRequestId.current = requestId;
+        setBetTermProposals(proposals);
+      }
     });
-    return () => {
-      cancelled = true;
-    };
   }, [liveBatchState, options]);
 
   const weeklyYieldPool = liveBatchState?.weeklyYieldPool ?? 0;

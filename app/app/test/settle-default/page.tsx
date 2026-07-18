@@ -23,7 +23,7 @@ import Header from "@/app/components/Header";
 import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const LOOKUP_TABLE_ADDRESS_STR =
   process.env.NEXT_PUBLIC_LOOKUP_TABLE_ADDRESS || "";
 
@@ -166,7 +166,7 @@ export default function SettleDefault() {
 
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL);
       const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
@@ -223,7 +223,7 @@ export default function SettleDefault() {
     setResult(null);
 
     try {
-      const connection = new Connection(DEVNET_RPC);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL);
       const programId = UNDEGEN_PROGRAM_ID;
       const mint = batchData.mint;
 

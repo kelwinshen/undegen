@@ -16,7 +16,7 @@ import Header from "@/app/components/Header";
 import lotteryIdl from "@/app/lib/idl/lottery.json";
 
 const LOTTERY_PROGRAM_ID = new PublicKey(lotteryIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
 const INIT_LOTTERY_DISCRIMINATOR = Buffer.from([
@@ -62,7 +62,7 @@ export default function InitializeLotteryTest() {
     setResult(null);
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const mint = new PublicKey(DEVNET_USDC_MINT);
       const [lotteryConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("lottery_config"), mint.toBuffer()],
@@ -124,7 +124,7 @@ export default function InitializeLotteryTest() {
       }
       addLog("success", `Admin: ${adminKeypair.publicKey.toBase58()}`);
 
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const mint = new PublicKey(DEVNET_USDC_MINT);
       const [lotteryConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("lottery_config"), mint.toBuffer()],

@@ -18,7 +18,7 @@ import yieldVaultIdl from "@/app/lib/idl/yield_vault.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
 const INIT_BATCH_DISCRIMINATOR = Buffer.from([
@@ -98,7 +98,7 @@ export default function InitializeBatchTest() {
     ix: TransactionInstruction,
     signer: Keypair
   ): Promise<string> => {
-    const connection = new Connection(DEVNET_RPC, "confirmed");
+    const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
     const tx = new Transaction().add(ix);
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -133,7 +133,7 @@ export default function InitializeBatchTest() {
 
     try {
       const operator = getOperatorKeypair();
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
       const mint = new PublicKey(DEVNET_USDC_MINT);
 

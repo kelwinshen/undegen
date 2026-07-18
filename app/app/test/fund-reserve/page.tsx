@@ -16,7 +16,7 @@ import Header from "@/app/components/Header";
 
 const YIELD_VAULT_PROGRAM_ID_STR =
   "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
 const FUND_RESERVE_DISCRIMINATOR = Buffer.from([
@@ -82,7 +82,7 @@ export default function FundReserveTest() {
 
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL);
       const yieldVaultProgramId = new PublicKey(YIELD_VAULT_PROGRAM_ID_STR);
       const mint = new PublicKey(DEVNET_USDC_MINT);
 
@@ -138,7 +138,7 @@ export default function FundReserveTest() {
       const operator = getOperatorKeypair();
       addLog("info", `Operator: ${operator.publicKey.toBase58()}`);
 
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const yieldVaultProgramId = new PublicKey(YIELD_VAULT_PROGRAM_ID_STR);
       const mint = new PublicKey(DEVNET_USDC_MINT);
 

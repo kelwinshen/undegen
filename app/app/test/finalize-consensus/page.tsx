@@ -16,7 +16,7 @@ import Header from "@/app/components/Header";
 import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 
 const FINALIZE_CONSENSUS_DISCRIMINATOR = Buffer.from([
   158, 21, 141, 117, 251, 129, 243, 22,
@@ -113,7 +113,7 @@ export default function FinalizeConsensusTest() {
   };
 
   const sendTx = async (ix: TransactionInstruction): Promise<string> => {
-    const connection = new Connection(DEVNET_RPC, "confirmed");
+    const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
     const signer = getOperatorKeypair();
     const tx = new Transaction().add(ix);
     const { blockhash } = await connection.getLatestBlockhash();
@@ -143,7 +143,7 @@ export default function FinalizeConsensusTest() {
     setLoading(true);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
 
       const batchIdBuffer = writeUInt64LE(BigInt(id));

@@ -17,7 +17,7 @@ import Header from "@/app/components/Header";
 import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 
 const PROPOSE_MATCH_DISCRIMINATOR = Buffer.from([
   148, 147, 248, 246, 13, 197, 75, 93,
@@ -223,7 +223,7 @@ export default function ProposeMatchTest() {
   };
 
   const sendTx = async (ix: TransactionInstruction): Promise<string> => {
-    const connection = new Connection(DEVNET_RPC, "confirmed");
+    const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
     const signer = getOperatorKeypair();
 
     const tx = new Transaction().add(
@@ -259,7 +259,7 @@ export default function ProposeMatchTest() {
     setLoading(true);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
 
       const batchIdBuffer = writeUInt64LE(id);
@@ -372,7 +372,16 @@ export default function ProposeMatchTest() {
       const timestamps: Record<number, number> = {};
       const slotsMapping: Record<
         number,
-        { messageId: string; ts: number; outcomeIndex: number }
+        {
+          messageId: string;
+          ts: number;
+          outcomeIndex: number;
+          participant1: string;
+          participant2: string;
+          startTime: number;
+          label: string;
+          odds: number;
+        }
       > = {};
 
       for (let i = 0; i < selectedOutcomes.length; i++) {
@@ -385,6 +394,15 @@ export default function ProposeMatchTest() {
           messageId: opt.messageId || opt.id,
           ts: opt.ts || 0,
           outcomeIndex: opt.outcomeIndex,
+          // TXODDS ages a fixture out of its feed once the match starts —
+          // these are the only fallback source describeBatchBetTerms has for
+          // team names/kickoff/odds once that happens, so they need to be
+          // captured now while TXODDS still has the fixture.
+          participant1: opt.participant1,
+          participant2: opt.participant2,
+          startTime: opt.startTime,
+          label: opt.label,
+          odds: opt.odds,
         };
 
         optionsMapping[i] = opt.messageId;

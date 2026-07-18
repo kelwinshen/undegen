@@ -1426,6 +1426,32 @@ async function getFixtureCandidates(
   }
 }
 
+// getFixtureCandidates comes up empty once a fixture kicks off (TxOdds's own
+// options feed excludes anything with startTime <= now) — this looks the
+// fixture up directly by ID via /api/txodds/fixture, which has no such
+// filter, so real team names still resolve after kickoff instead of falling
+// all the way to the Redis-stored proposal-time snapshot (or "Team 1"/"Team 2"
+// if that's missing too, e.g. for proposals saved before it captured names).
+async function getFixtureInfo(fixtureId: number): Promise<{
+  participant1: string;
+  participant2: string;
+  startTime: number;
+} | null> {
+  try {
+    const res = await fetch(`/api/txodds/fixture?fixtureId=${fixtureId}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.participant1 || !data.participant2) return null;
+    return {
+      participant1: data.participant1,
+      participant2: data.participant2,
+      startTime: data.startTime,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Mirrors test/cast-vote's statName/predicateText — turns a raw bet_terms
 // slot into a plain-English sentence ("Argentina goals > 0 (Full Time)")
 // using real participant names when known, without needing a matched option.
@@ -1595,13 +1621,27 @@ export async function describeBatchBetTerms(
     );
     const first = candidates[0] as Option | undefined;
     // The live TxOdds candidate lookup fails once a fixture ages out of the
-    // feed (already started, or simply no longer returned) — fall back to
-    // what propose_match captured at proposal time so team names/kickoff
-    // still render instead of "Fixture <id>".
+    // options/odds feed (already started, or simply no longer returned) —
+    // try a direct-by-ID fixture lookup next (still resolves after kickoff),
+    // then fall back to what propose_match captured at proposal time, so
+    // team names/kickoff still render instead of "Fixture <id>".
+    const fixtureInfo = first ? null : await getFixtureInfo(term.fixtureId);
     const storedSlot = slotsMapping[slotIndex];
-    const team1 = first?.participant1 ?? storedSlot?.participant1 ?? "Team 1";
-    const team2 = first?.participant2 ?? storedSlot?.participant2 ?? "Team 2";
-    const kickoffTimeMs = first?.startTime ?? storedSlot?.startTime ?? null;
+    const team1 =
+      first?.participant1 ??
+      fixtureInfo?.participant1 ??
+      storedSlot?.participant1 ??
+      "Team 1";
+    const team2 =
+      first?.participant2 ??
+      fixtureInfo?.participant2 ??
+      storedSlot?.participant2 ??
+      "Team 2";
+    const kickoffTimeMs =
+      first?.startTime ??
+      fixtureInfo?.startTime ??
+      storedSlot?.startTime ??
+      null;
 
     let multiplier = "—";
     let oddsLabel = storedSlot?.label ?? "";

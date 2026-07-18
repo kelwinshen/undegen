@@ -27,7 +27,7 @@ import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const ALT_ADDRESS_STR = "ETHPWDGA8zLAaxbBMvuJ2Acxy4UNSfi751DqH593tMLY";
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 
 const DEPOSIT_COLLATERAL_DISCRIMINATOR = Buffer.from([
   156, 131, 142, 116, 146, 247, 162, 120,
@@ -328,7 +328,7 @@ function DepositCollateralContent() {
 
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
@@ -399,7 +399,7 @@ function DepositCollateralContent() {
     setResult(null);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
       const operator = getOperatorKeypair();
       const mint = batchData.mint;

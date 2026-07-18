@@ -19,7 +19,7 @@ import yieldVaultIdl from "@/app/lib/idl/yield_vault.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 
 const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -163,7 +163,7 @@ export default function ClaimTest() {
 
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL);
       const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
@@ -245,7 +245,7 @@ export default function ClaimTest() {
     setResult(null);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
       const yieldVaultProgramId = YIELD_VAULT_PROGRAM_ID;
       const user = new PublicKey(wallet.account.address);

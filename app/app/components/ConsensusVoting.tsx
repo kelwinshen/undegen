@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { VoteResult, Option, Fixture } from "@/app/services/undegenProgram";
-import MiniCalendar from "./MiniCalendar";
+
 
 export type { Option, Fixture };
 
@@ -13,6 +13,8 @@ export interface ScoreInfo {
   participant2: string;
   p1Goals: number;
   p2Goals: number;
+  clockSeconds?: number | null;
+  clockRunning?: boolean;
 }
 
 export interface BetTermProposal {
@@ -127,6 +129,14 @@ function formatStartTime(timestamp: number): string {
     timeZone: "UTC",
     timeZoneName: "short",
   });
+}
+
+// TXODDS's live Clock.Seconds is raw elapsed play time, not bounded to a
+// standard 90 minutes (extra time/dev data can run past it) — shown as
+// plain elapsed minutes rather than faking a "45+2'" stoppage-time format,
+// since there's no half-boundary data here to compute that correctly.
+function formatMatchClock(seconds: number): string {
+  return `${Math.floor(seconds / 60)}′`;
 }
 
 function formatCountdown(diffMs: number): string {
@@ -245,11 +255,8 @@ export default function ConsensusVoting({
   fixtures,
   userVotes,
   setUserVotes,
-  simulatedVotes,
-  matchDecisions,
   remainingBets,
   weeklyYieldPool,
-  batchWeek = "Current Week",
   overrideLiveScores,
   isEnded = false,
   canVote = true,
@@ -267,9 +274,7 @@ export default function ConsensusVoting({
   onResult,
 }: ConsensusVotingProps) {
   const [now, setNow] = useState(() => Date.now());
-  const [expandedFixtureIds, setExpandedFixtureIds] = useState<Set<number>>(
-    new Set()
-  );
+
   const [chosenVotes, setChosenVotes] = useState<Record<number, string>>({});
   const [chosenSlot, setChosenSlot] = useState<number | null>(null);
   const [votingSlot, setVotingSlot] = useState<number | null>(null);
@@ -335,6 +340,51 @@ export default function ConsensusVoting({
     const interval = setInterval(fetchScores, 30000);
     return () => clearInterval(interval);
   }, [fixtures, overrideLiveScores]);
+
+  // Live/final score for the batch currently being waited on. Deliberately
+  // separate from the fetchedScores effect above (which keys off `fixtures`,
+  // a match resolved through the older Redis/live-odds matching that can
+  // come up empty once a fixture ages out of TxOdds post-kickoff) — this
+  // keys directly off betTermProposals' term.fixtureId, which
+  // describeBatchBetTerms now resolves reliably even after kickoff. Every
+  // slot in a batch proposes on the same match, so any resolved slot's
+  // fixtureId works.
+  const activeProposal = betTermProposals.find((p) => p.term.fixtureId > 0);
+  const activeFixtureId = activeProposal?.term.fixtureId;
+  const [liveScore, setLiveScore] = useState<ScoreInfo | null>(null);
+  useEffect(() => {
+    if (!isVotingCompleted || !activeFixtureId) {
+      setLiveScore(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchLiveScore = async () => {
+      try {
+        const res = await fetch(`/api/scores?fixtureIds=${activeFixtureId}`);
+        const data = await res.json();
+        const score = (data.scores || []).find(
+          (s: ScoreInfo) => s.fixtureId === activeFixtureId
+        );
+        if (!cancelled) setLiveScore(score ?? null);
+      } catch {
+        if (!cancelled) setLiveScore(null);
+      }
+    };
+    fetchLiveScore();
+    const interval = setInterval(fetchLiveScore, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isVotingCompleted, activeFixtureId]);
+  const FINISHED_STATUSES = new Set([
+    "Finished",
+    "Finished Extra Time",
+    "Finished Penalties",
+  ]);
+  const isLiveScoreFinal = liveScore
+    ? FINISHED_STATUSES.has(liveScore.status)
+    : false;
 
   // Total slots used so far (real matches + skips) — derived from the real
   // on-chain remainingBets prop, not matchDecisions (which only ever holds
@@ -421,17 +471,6 @@ export default function ConsensusVoting({
     }
   };
 
-  const toggleExpanded = (fixtureId: number) => {
-    setExpandedFixtureIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(fixtureId)) {
-        next.delete(fixtureId);
-      } else {
-        next.add(fixtureId);
-      }
-      return next;
-    });
-  };
 
   if (isLoading) {
     return (
@@ -477,6 +516,61 @@ export default function ConsensusVoting({
                   : ""
                 : "The syndicate is waiting for the next TXODDS fixture batch."}
           </p>
+          {liveScore &&
+            liveScore.status !== "Not Started" &&
+            (() => {
+              // Same "Team1 vs Team2" shape renderMatchTextWithFlags splits
+              // on below — reuse it here so the live score gets the same
+              // flag + name treatment as the option rows, with the score
+              // sitting between the two sides instead of "vs".
+              const parts = activeProposal?.matchText.split(" vs ");
+              const [scoreTeam1, scoreTeam2] =
+                parts?.length === 2 ? parts : [null, null];
+              return (
+                <div className="flex flex-col items-center gap-1.5 pt-2">
+                  <span
+                    className={`text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full ${
+                      isLiveScoreFinal
+                        ? "bg-foreground/10 text-foreground"
+                        : "bg-red-500/10 text-red-500"
+                    }`}
+                  >
+                    {isLiveScoreFinal
+                      ? "FULL TIME"
+                      : liveScore.status === "Half Time"
+                        ? "● HALF TIME"
+                        : liveScore.clockSeconds != null
+                          ? `● LIVE — ${formatMatchClock(liveScore.clockSeconds)}`
+                          : `● LIVE — ${liveScore.status}`}
+                  </span>
+                  <div className="flex items-center justify-center gap-3">
+                    {scoreTeam1 && (
+                      <span className="flex flex-col items-center gap-1 text-sm font-semibold text-foreground">
+                        {getFlagEmoji(scoreTeam1) && (
+                          <span className="text-6xl leading-none">
+                            {getFlagEmoji(scoreTeam1)}
+                          </span>
+                        )}
+                        {scoreTeam1}
+                      </span>
+                    )}
+                    <span className="text-5xl font-bold text-foreground">
+                      {liveScore.p1Goals} - {liveScore.p2Goals}
+                    </span>
+                    {scoreTeam2 && (
+                      <span className="flex flex-col items-center gap-1 text-sm font-semibold text-foreground">
+                        {getFlagEmoji(scoreTeam2) && (
+                          <span className="text-6xl leading-none">
+                            {getFlagEmoji(scoreTeam2)}
+                          </span>
+                        )}
+                        {scoreTeam2}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
         </div>
 
         {isActive &&

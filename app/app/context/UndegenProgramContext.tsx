@@ -105,20 +105,35 @@ export function UndegenProgramProvider({ children }: PropsWithChildren) {
   const [selectedBatchId, setSelectedBatchId] = useState(-1);
   const [usdcBalance, setUsdcBalance] = useState(0);
   const didAutoSelectLiveBatch = useRef(false);
+  // loadState() is called from three independent, overlapping triggers (see
+  // below): the initial mount, a 15s poll, and a real-time on-chain push.
+  // With no ordering guarantee between them, a slower older call finishing
+  // after a faster newer one would silently overwrite fresh state with stale
+  // state. These track the latest *applied* call so a late response only
+  // gets applied if nothing newer has already won.
+  const loadStateRequestId = useRef(0);
+  const latestAppliedLoadStateRequestId = useRef(0);
 
   // Load every real batch on-chain (0..next_batch_id-1). `silent` skips the
   // isLoading flip — used by the background poll below so a periodic refresh
   // just seamlessly swaps in updated numbers (vote weights, batch status,
   // odds) instead of flashing the whole page back to a loading skeleton.
   const loadState = async (silent = false) => {
+    const requestId = ++loadStateRequestId.current;
     try {
       if (!silent) setIsLoading(true);
       const optionsRes = await fetch("/api/txodds").then((r) => r.json());
-      setOptions(optionsRes.options || []);
 
       const latestBatchId = await fetchLatestBatchId();
       const batchIds = Array.from({ length: latestBatchId + 1 }, (_, i) => i);
       const realBatches = await fetchAllBatchesOnChain(batchIds, walletAddress);
+
+      // A newer call has already applied its (fresher) result — this one is
+      // stale, drop it instead of overwriting good data with old data.
+      if (requestId < latestAppliedLoadStateRequestId.current) return;
+      latestAppliedLoadStateRequestId.current = requestId;
+
+      setOptions(optionsRes.options || []);
       setBatches(realBatches);
 
       // Auto-select "the live batch" (highest-ID batch currently Active) once,

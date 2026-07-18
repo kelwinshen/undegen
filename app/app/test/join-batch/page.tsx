@@ -19,7 +19,7 @@ import yieldVaultIdl from "@/app/lib/idl/yield_vault.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -128,7 +128,7 @@ export default function JoinBatchTest() {
   const sendTxAsOperator = async (
     ix: TransactionInstruction
   ): Promise<string> => {
-    const connection = new Connection(DEVNET_RPC, "confirmed");
+    const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
     const signer = getOperatorKeypair();
     const tx = new Transaction().add(ix);
     const { blockhash } = await connection.getLatestBlockhash();
@@ -200,7 +200,7 @@ export default function JoinBatchTest() {
 
   const fetchLatestBatchId = async () => {
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
       const [configPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("protocol_config")],
@@ -244,7 +244,7 @@ export default function JoinBatchTest() {
     setResult(null);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const undegenProgramId = UNDEGEN_PROGRAM_ID;
       const mint = new PublicKey(DEVNET_USDC_MINT);
       const user = new PublicKey(wallet.account.address);

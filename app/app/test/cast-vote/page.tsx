@@ -15,7 +15,7 @@ import Header from "@/app/components/Header";
 import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
 const CAST_VOTE_DISCRIMINATOR = Buffer.from([
   20, 212, 15, 189, 69, 180, 69, 151,
@@ -273,7 +273,7 @@ export default function CastVoteTest() {
     setResult(null);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
 
       const batchIdBuffer = Buffer.alloc(8);
@@ -431,7 +431,7 @@ export default function CastVoteTest() {
     setResult(null);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
 
       const [userPositionPda] = PublicKey.findProgramAddressSync(

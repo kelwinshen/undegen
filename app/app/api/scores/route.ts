@@ -2,60 +2,61 @@ import { NextResponse } from "next/server";
 
 const API_BASE = "https://txline-dev.txodds.com";
 
-const STATUS_MAP: Record<string, string> = {
-  NS: "Not Started",
-  NS2: "Not Started",
-  I: "In Play",
-  I2: "In Play",
-  HT: "Half Time",
-  HT2: "Half Time",
-  F: "Finished",
-  F2: "Finished",
-  END: "Finished",
-  FET: "Finished Extra Time",
-  FPE: "Finished Penalties",
-  ET1: "Extra Time 1",
-  ET2: "Extra Time 2",
-  P: "Penalties",
-  PE: "Penalties Ended",
-  WET: "Waiting Extra Time",
-  WPE: "Waiting Penalties",
-};
-
-const STAT_KEY_PARTICIPANT1_GOALS = 1002;
-const STAT_KEY_PARTICIPANT2_GOALS = 1003;
-
-function extractStatus(statusObj: any): string {
-  if (!statusObj) return "Unknown";
-  if (typeof statusObj === "string") return statusObj;
-  const keys = Object.keys(statusObj);
-  return keys.length > 0 ? keys[0] : "Unknown";
+// The snapshot array isn't chronological — it's grouped by event Action name,
+// not by time — so "the last entry" is essentially a random event, not the
+// latest one. Seq is the real ordering key.
+function sortByTime(entries: any[]): any[] {
+  return [...entries].sort((a, b) => (a.Seq ?? 0) - (b.Seq ?? 0));
 }
 
-function extractGoals(entry: any): { p1: number; p2: number } | null {
-  // First try scoreSoccer
-  const scoreSoccer = entry.scoreSoccer;
-  if (
-    scoreSoccer &&
-    scoreSoccer.Participant1?.Total?.Goals !== undefined &&
-    scoreSoccer.Participant2?.Total?.Goals !== undefined
-  ) {
-    return {
-      p1: scoreSoccer.Participant1.Total.Goals,
-      p2: scoreSoccer.Participant2.Total.Goals,
-    };
+// Mirrors /api/scores/validation's hasMatchState pattern: derive status from
+// specific event Actions actually present in the snapshot, rather than
+// trusting a single field on a single entry (the previous version read
+// `statusSoccerId`, which doesn't exist anywhere in this API's response).
+function deriveStatus(sorted: any[]): string {
+  const hasAction = (name: string) => sorted.some((e) => e.Action === name);
+
+  if (hasAction("game_finalised")) return "Finished";
+
+  const htIndex = sorted.findIndex((e) => e.Action === "halftime_finalised");
+  if (htIndex !== -1) {
+    const secondHalfStarted = sorted
+      .slice(htIndex + 1)
+      .some((e) => e.Action === "kickoff");
+    if (!secondHalfStarted) return "Half Time";
   }
 
-  // Fallback to stats map
-  const stats = entry.stats;
-  if (stats && typeof stats === "object") {
-    const p1 = stats[STAT_KEY_PARTICIPANT1_GOALS];
-    const p2 = stats[STAT_KEY_PARTICIPANT2_GOALS];
+  if (hasAction("kickoff") || hasAction("kickoff_team")) return "In Play";
+
+  return "Not Started";
+}
+
+// The real field is `Score` (capital), not `scoreSoccer` — pulled from the
+// chronologically-latest entry (by Seq) that actually carries one, since
+// most event types don't include a Score snapshot at all.
+function extractGoals(sorted: any[]): { p1: number; p2: number } | null {
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const score = sorted[i].Score;
+    const p1 = score?.Participant1?.Total?.Goals;
+    const p2 = score?.Participant2?.Total?.Goals;
     if (typeof p1 === "number" && typeof p2 === "number") {
       return { p1, p2 };
     }
   }
+  return null;
+}
 
+// Same walk-backward-by-Seq approach as extractGoals — most event types
+// don't carry a Clock snapshot, so take the latest one that does.
+function extractClock(
+  sorted: any[]
+): { seconds: number; running: boolean } | null {
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const clock = sorted[i].Clock;
+    if (clock && typeof clock.Seconds === "number") {
+      return { seconds: clock.Seconds, running: Boolean(clock.Running) };
+    }
+  }
   return null;
 }
 
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
     await Promise.all(
       fixtureIds.map(async (fixtureId) => {
         try {
-          const url = `${API_BASE}/api/scores/snapshot/${fixtureId}?t=${Date.now()}`;
+          const url = `${API_BASE}/api/scores/snapshot/${fixtureId}`;
           const scoreRes = await fetch(url, {
             headers,
             cache: "no-store",
@@ -89,36 +90,19 @@ export async function GET(request: Request) {
 
           if (!Array.isArray(scoreData) || scoreData.length === 0) return;
 
-          // Status always from the very last entry
-          const lastEntry = scoreData[scoreData.length - 1];
-          const rawStatus = extractStatus(lastEntry.statusSoccerId);
+          const sorted = sortByTime(scoreData);
+          const status = deriveStatus(sorted);
+          const goals = extractGoals(sorted);
+          const clock = extractClock(sorted);
 
-          // Search backwards for the latest entry that has goals
-          let goals: { p1: number; p2: number } | null = null;
-          for (let i = scoreData.length - 1; i >= 0; i--) {
-            const g = extractGoals(scoreData[i]);
-            if (g) {
-              goals = g;
-              break;
-            }
-          }
-
-          if (goals === null) {
-            // Still return status-only score if match has started
-            scoresMap[fixtureId] = {
-              fixtureId,
-              status: STATUS_MAP[rawStatus] ?? rawStatus,
-              p1Goals: 0,
-              p2Goals: 0,
-            };
-          } else {
-            scoresMap[fixtureId] = {
-              fixtureId,
-              status: STATUS_MAP[rawStatus] ?? rawStatus,
-              p1Goals: goals.p1,
-              p2Goals: goals.p2,
-            };
-          }
+          scoresMap[fixtureId] = {
+            fixtureId,
+            status,
+            p1Goals: goals?.p1 ?? 0,
+            p2Goals: goals?.p2 ?? 0,
+            clockSeconds: clock?.seconds ?? null,
+            clockRunning: clock?.running ?? false,
+          };
         } catch (e) {
           // skip fixture on error
         }

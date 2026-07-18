@@ -16,7 +16,7 @@ import Header from "@/app/components/Header";
 import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 
 const INIT_PROTOCOL_DISCRIMINATOR = Buffer.from([
   188, 233, 252, 106, 134, 146, 202, 91,
@@ -73,7 +73,7 @@ export default function InitializeProtocolTest() {
       }
       addLog("success", `Admin: ${adminKeypair.publicKey.toBase58()}`);
 
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
       const [configPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("protocol_config")],

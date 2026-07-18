@@ -28,7 +28,7 @@ import yieldVaultIdl from "@/app/lib/idl/yield_vault.json";
 
 const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
 const ALT_ADDRESS_STR = "9iTNvzhM6opWF1BPA84Qx39Py2EFTVLXtmojp1d9NJSv";
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const TXODDS_PROGRAM_ID = new PublicKey(
   "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
 );
@@ -207,7 +207,7 @@ function SettleWithProofPageContent() {
     }
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
@@ -300,7 +300,7 @@ function SettleWithProofPageContent() {
     setLoading(true);
     setResult(null);
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = UNDEGEN_PROGRAM_ID;
       const operator = getOperatorKeypair();
       const mint = batchData.mint;
