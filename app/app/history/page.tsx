@@ -7,7 +7,10 @@ import SyndicateSidebar from "../components/SyndicateSidebar";
 import HowItWorks from "../components/HowItWorks";
 import FAQ from "../components/FAQ";
 import { useUndegenProgram } from "../context/UndegenProgramContext";
-import { previewClaimAmount, fetchActiveLotteryRound } from "../services/undegenProgram";
+import {
+  previewClaimAmount,
+  fetchActiveLotteryRound,
+} from "../services/undegenProgram";
 import { SOLANA_CONFIG } from "../lib/solanaConfig";
 
 // USDC's on-chain precision — shown in full rather than rounded so these
@@ -32,9 +35,11 @@ export default function HistoryPage() {
   // yield_vault + batch_token_account balances that BatchState doesn't
   // carry. Reset to null while (re)loading so stale numbers from a
   // previously focused batch never show for the new one.
-  const [claimPreview, setClaimPreview] = useState<{ principal: number; earnings: number; total: number } | null>(
-    null
-  );
+  const [claimPreview, setClaimPreview] = useState<{
+    principal: number;
+    earnings: number;
+    total: number;
+  } | null>(null);
   // Whether the lottery has an Open round right now — the real
   // `claim_and_join_lottery` instruction reverts without one, so the
   // "Join Lottery" button stays disabled until this comes back true.
@@ -75,7 +80,13 @@ export default function HistoryPage() {
     // Nothing left to preview once already claimed — the payout was decided
     // by that transaction, not by whatever the live vault/batch balances say
     // now (which keep shifting as other users claim afterward).
-    if (!isConnected || !walletAddress || !focusedBatchId || focusedUserDeposited <= 0 || focusedUserWithdrawn) {
+    if (
+      !isConnected ||
+      !walletAddress ||
+      !focusedBatchId ||
+      focusedUserDeposited <= 0 ||
+      focusedUserWithdrawn
+    ) {
       return;
     }
     let cancelled = false;
@@ -85,7 +96,13 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [isConnected, walletAddress, focusedBatchId, focusedUserDeposited, focusedUserWithdrawn]);
+  }, [
+    isConnected,
+    walletAddress,
+    focusedBatchId,
+    focusedUserDeposited,
+    focusedUserWithdrawn,
+  ]);
 
   // Auto-hide toast after 3 seconds
   useEffect(() => {
@@ -98,7 +115,8 @@ export default function HistoryPage() {
   const joinedBatches = useMemo(() => {
     return endedBatches.map((b) => {
       const userDeposited = isConnected ? b.userDeposited : 0;
-      const poolShare = b.totalDeposited > 0 ? userDeposited / b.totalDeposited : 0;
+      const poolShare =
+        b.totalDeposited > 0 ? userDeposited / b.totalDeposited : 0;
       const weeklyYield = poolShare * b.weeklyYieldPool;
       return {
         batchId: b.batchId,
@@ -120,7 +138,9 @@ export default function HistoryPage() {
     if (!focusedBatch) return;
     try {
       await claim(focusedBatch.batchId);
-      setToastMessage(`Successfully claimed your funds from Batch #${focusedBatch.batchId}!`);
+      setToastMessage(
+        `Successfully claimed your funds from Batch #${focusedBatch.batchId}!`
+      );
     } catch (e) {
       console.error(e);
       setToastMessage(`Failed to claim from Batch #${focusedBatch.batchId}`);
@@ -138,7 +158,9 @@ export default function HistoryPage() {
       );
     } catch (e) {
       console.error(e);
-      setToastMessage(`Failed to join the lottery from Batch #${focusedBatch.batchId}`);
+      setToastMessage(
+        `Failed to join the lottery from Batch #${focusedBatch.batchId}`
+      );
     }
   };
 
@@ -158,7 +180,8 @@ export default function HistoryPage() {
     focusedBatch && focusedBatch.apyBps > 0
       ? (weeklyYieldPool * 52 * 10000) / focusedBatch.apyBps
       : (focusedBatch?.totalDeposited ?? 0);
-  const realBetsCount = (focusedBatch?.winsCount ?? 0) + (focusedBatch?.lossesCount ?? 0);
+  const realBetsCount =
+    (focusedBatch?.winsCount ?? 0) + (focusedBatch?.lossesCount ?? 0);
   const allocatedBudget = weeklyYieldPool;
   const remainingBudget = allocatedBudget - realBetsCount * betSize;
   const batchRecord = {
@@ -168,14 +191,19 @@ export default function HistoryPage() {
   };
 
   const userLockedAmount = focusedBatch?.userDeposited ?? 0;
-  const userPoolShare = originalTotalDeposited > 0 ? userLockedAmount / originalTotalDeposited : 0;
+  const userPoolShare =
+    originalTotalDeposited > 0 ? userLockedAmount / originalTotalDeposited : 0;
 
   // Same "growth" math as the sidebar's Treasury Dashboard (accumulated
   // winnings + whatever bet capital was never put at risk), annualized —
   // except here the batch is Ended, so it's the batch's real, final result
   // rather than an in-progress estimate.
-  const totalFundGrowth = (focusedBatch?.accumulatedWinnings ?? 0) + remainingBudget;
-  const finalApy = originalTotalDeposited > 0 ? (totalFundGrowth * 52 * 100) / originalTotalDeposited : 0;
+  const totalFundGrowth =
+    (focusedBatch?.accumulatedWinnings ?? 0) + remainingBudget;
+  const finalApy =
+    originalTotalDeposited > 0
+      ? (totalFundGrowth * 52 * 100) / originalTotalDeposited
+      : 0;
 
   // Real claim preview (see previewClaimAmount) — falls back to the raw
   // deposit while the RPC preview is still loading, so the donut/figures
@@ -184,13 +212,18 @@ export default function HistoryPage() {
   const previewPrincipal = claimPreview?.principal ?? userLockedAmount;
   const previewEarnings = claimPreview?.earnings ?? 0;
   const previewTotal = claimPreview?.total ?? previewPrincipal;
-  const userStakePct = previewTotal > 0 ? (previewPrincipal / previewTotal) * 100 : 100;
-  const isClaimPreviewLoading = isConnected && userLockedAmount > 0 && claimPreview === null;
+  const userStakePct =
+    previewTotal > 0 ? (previewPrincipal / previewTotal) * 100 : 100;
+  const isClaimPreviewLoading =
+    isConnected && userLockedAmount > 0 && claimPreview === null;
 
-  const totalRecord = batchRecord.wins + batchRecord.losses + batchRecord.skipped;
+  const totalRecord =
+    batchRecord.wins + batchRecord.losses + batchRecord.skipped;
   const winsPct = totalRecord > 0 ? (batchRecord.wins / totalRecord) * 100 : 0;
-  const lossesPct = totalRecord > 0 ? (batchRecord.losses / totalRecord) * 100 : 0;
-  const skippedPct = totalRecord > 0 ? (batchRecord.skipped / totalRecord) * 100 : 0;
+  const lossesPct =
+    totalRecord > 0 ? (batchRecord.losses / totalRecord) * 100 : 0;
+  const skippedPct =
+    totalRecord > 0 ? (batchRecord.skipped / totalRecord) * 100 : 0;
 
   if (isLoading) {
     return (
@@ -203,11 +236,15 @@ export default function HistoryPage() {
   if (!focusedBatch) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-bg1 text-center px-6">
-        <div className="text-muted text-lg font-semibold">No ended batches yet</div>
+        <div className="text-muted text-lg font-semibold">
+          No ended batches yet
+        </div>
         <p className="text-muted text-sm max-w-sm">
           Check back once a batch settles, or view{" "}
-          <a href="/upcoming" className="underline hover:text-foreground">Upcoming</a> to join
-          the next one.
+          <a href="/upcoming" className="underline hover:text-foreground">
+            Upcoming
+          </a>{" "}
+          to join the next one.
         </p>
       </div>
     );
@@ -257,7 +294,9 @@ export default function HistoryPage() {
                  legible at a glance, plus the actual claim action. */
               <div className="p-6 rounded-2xl border border-foreground/15 bg-foreground/[0.02] backdrop-blur-sm space-y-5">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-foreground">Your Results</h2>
+                  <h2 className="text-lg font-bold text-foreground">
+                    Your Results
+                  </h2>
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                       focusedBatch.userWithdrawn
@@ -277,7 +316,8 @@ export default function HistoryPage() {
                   <div className="p-4 rounded-xl bg-foreground/5 border border-border-low flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-foreground shrink-0" />
                     <p className="text-xs text-foreground">
-                      You've already claimed your stake and earnings from this batch.
+                      You've already claimed your stake and earnings from this
+                      batch.
                     </p>
                   </div>
                 ) : (
@@ -290,7 +330,9 @@ export default function HistoryPage() {
                         }}
                       >
                         <div className="absolute inset-2 rounded-full bg-card dark:bg-neutral-950 flex flex-col items-center justify-center text-center px-2">
-                          <span className="text-[9px] text-muted uppercase tracking-wider">Total Payout</span>
+                          <span className="text-[9px] text-muted uppercase tracking-wider">
+                            Total Payout
+                          </span>
                           <span className="text-sm font-bold font-mono text-foreground leading-tight">
                             {previewTotal.toFixed(AMOUNT_DECIMALS)}
                           </span>
@@ -305,21 +347,29 @@ export default function HistoryPage() {
                           </div>
                           <p className="font-mono text-foreground text-lg font-bold mt-0.5">
                             {previewPrincipal.toFixed(AMOUNT_DECIMALS)}
-                            <span className="text-xs font-sans text-muted ml-1">USDC</span>
+                            <span className="text-xs font-sans text-muted ml-1">
+                              USDC
+                            </span>
                           </p>
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                            <p className="text-xs text-muted">Your Earnings (est.)</p>
+                            <p className="text-xs text-muted">
+                              Your Earnings (est.)
+                            </p>
                           </div>
                           <p className="font-mono text-green-600 dark:text-green-400 text-lg font-bold mt-0.5">
                             {isClaimPreviewLoading ? (
-                              <span className="text-muted animate-pulse">calculating…</span>
+                              <span className="text-muted animate-pulse">
+                                calculating…
+                              </span>
                             ) : (
                               <>
                                 ~+{previewEarnings.toFixed(AMOUNT_DECIMALS)}
-                                <span className="text-xs font-sans text-muted ml-1">USDC</span>
+                                <span className="text-xs font-sans text-muted ml-1">
+                                  USDC
+                                </span>
                               </>
                             )}
                           </p>
@@ -332,14 +382,16 @@ export default function HistoryPage() {
                         </div>
                         <div>
                           <p className="text-xs text-muted">Principal</p>
-                          <p className="font-mono text-foreground mt-0.5">Always protected</p>
+                          <p className="font-mono text-foreground mt-0.5">
+                            Always protected
+                          </p>
                         </div>
                       </div>
                     </div>
 
                     <p className="text-[10px] text-muted/70">
-                      ~ Estimated from live vault and batch balances — the actual
-                      claimed amount may slip slightly by the time your
+                      ~ Estimated from live vault and batch balances — the
+                      actual claimed amount may slip slightly by the time your
                       transaction lands.
                     </p>
                   </>
@@ -366,12 +418,14 @@ export default function HistoryPage() {
             )}
 
             {/* Batch Summary — the same figures the Treasury Dashboard shows
-                for a Live batch (No-Risk APY, pool stake, bet size, vault
+                for a Live batch (No-Risk APY, pool stake, prediction size, vault
                 growth, batch record), but as this batch's final, settled
                 numbers rather than an in-progress read. */}
             <div className="p-6 rounded-2xl backdrop-blur-sm border border-border-low space-y-5">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-foreground">Batch Summary</h2>
+                <h2 className="text-lg font-bold text-foreground">
+                  Batch Summary
+                </h2>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-neutral-100 text-neutral-800 border border-neutral-200 dark:bg-neutral-500/10 dark:text-neutral-400 dark:border-neutral-500/20">
                   Completed
                 </span>
@@ -391,12 +445,16 @@ export default function HistoryPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted">Bet Size</p>
-                  <p className="font-mono text-foreground mt-0.5">{betSize.toFixed(AMOUNT_DECIMALS)} USDC</p>
+                  <p className="text-xs text-muted">Prediction Size</p>
+                  <p className="font-mono text-foreground mt-0.5">
+                    {betSize.toFixed(AMOUNT_DECIMALS)} USDC
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted">Participants</p>
-                  <p className="font-mono text-foreground mt-0.5">{focusedBatch.participantCount}</p>
+                  <p className="font-mono text-foreground mt-0.5">
+                    {focusedBatch.participantCount}
+                  </p>
                 </div>
               </div>
 
@@ -414,8 +472,14 @@ export default function HistoryPage() {
                   />
                 </div>
                 <div className="flex justify-between text-xs text-muted">
-                  <span>Accumulated Winnings: {focusedBatch.accumulatedWinnings.toFixed(AMOUNT_DECIMALS)} USDC</span>
-                  <span>Remaining: {remainingBudget.toFixed(AMOUNT_DECIMALS)} USDC</span>
+                  <span>
+                    Accumulated Winnings:{" "}
+                    {focusedBatch.accumulatedWinnings.toFixed(AMOUNT_DECIMALS)}{" "}
+                    USDC
+                  </span>
+                  <span>
+                    Remaining: {remainingBudget.toFixed(AMOUNT_DECIMALS)} USDC
+                  </span>
                 </div>
               </div>
 
@@ -424,13 +488,22 @@ export default function HistoryPage() {
                 {totalRecord > 0 && (
                   <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-neutral-200 dark:bg-gray-700">
                     {winsPct > 0 && (
-                      <div className="h-full bg-foreground dark:bg-white" style={{ width: `${winsPct}%` }} />
+                      <div
+                        className="h-full bg-foreground dark:bg-white"
+                        style={{ width: `${winsPct}%` }}
+                      />
                     )}
                     {lossesPct > 0 && (
-                      <div className="h-full bg-red-500" style={{ width: `${lossesPct}%` }} />
+                      <div
+                        className="h-full bg-red-500"
+                        style={{ width: `${lossesPct}%` }}
+                      />
                     )}
                     {skippedPct > 0 && (
-                      <div className="h-full bg-amber-500" style={{ width: `${skippedPct}%` }} />
+                      <div
+                        className="h-full bg-amber-500"
+                        style={{ width: `${skippedPct}%` }}
+                      />
                     )}
                   </div>
                 )}

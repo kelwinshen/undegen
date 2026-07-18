@@ -31,9 +31,7 @@ const SETTLE_DEFAULT_DISCRIMINATOR = new Uint8Array([
   246, 228, 125, 180, 94, 53, 233, 137,
 ]);
 
-const BATCH_DISCRIMINATOR = new Uint8Array([
-  156, 194, 70, 44, 22, 88, 137, 44,
-]);
+const BATCH_DISCRIMINATOR = new Uint8Array([156, 194, 70, 44, 22, 88, 137, 44]);
 
 const COLLATERAL_SEED = "collateral";
 
@@ -58,7 +56,7 @@ function writeUInt64LE(value: number | bigint | string): Uint8Array {
   new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigUint64(
     0,
     BigInt(value),
-    true,
+    true
   );
   return buf;
 }
@@ -69,11 +67,8 @@ const BetTermLayout = borsh.struct([
   borsh.u32("stat_a_key"),
   borsh.option(borsh.u32(), "stat_b_key"),
   borsh.option(
-    borsh.rustEnum([
-      borsh.struct([], "Add"),
-      borsh.struct([], "Subtract"),
-    ]),
-    "op",
+    borsh.rustEnum([borsh.struct([], "Add"), borsh.struct([], "Subtract")]),
+    "op"
   ),
   borsh.i32("predicate_threshold"),
   borsh.u8("predicate_comparison"),
@@ -145,19 +140,14 @@ export default function SettleDefault() {
   const [batchData, setBatchData] = useState<any>(null);
 
   const addLog = (msg: string) =>
-    setLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${msg}`,
-    ]);
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
     if (!secretKeyEnv)
       throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
-      return Keypair.fromSecretKey(
-        Uint8Array.from(JSON.parse(secretKeyEnv)),
-      );
+      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
     return Keypair.fromSecretKey(bs58.decode(secretKeyEnv));
   };
@@ -181,7 +171,7 @@ export default function SettleDefault() {
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("batch"), Buffer.from(batchIdBuffer)],
-        programId,
+        programId
       );
       setBatchPda(pda);
       addLog(`Batch PDA: ${pda.toBase58()}`);
@@ -199,7 +189,7 @@ export default function SettleDefault() {
       if (accountInfo.data.length < MIN_BATCH_DATA_LEN) {
         throw new Error(
           `Batch account data too short (${accountInfo.data.length} bytes). ` +
-          `Expected at least ${MIN_BATCH_DATA_LEN}.`,
+            `Expected at least ${MIN_BATCH_DATA_LEN}.`
         );
       }
 
@@ -209,7 +199,7 @@ export default function SettleDefault() {
       } catch (decodeErr: any) {
         throw new Error(
           `Failed to decode batch: ${decodeErr.message}. ` +
-          `Data length: ${accountInfo.data.length}.`,
+            `Data length: ${accountInfo.data.length}.`
         );
       }
 
@@ -239,13 +229,13 @@ export default function SettleDefault() {
 
       const [collateralPda] = PublicKey.findProgramAddressSync(
         [Buffer.from(COLLATERAL_SEED), batchPda.toBuffer()],
-        programId,
+        programId
       );
 
       const batchTokenAccount = await getAssociatedTokenAddress(
         mint,
         batchPda,
-        true,
+        true
       );
 
       const data = Buffer.from(SETTLE_DEFAULT_DISCRIMINATOR);
@@ -290,7 +280,9 @@ export default function SettleDefault() {
       const tx = new VersionedTransaction(messageV0);
       tx.sign([operator]);
 
-      addLog("Sending settle_default transaction (contract will enforce state)...");
+      addLog(
+        "Sending settle_default transaction (contract will enforce state)..."
+      );
       const sig = await connection.sendRawTransaction(tx.serialize(), {
         skipPreflight: false,
       });
@@ -358,7 +350,8 @@ export default function SettleDefault() {
                   </span>
                 </span>
                 <span className="block">
-                  <strong>Bet Size:</strong> {batchData.bet_size.toString()}
+                  <strong>Prediction Size:</strong>{" "}
+                  {batchData.bet_size.toString()}
                 </span>
                 <span className="block">
                   <strong>Collateral Required:</strong>{" "}
@@ -371,7 +364,7 @@ export default function SettleDefault() {
                 <span className="block">
                   <strong>Proof Deadline:</strong>{" "}
                   {new Date(
-                    Number(batchData.proof_deadline) * 1000,
+                    Number(batchData.proof_deadline) * 1000
                   ).toLocaleString()}
                 </span>
               </div>
@@ -387,7 +380,8 @@ export default function SettleDefault() {
                         className={`p-3 bg-bg1 rounded-lg border border-border-low ${isEmpty ? "opacity-50" : ""}`}
                       >
                         <span className="text-sm font-semibold text-gray-200">
-                          Slot {idx + 1} {isEmpty ? "(empty)" : `– Fixture ${term.fixture_id}`}
+                          Slot {idx + 1}{" "}
+                          {isEmpty ? "(empty)" : `– Fixture ${term.fixture_id}`}
                         </span>
                         {!isEmpty && (
                           <p className="text-xs text-gray-400 mt-1">

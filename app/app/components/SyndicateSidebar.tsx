@@ -29,7 +29,10 @@ interface JoinedBatchItem {
 // each sorted by batchId ascending — shared by every joined/available list
 // in this component (desktop card + mobile drawer, Live + Upcoming) so the
 // split logic only lives in one place.
-function splitByJoined(items: JoinedBatchItem[]): { joined: JoinedBatchItem[]; available: JoinedBatchItem[] } {
+function splitByJoined(items: JoinedBatchItem[]): {
+  joined: JoinedBatchItem[];
+  available: JoinedBatchItem[];
+} {
   const sorted = [...items].sort((a, b) => a.batchId - b.batchId);
   return {
     joined: sorted.filter((b) => b.userDeposited > 0),
@@ -95,9 +98,12 @@ export default function SyndicateSidebar({
   // Unrealized APY — this batch's actual growth so far, annualized against
   // the weekly cadence (52 weeks/year), as a % of what's staked. Distinct
   // from the operator-set `apyBps` above (No-Risk APY, the guaranteed rate).
-  const unrealizedGrowthApy = totalDeposited > 0 ? (totalFundGrowth * 52 * 100) / totalDeposited : 0;
+  const unrealizedGrowthApy =
+    totalDeposited > 0 ? (totalFundGrowth * 52 * 100) / totalDeposited : 0;
 
-  const voteStatusLabel = (status?: "no-match" | "voting" | "voting-ended" | "active") => {
+  const voteStatusLabel = (
+    status?: "no-match" | "voting" | "voting-ended" | "active"
+  ) => {
     switch (status) {
       case "voting":
         return "Voting Session";
@@ -125,7 +131,9 @@ export default function SyndicateSidebar({
               .filter((b) => b.phase === "Ended")
               .sort((a, b) => b.batchId - a.batchId);
             const joined = historyBatches.filter((b) => b.userDeposited > 0);
-            const available = historyBatches.filter((b) => b.userDeposited === 0);
+            const available = historyBatches.filter(
+              (b) => b.userDeposited === 0
+            );
             const visibleAvailable = available.slice(0, historyAvailableCount);
             const renderRow = (b: JoinedBatchItem) => {
               const isCurrent = b.batchId === currentBatchId;
@@ -169,7 +177,11 @@ export default function SyndicateSidebar({
                             : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
                         }`}
                       >
-                        {isJoined ? (b.userWithdrawn ? "Completed" : "Claimable") : "View ➜"}
+                        {isJoined
+                          ? b.userWithdrawn
+                            ? "Completed"
+                            : "Claimable"
+                          : "View ➜"}
                       </span>
                     )}
                   </div>
@@ -185,12 +197,18 @@ export default function SyndicateSidebar({
                   </div>
                 )}
                 {available.length > 0 && (
-                  <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                  <div
+                    className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}
+                  >
                     <h2 className="text-lg font-bold">Batch History</h2>
-                    <div className="space-y-1.5">{visibleAvailable.map(renderRow)}</div>
+                    <div className="space-y-1.5">
+                      {visibleAvailable.map(renderRow)}
+                    </div>
                     {historyAvailableCount < available.length && (
                       <button
-                        onClick={() => setHistoryAvailableCount((c) => c + PAGE_SIZE)}
+                        onClick={() =>
+                          setHistoryAvailableCount((c) => c + PAGE_SIZE)
+                        }
                         className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
                       >
                         Load More
@@ -209,7 +227,9 @@ export default function SyndicateSidebar({
           joinedBatches &&
           joinedBatches.some((b) => b.phase === "Active") &&
           (() => {
-            const { joined, available } = splitByJoined(joinedBatches.filter((b) => b.phase === "Active"));
+            const { joined, available } = splitByJoined(
+              joinedBatches.filter((b) => b.phase === "Active")
+            );
             const visibleAvailable = available.slice(0, liveAvailableCount);
             const renderRow = (b: JoinedBatchItem) => {
               const isCurrent = b.batchId === currentBatchId;
@@ -217,9 +237,7 @@ export default function SyndicateSidebar({
               return (
                 <button
                   key={b.batchId}
-                  onClick={() =>
-                    !isCurrent && onNavigateToBatch?.(b.batchId)
-                  }
+                  onClick={() => !isCurrent && onNavigateToBatch?.(b.batchId)}
                   disabled={isCurrent}
                   className={`w-full flex justify-between items-center p-2 rounded-lg border text-left transition ${
                     isCurrent
@@ -269,12 +287,18 @@ export default function SyndicateSidebar({
                   </div>
                 )}
                 {available.length > 0 && (
-                  <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                  <div
+                    className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}
+                  >
                     <h2 className="text-lg font-bold">Live Batches</h2>
-                    <div className="space-y-1.5">{visibleAvailable.map(renderRow)}</div>
+                    <div className="space-y-1.5">
+                      {visibleAvailable.map(renderRow)}
+                    </div>
                     {liveAvailableCount < available.length && (
                       <button
-                        onClick={() => setLiveAvailableCount((c) => c + PAGE_SIZE)}
+                        onClick={() =>
+                          setLiveAvailableCount((c) => c + PAGE_SIZE)
+                        }
                         className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
                       >
                         Load More
@@ -293,13 +317,21 @@ export default function SyndicateSidebar({
             {isConnected &&
               joinedBatches &&
               joinedBatches.some(
-                (b) => b.userDeposited > 0 && b.phase !== "Ended" && b.phase !== "Lobby"
+                (b) =>
+                  b.userDeposited > 0 &&
+                  b.phase !== "Ended" &&
+                  b.phase !== "Lobby"
               ) && (
                 <div className="space-y-2">
                   <h2 className="text-lg font-bold">My Joined Batches</h2>
                   <div className="space-y-1.5">
                     {joinedBatches.map((b) => {
-                      if (b.userDeposited === 0 || b.phase === "Ended" || b.phase === "Lobby") return null;
+                      if (
+                        b.userDeposited === 0 ||
+                        b.phase === "Ended" ||
+                        b.phase === "Lobby"
+                      )
+                        return null;
                       const isCurrent = b.batchId === currentBatchId;
                       return (
                         <button
@@ -355,14 +387,23 @@ export default function SyndicateSidebar({
                 : joinedBatches.some((b) => b.phase !== "Ended")) &&
               (() => {
                 const eligible = joinedBatches.filter((b) => {
-                  if (isConnected && b.userDeposited > 0 && b.phase !== "Lobby") return false;
+                  if (isConnected && b.userDeposited > 0 && b.phase !== "Lobby")
+                    return false;
                   if (b.phase === "Ended") return false;
                   return true;
                 });
                 const { joined, available } = isConnected
                   ? splitByJoined(eligible)
-                  : { joined: [] as JoinedBatchItem[], available: [...eligible].sort((a, b) => a.batchId - b.batchId) };
-                const visibleAvailable = available.slice(0, lobbyAvailableCount);
+                  : {
+                      joined: [] as JoinedBatchItem[],
+                      available: [...eligible].sort(
+                        (a, b) => a.batchId - b.batchId
+                      ),
+                    };
+                const visibleAvailable = available.slice(
+                  0,
+                  lobbyAvailableCount
+                );
                 const renderRow = (b: JoinedBatchItem) => {
                   const isCurrent = b.batchId === currentBatchId;
                   return (
@@ -404,25 +445,38 @@ export default function SyndicateSidebar({
                 // (already-started stakes) may or may not have rendered —
                 // only add a separating top border here if it did.
                 const myJoinedBatchesShown = joinedBatches.some(
-                  (b) => b.userDeposited > 0 && b.phase !== "Ended" && b.phase !== "Lobby"
+                  (b) =>
+                    b.userDeposited > 0 &&
+                    b.phase !== "Ended" &&
+                    b.phase !== "Lobby"
                 );
                 return (
                   <>
                     {joined.length > 0 && (
-                      <div className={`space-y-2 ${isConnected && myJoinedBatchesShown ? "pt-2 border-t border-border-low" : ""}`}>
+                      <div
+                        className={`space-y-2 ${isConnected && myJoinedBatchesShown ? "pt-2 border-t border-border-low" : ""}`}
+                      >
                         <h2 className="text-lg font-bold">My Staked Batches</h2>
-                        <div className="space-y-1.5">{joined.map(renderRow)}</div>
+                        <div className="space-y-1.5">
+                          {joined.map(renderRow)}
+                        </div>
                       </div>
                     )}
                     {available.length > 0 && (
-                      <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                      <div
+                        className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}
+                      >
                         <h2 className="text-lg font-bold">
                           {isConnected ? "Available Batches" : "All Batches"}
                         </h2>
-                        <div className="space-y-1.5">{visibleAvailable.map(renderRow)}</div>
+                        <div className="space-y-1.5">
+                          {visibleAvailable.map(renderRow)}
+                        </div>
                         {lobbyAvailableCount < available.length && (
                           <button
-                            onClick={() => setLobbyAvailableCount((c) => c + PAGE_SIZE)}
+                            onClick={() =>
+                              setLobbyAvailableCount((c) => c + PAGE_SIZE)
+                            }
                             className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
                           >
                             Load More
@@ -438,7 +492,9 @@ export default function SyndicateSidebar({
 
         {isLobby && isConnected && (
           <div className="pt-2 border-t border-border-low space-y-1">
-            <span className="text-xs font-bold text-muted">Your Total Staked for Upcoming Batches</span>
+            <span className="text-xs font-bold text-muted">
+              Your Total Staked for Upcoming Batches
+            </span>
             <div className="text-xs font-bold text-foreground font-mono">
               {joinedBatches
                 .filter((b) => b.phase !== "Ended")
@@ -456,131 +512,143 @@ export default function SyndicateSidebar({
           goes Active. Ended batches show this same data as the main-content
           Batch Summary on /history instead, so it isn't duplicated here. */}
       {!isLobby && !isEnded && (
-      <div className="p-6 rounded-2xl backdrop-blur-sm border border-border-low space-y-5">
-        <h2 className="text-lg font-bold">Treasury Dashboard</h2>
+        <div className="p-6 rounded-2xl backdrop-blur-sm border border-border-low space-y-5">
+          <h2 className="text-lg font-bold">Treasury Dashboard</h2>
 
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted">No-Risk APY</span>
-            <span className="font-mono">{(apyBps / 100).toFixed(2)}%</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Total Pool Stake</span>
-            <span className="font-mono">{totalDeposited.toFixed(AMOUNT_DECIMALS)} USDC</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Bet Size</span>
-            <span className="font-mono">{betSize.toFixed(AMOUNT_DECIMALS)} USDC</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Participants</span>
-            <span className="font-mono">{participantCount}</span>
-          </div>
-        </div>
-
-        <div className="p-3 border border-border-low rounded-lg space-y-2">
-          <p className="text-xs text-muted">Total Bet Capital</p>
-          <p className="text-2xl font-bold text-foreground">
-            {weeklyYieldPool.toFixed(AMOUNT_DECIMALS)} USDC
-          </p>
-          <div className="w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-2">
-            <div
-              className="bg-foreground dark:bg-white h-2 rounded-full"
-              style={{
-                width: `${allocatedBudget > 0 ? (remainingBudget / allocatedBudget) * 100 : 0}%`,
-              }}
-            />
-          </div>
-          <div className="flex justify-end text-xs text-muted">
-            <span>Remaining: {remainingBudget.toFixed(AMOUNT_DECIMALS)} USDC</span>
-          </div>
-        </div>
-
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted">Accumulated Winnings</span>
-            <span className="font-mono">{accumulatedWinnings.toFixed(AMOUNT_DECIMALS)} USDC</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Remaining Capital</span>
-            <span className="font-mono">{remainingBudget.toFixed(AMOUNT_DECIMALS)} USDC</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Remaining Bet</span>
-            <span className="font-mono">
-              {remainingBets} prediction{remainingBets !== 1 ? "s" : ""}
-            </span>
-          </div>
-        </div>
-
-        <div className="p-3 border border-border-low rounded-lg space-y-1">
-          <div className="flex justify-between items-baseline">
-            <p className="text-xs text-muted">Current Vault Growth</p>
-            <span className="text-xs font-mono text-green-600 dark:text-green-400">
-              Unrealized APY: {unrealizedGrowthApy.toFixed(2)}%
-            </span>
-          </div>
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {totalFundGrowth.toFixed(AMOUNT_DECIMALS)} USDC
-          </p>
-          <p className="text-xs text-muted">
-            Accumulated Winnings + Remaining Capital
-          </p>
-        </div>
-
-        {isConnected && (
-          <div className="p-3 border border-border-low rounded-lg space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted">Your Pool Share</span>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted">No-Risk APY</span>
+              <span className="font-mono">{(apyBps / 100).toFixed(2)}%</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">Total Pool Stake</span>
               <span className="font-mono">
-                {(userPoolShare * 100).toFixed(5)}%
+                {totalDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">Prediction Size</span>
+              <span className="font-mono">
+                {betSize.toFixed(AMOUNT_DECIMALS)} USDC
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">Participants</span>
+              <span className="font-mono">{participantCount}</span>
+            </div>
+          </div>
+
+          <div className="p-3 border border-border-low rounded-lg space-y-2">
+            <p className="text-xs text-muted">Total Bet Capital</p>
+            <p className="text-2xl font-bold text-foreground">
+              {weeklyYieldPool.toFixed(AMOUNT_DECIMALS)} USDC
+            </p>
+            <div className="w-full bg-neutral-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-foreground dark:bg-white h-2 rounded-full"
+                style={{
+                  width: `${allocatedBudget > 0 ? (remainingBudget / allocatedBudget) * 100 : 0}%`,
+                }}
+              />
+            </div>
+            <div className="flex justify-end text-xs text-muted">
+              <span>
+                Remaining: {remainingBudget.toFixed(AMOUNT_DECIMALS)} USDC
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted">Accumulated Winnings</span>
+              <span className="font-mono">
+                {accumulatedWinnings.toFixed(AMOUNT_DECIMALS)} USDC
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">Remaining Capital</span>
+              <span className="font-mono">
+                {remainingBudget.toFixed(AMOUNT_DECIMALS)} USDC
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">Remaining Bet</span>
+              <span className="font-mono">
+                {remainingBets} prediction{remainingBets !== 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3 border border-border-low rounded-lg space-y-1">
+            <div className="flex justify-between items-baseline">
+              <p className="text-xs text-muted">Current Vault Growth</p>
+              <span className="text-xs font-mono text-green-600 dark:text-green-400">
+                Unrealized APY: {unrealizedGrowthApy.toFixed(2)}%
+              </span>
+            </div>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+              {totalFundGrowth.toFixed(AMOUNT_DECIMALS)} USDC
+            </p>
+            <p className="text-xs text-muted">
+              Accumulated Winnings + Remaining Capital
+            </p>
+          </div>
+
+          {isConnected && (
+            <div className="p-3 border border-border-low rounded-lg space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Your Pool Share</span>
+                <span className="font-mono">
+                  {(userPoolShare * 100).toFixed(5)}%
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Locked Principal</span>
+                <span className="font-mono">
+                  {userLockedAmount.toFixed(AMOUNT_DECIMALS)} USDC
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="p-3 border border-border-low rounded-lg space-y-2">
+            <p className="text-xs text-muted">Current Batch Record</p>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Wins</span>
+              <span className="text-foreground font-mono">
+                {batchRecord.wins}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Locked Principal</span>
-              <span className="font-mono">{userLockedAmount.toFixed(AMOUNT_DECIMALS)} USDC</span>
+              <span className="text-muted">Losses</span>
+              <span className="text-red-600 dark:text-red-400 font-mono">
+                {batchRecord.losses}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Skipped</span>
+              <span className="text-amber-600 dark:text-yellow-400 font-mono">
+                {batchRecord.skipped}
+              </span>
             </div>
           </div>
-        )}
 
-        <div className="p-3 border border-border-low rounded-lg space-y-2">
-          <p className="text-xs text-muted">Current Batch Record</p>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Wins</span>
-            <span className="text-foreground font-mono">
-              {batchRecord.wins}
+          <div className="p-2 border border-border-low rounded-lg text-xs text-muted">
+            <span className="text-foreground/80 dark:text-gray-300 font-medium">
+              ✓ Verified by TXODDS Oracle
+            </span>
+            <br />
+            <span className="text-muted/80">
+              Settlement verified using on-chain cryptographic proofs.
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Losses</span>
-            <span className="text-red-600 dark:text-red-400 font-mono">
-              {batchRecord.losses}
-            </span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Skipped</span>
-            <span className="text-amber-600 dark:text-yellow-400 font-mono">
-              {batchRecord.skipped}
-            </span>
-          </div>
+
+          {!isConnected && (
+            <p className="text-xs text-amber-600 dark:text-yellow-300">
+              Connect wallet to participate in the syndicate.
+            </p>
+          )}
         </div>
-
-        <div className="p-2 border border-border-low rounded-lg text-xs text-muted">
-          <span className="text-foreground/80 dark:text-gray-300 font-medium">
-            ✓ Verified by TXODDS Oracle
-          </span>
-          <br />
-          <span className="text-muted/80">
-            Settlement verified using on-chain cryptographic proofs.
-          </span>
-        </div>
-
-        {!isConnected && (
-          <p className="text-xs text-amber-600 dark:text-yellow-300">
-            Connect wallet to participate in the syndicate.
-          </p>
-        )}
-      </div>
       )}
 
       {/* Sticky Mobile Batch Selector Button */}
@@ -671,9 +739,16 @@ export default function SyndicateSidebar({
                     const historyBatches = joinedBatches
                       .filter((b) => b.phase === "Ended")
                       .sort((a, b) => b.batchId - a.batchId);
-                    const joined = historyBatches.filter((b) => b.userDeposited > 0);
-                    const available = historyBatches.filter((b) => b.userDeposited === 0);
-                    const visibleAvailable = available.slice(0, historyAvailableCount);
+                    const joined = historyBatches.filter(
+                      (b) => b.userDeposited > 0
+                    );
+                    const available = historyBatches.filter(
+                      (b) => b.userDeposited === 0
+                    );
+                    const visibleAvailable = available.slice(
+                      0,
+                      historyAvailableCount
+                    );
                     const renderRow = (b: JoinedBatchItem) => {
                       const isCurrent = b.batchId === currentBatchId;
                       const isJoined = b.userDeposited > 0;
@@ -706,7 +781,8 @@ export default function SyndicateSidebar({
                                 <p className="text-xs text-muted font-sans">
                                   Staked:{" "}
                                   <span className="font-mono text-foreground">
-                                    {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+                                    {b.userDeposited.toFixed(AMOUNT_DECIMALS)}{" "}
+                                    USDC
                                   </span>
                                 </p>
                               </div>
@@ -721,7 +797,11 @@ export default function SyndicateSidebar({
                                     : "text-muted group-hover:text-foreground border border-border group-hover:border-foreground/50 bg-card dark:bg-neutral-950"
                                 }`}
                               >
-                                {isJoined ? (b.userWithdrawn ? "Completed" : "Claimable") : "View ➜"}
+                                {isJoined
+                                  ? b.userWithdrawn
+                                    ? "Completed"
+                                    : "Claimable"
+                                  : "View ➜"}
                               </span>
                             )}
                           </div>
@@ -735,18 +815,26 @@ export default function SyndicateSidebar({
                             <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
                               My Batch History
                             </h2>
-                            <div className="space-y-2">{joined.map(renderRow)}</div>
+                            <div className="space-y-2">
+                              {joined.map(renderRow)}
+                            </div>
                           </div>
                         )}
                         {available.length > 0 && (
-                          <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                          <div
+                            className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}
+                          >
                             <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
                               Batch History
                             </h2>
-                            <div className="space-y-2">{visibleAvailable.map(renderRow)}</div>
+                            <div className="space-y-2">
+                              {visibleAvailable.map(renderRow)}
+                            </div>
                             {historyAvailableCount < available.length && (
                               <button
-                                onClick={() => setHistoryAvailableCount((c) => c + PAGE_SIZE)}
+                                onClick={() =>
+                                  setHistoryAvailableCount((c) => c + PAGE_SIZE)
+                                }
                                 className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
                               >
                                 Load More
@@ -763,8 +851,13 @@ export default function SyndicateSidebar({
                   joinedBatches &&
                   joinedBatches.some((b) => b.phase === "Active") &&
                   (() => {
-                    const { joined, available } = splitByJoined(joinedBatches.filter((b) => b.phase === "Active"));
-                    const visibleAvailable = available.slice(0, liveAvailableCount);
+                    const { joined, available } = splitByJoined(
+                      joinedBatches.filter((b) => b.phase === "Active")
+                    );
+                    const visibleAvailable = available.slice(
+                      0,
+                      liveAvailableCount
+                    );
                     const renderRow = (b: JoinedBatchItem) => {
                       const isCurrent = b.batchId === currentBatchId;
                       const isJoined = b.userDeposited > 0;
@@ -797,7 +890,8 @@ export default function SyndicateSidebar({
                                 <p className="text-xs text-muted font-sans">
                                   Staked:{" "}
                                   <span className="font-mono text-foreground">
-                                    {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+                                    {b.userDeposited.toFixed(AMOUNT_DECIMALS)}{" "}
+                                    USDC
                                   </span>
                                 </p>
                               </div>
@@ -824,18 +918,26 @@ export default function SyndicateSidebar({
                             <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
                               My Live Batches
                             </h2>
-                            <div className="space-y-2">{joined.map(renderRow)}</div>
+                            <div className="space-y-2">
+                              {joined.map(renderRow)}
+                            </div>
                           </div>
                         )}
                         {available.length > 0 && (
-                          <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                          <div
+                            className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}
+                          >
                             <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
                               Live Batches
                             </h2>
-                            <div className="space-y-2">{visibleAvailable.map(renderRow)}</div>
+                            <div className="space-y-2">
+                              {visibleAvailable.map(renderRow)}
+                            </div>
                             {liveAvailableCount < available.length && (
                               <button
-                                onClick={() => setLiveAvailableCount((c) => c + PAGE_SIZE)}
+                                onClick={() =>
+                                  setLiveAvailableCount((c) => c + PAGE_SIZE)
+                                }
                                 className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
                               >
                                 Load More
@@ -852,7 +954,10 @@ export default function SyndicateSidebar({
                     {isConnected &&
                       joinedBatches &&
                       joinedBatches.some(
-                        (b) => b.userDeposited > 0 && b.phase !== "Ended" && b.phase !== "Lobby"
+                        (b) =>
+                          b.userDeposited > 0 &&
+                          b.phase !== "Ended" &&
+                          b.phase !== "Lobby"
                       ) && (
                         <div className="space-y-2">
                           <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
@@ -860,7 +965,11 @@ export default function SyndicateSidebar({
                           </h2>
                           <div className="space-y-2">
                             {joinedBatches.map((b) => {
-                              if (b.userDeposited === 0 || b.phase === "Ended" || b.phase === "Lobby")
+                              if (
+                                b.userDeposited === 0 ||
+                                b.phase === "Ended" ||
+                                b.phase === "Lobby"
+                              )
                                 return null;
                               const isCurrent = b.batchId === currentBatchId;
                               return (
@@ -916,16 +1025,32 @@ export default function SyndicateSidebar({
                         : joinedBatches.some((b) => b.phase !== "Ended")) &&
                       (() => {
                         const eligible = joinedBatches.filter((b) => {
-                          if (isConnected && b.userDeposited > 0 && b.phase !== "Lobby") return false;
+                          if (
+                            isConnected &&
+                            b.userDeposited > 0 &&
+                            b.phase !== "Lobby"
+                          )
+                            return false;
                           if (b.phase === "Ended") return false;
                           return true;
                         });
                         const { joined, available } = isConnected
                           ? splitByJoined(eligible)
-                          : { joined: [] as JoinedBatchItem[], available: [...eligible].sort((a, b) => a.batchId - b.batchId) };
-                        const visibleAvailable = available.slice(0, lobbyAvailableCount);
+                          : {
+                              joined: [] as JoinedBatchItem[],
+                              available: [...eligible].sort(
+                                (a, b) => a.batchId - b.batchId
+                              ),
+                            };
+                        const visibleAvailable = available.slice(
+                          0,
+                          lobbyAvailableCount
+                        );
                         const myJoinedBatchesShown = joinedBatches.some(
-                          (b) => b.userDeposited > 0 && b.phase !== "Ended" && b.phase !== "Lobby"
+                          (b) =>
+                            b.userDeposited > 0 &&
+                            b.phase !== "Ended" &&
+                            b.phase !== "Lobby"
                         );
                         const renderRow = (b: JoinedBatchItem) => {
                           const isCurrent = b.batchId === currentBatchId;
@@ -958,7 +1083,10 @@ export default function SyndicateSidebar({
                                     <p className="text-xs text-muted font-sans">
                                       Staked:{" "}
                                       <span className="font-mono text-foreground">
-                                        {b.userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+                                        {b.userDeposited.toFixed(
+                                          AMOUNT_DECIMALS
+                                        )}{" "}
+                                        USDC
                                       </span>
                                     </p>
                                   </div>
@@ -970,22 +1098,36 @@ export default function SyndicateSidebar({
                         return (
                           <>
                             {joined.length > 0 && (
-                              <div className={`space-y-2 ${isConnected && myJoinedBatchesShown ? "pt-2 border-t border-border-low" : ""}`}>
+                              <div
+                                className={`space-y-2 ${isConnected && myJoinedBatchesShown ? "pt-2 border-t border-border-low" : ""}`}
+                              >
                                 <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
                                   My Staked Batches
                                 </h2>
-                                <div className="space-y-2">{joined.map(renderRow)}</div>
+                                <div className="space-y-2">
+                                  {joined.map(renderRow)}
+                                </div>
                               </div>
                             )}
                             {available.length > 0 && (
-                              <div className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}>
+                              <div
+                                className={`space-y-2 ${joined.length > 0 ? "pt-2 border-t border-border-low" : ""}`}
+                              >
                                 <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
-                                  {isConnected ? "Available Batches" : "All Batches"}
+                                  {isConnected
+                                    ? "Available Batches"
+                                    : "All Batches"}
                                 </h2>
-                                <div className="space-y-2">{visibleAvailable.map(renderRow)}</div>
+                                <div className="space-y-2">
+                                  {visibleAvailable.map(renderRow)}
+                                </div>
                                 {lobbyAvailableCount < available.length && (
                                   <button
-                                    onClick={() => setLobbyAvailableCount((c) => c + PAGE_SIZE)}
+                                    onClick={() =>
+                                      setLobbyAvailableCount(
+                                        (c) => c + PAGE_SIZE
+                                      )
+                                    }
                                     className="w-full text-center py-2 text-xs font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
                                   >
                                     Load More

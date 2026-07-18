@@ -64,7 +64,8 @@ export default function LobbyPhase({
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const poolSharePct = totalDeposited > 0 ? (userDeposited / totalDeposited) * 100 : 0;
+  const poolSharePct =
+    totalDeposited > 0 ? (userDeposited / totalDeposited) * 100 : 0;
   // Mirrors the on-chain bet_size math in start_batch.rs: annual yield / 52
   // weeks, split evenly across the batch's 5 weekly bets.
   const estimatedWeeklyYield = (totalDeposited * (apyBps / 10000)) / 52;
@@ -143,11 +144,11 @@ export default function LobbyPhase({
     <div className="rounded-2xl backdrop-blur-sm border border-border-low p-6 space-y-6 ">
       {/* Header */}
       <div className="flex justify-end items-start">
-       
-
         {/* Countdown timer pill matching "Liquid" placement */}
         <div className="flex items-center gap-1.5 rounded-full border border-border-low px-3 py-1 text-xs text-muted bg-neutral-900/20 dark:bg-neutral-950/20 backdrop-blur-sm">
-          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isExpired ? "bg-red-500" : "bg-foreground"}`} />
+          <span
+            className={`w-1.5 h-1.5 rounded-full animate-pulse ${isExpired ? "bg-red-500" : "bg-foreground"}`}
+          />
           <span>Starts in:</span>
           <span className="font-mono font-medium text-foreground">
             {timeLeft}
@@ -200,7 +201,9 @@ export default function LobbyPhase({
               />
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted mt-3">
-              <span>Balance: {walletBalance.toFixed(AMOUNT_DECIMALS)} USDC</span>
+              <span>
+                Balance: {walletBalance.toFixed(AMOUNT_DECIMALS)} USDC
+              </span>
             </div>
           </>
         ) : (
@@ -220,7 +223,9 @@ export default function LobbyPhase({
               />
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted mt-3">
-              <span>Your Stake: {userDeposited.toFixed(AMOUNT_DECIMALS)} USDC</span>
+              <span>
+                Your Stake: {userDeposited.toFixed(AMOUNT_DECIMALS)} USDC
+              </span>
             </div>
           </>
         )}
@@ -314,7 +319,9 @@ export default function LobbyPhase({
 
         <div className="space-y-4">
           <div className="space-y-3.5">
-            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Your Position</p>
+            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">
+              Your Position
+            </p>
 
             <div className="flex justify-between items-center relative">
               <div className="relative group">
@@ -322,7 +329,8 @@ export default function LobbyPhase({
                   Your Stake
                 </span>
                 <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
-                  Your active stake amount committed and earning yield in this batch.
+                  Your active stake amount committed and earning yield in this
+                  batch.
                 </div>
               </div>
               <span className="font-bold text-foreground">
@@ -346,7 +354,9 @@ export default function LobbyPhase({
           </div>
 
           <div className="border-t border-border-low/60 pt-3.5 space-y-3.5">
-            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Pool</p>
+            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">
+              Pool
+            </p>
 
             <div className="flex justify-between items-center relative">
               <div className="relative group">
@@ -354,7 +364,8 @@ export default function LobbyPhase({
                   APY
                 </span>
                 <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
-                  Annual yield rate proposed by the operator when this batch was created.
+                  Annual yield rate proposed by the operator when this batch was
+                  created.
                 </div>
               </div>
               <span className="font-bold text-foreground">
@@ -382,7 +393,8 @@ export default function LobbyPhase({
                   Total Bet Capital
                 </span>
                 <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
-                  Total pool stake × APY ÷ 52 weeks — the guaranteed weekly yield available to bet with.
+                  Total pool stake × APY ÷ 52 weeks — the guaranteed weekly
+                  yield available to bet with.
                 </div>
               </div>
               <span className="font-bold text-foreground">
@@ -393,10 +405,11 @@ export default function LobbyPhase({
             <div className="flex justify-between items-center relative">
               <div className="relative group">
                 <span className="text-muted border-b border-dashed border-neutral-700/50 pb-0.5 cursor-help">
-                  Bet Size
+                  Prediction Size
                 </span>
                 <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
-                  Total bet capital split evenly across this batch's 5 weekly bets.
+                  Total bet capital split evenly across this batch's 5 weekly
+                  bets.
                 </div>
               </div>
               <span className="font-bold text-foreground">
@@ -410,7 +423,8 @@ export default function LobbyPhase({
                   Participants
                 </span>
                 <div className="absolute bottom-full left-0 mb-2 pointer-events-none opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 w-60 p-2.5 text-[11.5px] leading-normal text-muted bg-neutral-900/95 dark:bg-neutral-950/95 border border-border-low rounded-lg shadow-xl z-30 origin-bottom-left">
-                  Total number of users who have joined and committed funds to this batch.
+                  Total number of users who have joined and committed funds to
+                  this batch.
                 </div>
               </div>
               <span className="font-bold text-foreground">
