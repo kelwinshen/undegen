@@ -7,6 +7,7 @@ import LobbyPhase from "../components/LobbyPhase";
 import SyndicateSidebar from "../components/SyndicateSidebar";
 import HowItWorks from "../components/HowItWorks";
 import FAQ from "../components/FAQ";
+import BannerSlider from "../components/SliderBanner";
 
 export default function UpcomingBatchesPage() {
   const {
@@ -109,6 +110,7 @@ export default function UpcomingBatchesPage() {
       </AnimatePresence>
 
       <main className="relative z-10 mx-auto flex max-w-6xl min-h-screen flex-col gap-8 border-border-low px-6 pt-28 pb-28 md:pb-12">
+        <BannerSlider />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between">
