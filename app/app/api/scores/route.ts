@@ -46,18 +46,26 @@ function extractGoals(sorted: any[]): { p1: number; p2: number } | null {
   return null;
 }
 
-// Same walk-backward-by-Seq approach as extractGoals — most event types
-// don't carry a Clock snapshot, so take the latest one that does.
+// Elapsed match time can only increase — but the raw feed can carry a
+// stray clock_adjustment (or similar) event with a bogus reset value even
+// after later Seq numbers already showed a much higher one, so trusting
+// "whichever Clock-bearing entry has the highest Seq" isn't safe. Take the
+// highest Seconds actually observed instead.
 function extractClock(
   sorted: any[]
 ): { seconds: number; running: boolean } | null {
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    const clock = sorted[i].Clock;
-    if (clock && typeof clock.Seconds === "number") {
-      return { seconds: clock.Seconds, running: Boolean(clock.Running) };
+  let best: { seconds: number; running: boolean } | null = null;
+  for (const entry of sorted) {
+    const clock = entry.Clock;
+    if (
+      clock &&
+      typeof clock.Seconds === "number" &&
+      (best === null || clock.Seconds >= best.seconds)
+    ) {
+      best = { seconds: clock.Seconds, running: Boolean(clock.Running) };
     }
   }
-  return null;
+  return best;
 }
 
 export async function GET(request: Request) {
