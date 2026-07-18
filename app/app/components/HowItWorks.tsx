@@ -186,9 +186,7 @@ export default function HowItWorks() {
                 <span className="text-[10px] text-neutral-400 block font-medium uppercase tracking-wider">
                   Your Tickets
                 </span>
-                <span className="text-lg font-bold text-foreground">
-                  50 USDC
-                </span>
+                <span className="text-lg font-bold text-foreground">50</span>
               </div>
               <div>
                 <span className="text-[10px] text-neutral-400 block font-medium uppercase tracking-wider">

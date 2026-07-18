@@ -337,9 +337,13 @@ export default function LotteryPage() {
                             className="text-6xl font-bold text-center bg-transparent focus:outline-none w-full max-w-[280px] text-foreground placeholder-neutral-700 dark:placeholder-neutral-800"
                           />
                         </div>
+                        <p className="text-sm text-muted mt-1">USDC</p>
                         <div className="flex items-center gap-1.5 text-xs text-muted mt-3">
                           <span>
-                            Balance: {usdcBalance.toFixed(AMOUNT_DECIMALS)} USDC
+                            {parsedAmount > 0
+                              ? `${Math.floor(parsedAmount * 1_000_000).toLocaleString()} tickets`
+                              : "—"}{" "}
+                            · Balance: {usdcBalance.toFixed(AMOUNT_DECIMALS)} USDC
                           </span>
                         </div>
                       </div>
@@ -523,8 +527,7 @@ export default function LotteryPage() {
                               <p className="text-[10px] text-muted font-sans mt-1">
                                 Your Tickets:{" "}
                                 <span className="font-mono text-foreground">
-                                  {r.myEntry.amount.toFixed(AMOUNT_DECIMALS)}{" "}
-                                  USDC
+                                  {r.myEntry.amount * 1000000}
                                 </span>
                               </p>
                             )}
@@ -588,7 +591,13 @@ export default function LotteryPage() {
                       <div className="flex justify-between">
                         <span className="text-muted">Your Tickets</span>
                         <span className="font-mono text-foreground">
-                          {myEntry.amount.toFixed(AMOUNT_DECIMALS)} USDC
+                          {myEntry.amount * 1000000}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted">Total Buy</span>
+                        <span className="font-mono text-foreground">
+                          {myEntry.amount.toFixed(6)} USDC
                         </span>
                       </div>
                       <div className="flex justify-between">
