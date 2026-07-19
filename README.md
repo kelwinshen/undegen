@@ -2,7 +2,7 @@
 
 A high-performance, principal-protected sports prediction syndicate, voting consensus protocol, and web application built on **Solana**, **Anchor**, and **Next.js**.
 
-> **Philosophy**: *Win together. Choose your upside. Never risk your principal.*
+> **Philosophy**: *Win together. Lose nothingl.*
 
 ---
 
