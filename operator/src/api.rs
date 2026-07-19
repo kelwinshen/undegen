@@ -315,7 +315,6 @@ impl TxOddsClient {
         Ok(resp)
     }
 
-    /// Fetch odds validation proof/merkle proof
     pub async fn get_odds_validation(
         &self,
         message_id: &str,

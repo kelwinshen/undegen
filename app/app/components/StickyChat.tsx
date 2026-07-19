@@ -148,7 +148,6 @@ export default function StickyChat() {
 
       setMessages((prev) => [...prev, newMsg]);
 
-      // Increment unread count if the chat panel is closed
       if (!isOpen) {
         setUnreadCount((count) => count + 1);
       }

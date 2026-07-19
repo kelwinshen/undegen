@@ -13,7 +13,6 @@ use {
     solana_message::{Message, VersionedMessage},
     solana_signer::Signer,
     solana_transaction::versioned::VersionedTransaction,
-    // NEW IMPORTS: Bring in the TxOdds types for testing
     undegen_core::txodds_types::{Comparison, TraderPredicate},
 };
 
@@ -384,7 +383,7 @@ fn test_propose_match() {
     assert_eq!(batch_state.bet_terms[0].fixture_id, 999);
     assert_eq!(batch_state.bet_terms[2].stat_a_key, 3);
     
-    // NEW: Verify the nested struct saved correctly
+    // Verify the nested predicate struct saved correctly
     assert_eq!(batch_state.bet_terms[0].predicate.comparison, Comparison::GreaterThan);
     
     assert_eq!(batch_state.kickoff_timestamp, kickoff_timestamp);

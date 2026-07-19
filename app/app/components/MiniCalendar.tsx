@@ -30,7 +30,6 @@ const addDaysUTC = (dateStr: string, days: number): string => {
   return date.toISOString().slice(0, 10);
 };
 
-// Format UTC date string to Month and Day
 const formatUTCDate = (dateStr: string) => {
   const [year, month, day] = dateStr.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));

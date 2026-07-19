@@ -22,7 +22,7 @@ pub fn penalize_missed_collateral_handler(ctx: Context<PenalizeMissedCollateral>
     // Cancel bet — reset match state, back to Locked so operator can propose again
     batch.status = BatchStatus::Locked;
     
-    // --- NEW: Reset the multi-option tracking arrays ---
+    // Reset the multi-option tracking arrays for the next match
     batch.bet_terms = [BetTerms::default(); 4];
     batch.vote_weights = [0; 5];
     batch.winning_vote_index = None;

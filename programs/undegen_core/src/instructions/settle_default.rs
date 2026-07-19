@@ -10,11 +10,11 @@ pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     let batch = &mut ctx.accounts.batch;
     require!(batch.status == BatchStatus::Active || batch.status == BatchStatus::AwaitingCollateral , CoreError::NotActiveOrNotWaitingCollateral);
 
-    // let clock = Clock::get()?;
-    // require!(
-    //     clock.unix_timestamp >= batch.proof_deadline,
-    //     CoreError::ProofDeadlineNotPassed
-    // );
+    let clock = Clock::get()?;
+    require!(
+        clock.unix_timestamp >= batch.proof_deadline,
+        CoreError::ProofDeadlineNotPassed
+    );
 
     // Users win by operator silence — slash operator yield entitlement 20%
     batch.operator_yield_bps = batch.operator_yield_bps.saturating_sub(2000);
@@ -22,7 +22,7 @@ pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     batch.bets_completed = batch.bets_completed.saturating_add(1);
     batch.wins_count = batch.wins_count.saturating_add(1);
 
-    // --- NEW: Reset current bet state for the multi-option array model ---
+    // Reset bet state so the batch is ready for the next match
     batch.bet_terms = [BetTerms::default(); 4];
     batch.vote_weights = [0; 5];
     batch.winning_vote_index = None;

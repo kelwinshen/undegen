@@ -21,7 +21,7 @@ The Anchor workspace contains three programs defined in `Anchor.toml`:
 | :--- | :--- | :--- |
 | `undegen_core` | `programs/undegen_core` | `7HqLyczSoYYkru9xQ2QwiAN3kp156h2fr4z8EMeNJs3X` |
 | `lottery` | `programs/lottery` | `BkMhRmJCsnZ2bW9RkjK3mPQTEbtY6gpnX8H7AJQRrmbh` |
-| `yield_vault` | `programs/yield_vault` | Defined in workspace |
+| `yield_vault` | `programs/yield_vault` | `EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS` |
 
 ---
 

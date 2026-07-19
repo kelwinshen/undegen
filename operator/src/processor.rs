@@ -46,7 +46,6 @@ impl BatchProcessor {
         let next_batch_id = config_state.next_batch_id;
         info!("On-chain next_batch_id: {}", next_batch_id);
 
-        // If no batches exist, initialize the first one
         if next_batch_id == 0 {
             info!("No batches exist. Initializing batch ID 0");
             match self
@@ -60,9 +59,7 @@ impl BatchProcessor {
             return Ok(());
         }
 
-        // Loop through all batches from 1 to next_batch_id - 1
         for batch_id in 1..next_batch_id {
-            // Fetch batch state
             let batch = match self.solana.fetch_batch(batch_id).await {
                 Ok(b) => b,
                 Err(e) => {

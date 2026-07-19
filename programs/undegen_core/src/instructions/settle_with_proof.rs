@@ -17,15 +17,15 @@ pub fn settle_with_proof_handler(
     stat_a: StatTerm,
     stat_b: Option<StatTerm>,
     ts: i64,
-    // Note: outcome: bool is REMOVED! We get this directly from the Oracle return data now.
 ) -> Result<()> {
+    // Outcome is derived from the Oracle's return data, not passed in as an argument
     let batch = &mut ctx.accounts.batch;
     require!(batch.operator == ctx.accounts.operator.key(), CoreError::Unauthorized);
     require!(batch.status == BatchStatus::Active, CoreError::NotActive);
 
     let clock = Clock::get()?;
     require!(clock.unix_timestamp >= batch.kickoff_timestamp, CoreError::KickoffNotReached);
-    // require!(clock.unix_timestamp < batch.proof_deadline, CoreError::ProofDeadlineNotPassed);
+    require!(clock.unix_timestamp < batch.proof_deadline, CoreError::ProofDeadlineNotPassed);
 
     let winning_index = batch.winning_vote_index.expect("Consensus not finalized");
     

@@ -426,7 +426,7 @@ fn test_penalize_missed_collateral() {
     assert_eq!(batch_state.kickoff_timestamp, 0);
     assert_eq!(batch_state.win_prize, 0);
     
-    // Updated Assertions for Multi-Option Array
+    // Multi-option vote tracking should be reset
     assert_eq!(batch_state.vote_weights, [0; 5]);
     assert_eq!(batch_state.winning_vote_index, None);
     

@@ -13,7 +13,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
@@ -23,7 +22,6 @@ async fn main() -> Result<()> {
 
     info!("Starting Undegen Operator Service...");
 
-    // Load config
     let config = crate::config::Config::load()
         .context("Failed to load configuration")?;
 
@@ -31,7 +29,6 @@ async fn main() -> Result<()> {
     info!("RPC URL: {}", config.rpc_url);
     info!("Redis URL: {}", config.redis_url);
 
-    // Initialize Redis pool
     let redis_cfg = RedisConfig::from_url(&config.redis_url);
     let redis_pool = redis_cfg
         .create_pool(Some(deadpool_redis::Runtime::Tokio1))
@@ -39,7 +36,6 @@ async fn main() -> Result<()> {
 
     let redis_state = crate::state::RedisState::new(redis_pool);
 
-    // Initialize Solana client
     let solana_client = crate::solana::SolanaClient::new(
         &config.rpc_url,
         config.operator_keypair.clone(),
@@ -52,10 +48,8 @@ async fn main() -> Result<()> {
         config.lottery_program_id,
     );
 
-    // Initialize TxOdds client
     let txodds_client = crate::api::TxOddsClient::new(&config)?;
 
-    // Initialize Processor
     let processor = crate::processor::BatchProcessor::new(
         config.clone(),
         solana_client,

@@ -334,7 +334,6 @@ impl SolanaClient {
         self.operator_keypair.pubkey()
     }
 
-    /// Fetch ProtocolConfig account
     pub async fn fetch_protocol_config(&self) -> Result<ProtocolConfig> {
         let pda = get_protocol_config_pda(&self.undegen_program_id);
         let data = self.rpc.get_account_data(&pda).await
@@ -350,7 +349,6 @@ impl SolanaClient {
         Ok(config)
     }
 
-    /// Fetch Batch account
     pub async fn fetch_batch(&self, batch_id: u64) -> Result<Batch> {
         let pda = get_batch_pda(batch_id, &self.undegen_program_id);
         let data = self.rpc.get_account_data(&pda).await
@@ -861,7 +859,6 @@ impl SolanaClient {
 
     // --- Lottery program ---
 
-    /// Fetch LotteryConfig account for the operator's mint
     pub async fn fetch_lottery_config(&self) -> Result<LotteryConfig> {
         let pda = get_lottery_config_pda(&self.mint_address, &self.lottery_program_id);
         let data = self.rpc.get_account_data(&pda).await
@@ -877,7 +874,6 @@ impl SolanaClient {
         Ok(config)
     }
 
-    /// Fetch Round account for a given round ID
     pub async fn fetch_round(&self, round_id: u64) -> Result<Round> {
         let pda = get_round_pda(&self.mint_address, round_id, &self.lottery_program_id);
         let data = self.rpc.get_account_data(&pda).await

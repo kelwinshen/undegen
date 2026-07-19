@@ -199,7 +199,6 @@ export default function ClaimTest() {
       setBatchData(decoded);
       addLog("Batch loaded successfully.");
 
-      // Check if the connected user has a position account
       if (connected && wallet?.account?.address) {
         const user = new PublicKey(wallet.account.address);
         const [userPosPda] = PublicKey.findProgramAddressSync(

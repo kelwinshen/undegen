@@ -8,7 +8,6 @@
  * needs a matching edit in this file.
  */
 export const SOLANA_CONFIG = {
-  // RPC cluster endpoint URL
   RPC_URL: "https://api.devnet.solana.com",
 
   // USDC Mint Address (devnet test USDC used by undegen_core)
@@ -17,6 +16,5 @@ export const SOLANA_CONFIG = {
   // Decimals of the deposit token (USDC uses 6)
   TOKEN_DECIMALS: 6,
 
-  // Commitment level for RPC calls and transaction confirmation
   COMMITMENT: "confirmed" as const,
 };

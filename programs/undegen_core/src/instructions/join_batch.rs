@@ -95,7 +95,7 @@ pub fn join_batch_handler(ctx: Context<JoinBatch>, amount: u64) -> Result<()> {
         position.owner = ctx.accounts.user.key();
         position.has_voted = false;
 
-        // --- NEW: Initialize the vote_index instead of the boolean ---
+        // vote_index tracks which of the multi-option outcomes was voted for
         position.vote_index = 0;
         position.voted_at_round = 0;
 

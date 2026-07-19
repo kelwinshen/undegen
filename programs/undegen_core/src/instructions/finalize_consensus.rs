@@ -7,11 +7,11 @@ pub fn finalize_consensus_handler(ctx: Context<FinalizeConsensus>) -> Result<()>
     let batch = &mut ctx.accounts.batch;
     require!(batch.status == BatchStatus::Locked, CoreError::NotLocked);
 
-    // let clock = Clock::get()?;
-    // require!(
-    //     clock.unix_timestamp >= batch.kickoff_timestamp.saturating_sub(3600),
-    //     CoreError::KickoffNotReached
-    // );
+    let clock = Clock::get()?;
+    require!(
+        clock.unix_timestamp >= batch.kickoff_timestamp.saturating_sub(3600),
+        CoreError::KickoffNotReached
+    );
 
     // 1. Iterate through vote weights to find the highest consensus
     let mut max_weight = 0;
