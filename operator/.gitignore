@@ -1,0 +1,14 @@
+# Rust build artifacts
+/target
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Reference folders
+reference/
+
+# Operating system files
+.DS_Store
+Thumbs.db

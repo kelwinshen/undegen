@@ -1,0 +1,16 @@
+tick_interval_secs: 5
+lobby_duration_secs: 86400
+max_active_batches: 4
+batch_apy_bps: 500
+operator_yield_bps: 400
+min_batch_users: 1
+undegen_program_id: "4KdYywAokwbLWNZ6XFtr6boho1JprUTuhYsoGuu4dVRY"
+txodds_program_id: "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
+yield_vault_program_id: "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS"
+mint_address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" # Devnet USDC or custom mint
+fixtures_lookback_hours: 1
+deposit_collateral_alt: "ETHPWDGA8zLAaxbBMvuJ2Acxy4UNSfi751DqH593tMLY"
+settle_with_proof_alt: "9iTNvzhM6opWF1BPA84Qx39Py2EFTVLXtmojp1d9NJSv"
+lottery_program_id: "AH9Uibbi3vvUq3PkdTZTz3revx4GoPEN3bJeXh8A57HL"
+lottery_round_duration_secs: 604800
+
