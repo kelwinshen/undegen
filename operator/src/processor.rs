@@ -528,6 +528,7 @@ impl BatchProcessor {
                             metadata.fixture_id,
                             resolved_seq,
                             bet_term.stat_a_key,
+                            bet_term.stat_b_key,
                         )
                         .await?;
 

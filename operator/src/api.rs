@@ -32,12 +32,59 @@ pub struct TxOddsItem {
     pub bookmaker_id: i32,
 }
 
+fn deserialize_non_null_value<'de, D>(deserializer: D) -> Result<Option<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(opt.filter(|v| !v.is_null()))
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ScoreParticipant {
-    #[serde(alias = "HT")]
-    pub ht: Option<i32>,
-    #[serde(alias = "H2")]
-    pub h2: Option<i32>,
+    #[serde(default, alias = "HT", alias = "ht", deserialize_with = "deserialize_non_null_value")]
+    pub ht: Option<serde_json::Value>,
+    #[serde(default, alias = "H2", alias = "h2", deserialize_with = "deserialize_non_null_value")]
+    pub h2: Option<serde_json::Value>,
+}
+
+#[allow(dead_code)]
+impl ScoreParticipant {
+    pub fn ht_as_i64(&self) -> Option<i64> {
+        match self.ht.as_ref()? {
+            serde_json::Value::Number(n) => n.as_i64(),
+            serde_json::Value::String(s) => s.parse().ok(),
+            serde_json::Value::Object(map) => {
+                for k in &["score", "Score", "val", "value", "points"] {
+                    if let Some(v) = map.get(*k) {
+                        if let Some(n) = v.as_i64() {
+                            return Some(n);
+                        }
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    pub fn h2_as_i64(&self) -> Option<i64> {
+        match self.h2.as_ref()? {
+            serde_json::Value::Number(n) => n.as_i64(),
+            serde_json::Value::String(s) => s.parse().ok(),
+            serde_json::Value::Object(map) => {
+                for k in &["score", "Score", "val", "value", "points"] {
+                    if let Some(v) = map.get(*k) {
+                        if let Some(n) = v.as_i64() {
+                            return Some(n);
+                        }
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -299,11 +346,15 @@ impl TxOddsClient {
         fixture_id: i64,
         seq: u64,
         stat_key: u32,
+        stat_key2: Option<u32>,
     ) -> Result<StatValidationResponse> {
-        let url = format!(
+        let mut url = format!(
             "{}/api/scores/stat-validation?fixtureId={}&seq={}&statKey={}",
             self.base_url, fixture_id, seq, stat_key
         );
+        if let Some(k2) = stat_key2 {
+            url.push_str(&format!("&statKey2={}", k2));
+        }
         info!("Fetching score validation proof from {}", url);
         let resp: StatValidationResponse = self.client
             .get(&url)
@@ -376,4 +427,55 @@ pub struct RawOddsMarket {
     pub market_parameters: Option<String>,
     #[serde(rename = "MarketPeriod")]
     pub market_period: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_score_snapshot_deserialization_with_map_and_int() {
+        let json_data = r#"[
+            {
+                "Seq": 100,
+                "GameState": "halftime",
+                "Score": {
+                    "Participant1": {
+                        "HT": { "score": 1, "details": {} },
+                        "H2": null
+                    },
+                    "Participant2": {
+                        "HT": 0
+                    }
+                }
+            },
+            {
+                "Seq": 101,
+                "GameState": "game_finalised",
+                "Score": {
+                    "Participant1": {
+                        "HT": 1,
+                        "H2": 2
+                    },
+                    "Participant2": {
+                        "HT": 0,
+                        "H2": 1
+                    }
+                }
+            }
+        ]"#;
+
+        let snapshots: Vec<ScoreSnapshot> = serde_json::from_str(json_data).expect("Deserialization failed");
+        assert_eq!(snapshots.len(), 2);
+        assert_eq!(snapshots[0].seq, 100);
+
+        let p1_0 = snapshots[0].score.as_ref().unwrap().participant1.as_ref().unwrap();
+        assert!(p1_0.ht.is_some());
+        assert!(p1_0.h2.is_none());
+        assert_eq!(p1_0.ht_as_i64(), Some(1));
+
+        let p1_1 = snapshots[1].score.as_ref().unwrap().participant1.as_ref().unwrap();
+        assert_eq!(p1_1.ht_as_i64(), Some(1));
+        assert_eq!(p1_1.h2_as_i64(), Some(2));
+    }
 }
