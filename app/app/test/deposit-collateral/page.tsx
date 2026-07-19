@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,6 +13,7 @@ import {
   VersionedTransaction,
   TransactionMessage,
   AddressLookupTableAccount,
+  AddressLookupTableProgram,
 } from "@solana/web3.js";
 import {
   getAssociatedTokenAddress,
@@ -21,18 +22,18 @@ import {
 } from "@solana/spl-token";
 import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/Header";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
-const UNDEGEN_PROGRAM_ID_STR = "BgAM2mzfbFhcA1F3AfjfnV1nzyTJXb6bSz5BX7Wufwma";
-const DEVNET_RPC = "https://api.devnet.solana.com";
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
+const ALT_ADDRESS_STR = "ETHPWDGA8zLAaxbBMvuJ2Acxy4UNSfi751DqH593tMLY";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 
 const DEPOSIT_COLLATERAL_DISCRIMINATOR = Buffer.from([
   156, 131, 142, 116, 146, 247, 162, 120,
 ]);
 
-const BATCH_DISCRIMINATOR = Buffer.from([
-  156, 194, 70, 44, 22, 88, 137, 44,
-]);
+const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
 
 const COLLATERAL_SEED = "collateral";
 
@@ -81,7 +82,7 @@ function writeUInt64LE(value: number | bigint | string): Buffer {
   new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigUint64(
     0,
     BigInt(value),
-    true,
+    true
   );
   return buf;
 }
@@ -90,7 +91,7 @@ function writeInt64LE(value: number | bigint | string): Buffer {
   new DataView(buf.buffer, buf.byteOffset, buf.byteLength).setBigInt64(
     0,
     BigInt(value),
-    true,
+    true
   );
   return buf;
 }
@@ -158,7 +159,8 @@ function serializeSummary(s: any): Buffer {
   const rootBuf = Array.isArray(oddsRoot)
     ? Buffer.from(oddsRoot)
     : Buffer.from(oddsRoot, "base64");
-  if (rootBuf.length !== 32) throw new Error("oddsSubTreeRoot must be 32 bytes");
+  if (rootBuf.length !== 32)
+    throw new Error("oddsSubTreeRoot must be 32 bytes");
 
   const stats = s.updateStats ?? s.update_stats;
   const updateCount = stats.updateCount ?? stats.update_count;
@@ -248,7 +250,7 @@ type SlotMapping = {
   outcomeIndex: number;
 };
 
-export default function DepositCollateral() {
+function DepositCollateralContent() {
   const searchParams = useSearchParams();
   const batchIdParam = searchParams.get("batchId") || "";
   const [batchId, setBatchId] = useState(batchIdParam);
@@ -269,19 +271,14 @@ export default function DepositCollateral() {
   const [depositAmount, setDepositAmount] = useState<string>("");
 
   const addLog = (msg: string) =>
-    setLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${msg}`,
-    ]);
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
     if (!secretKeyEnv)
       throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
-      return Keypair.fromSecretKey(
-        Uint8Array.from(JSON.parse(secretKeyEnv)),
-      );
+      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
     return Keypair.fromSecretKey(bs58.decode(secretKeyEnv));
   };
@@ -302,7 +299,7 @@ export default function DepositCollateral() {
       const amount = (betSize * priceBig) / BigInt(1000);
       setDepositAmount(amount.toString());
       addLog(
-        `Computed deposit amount: ${amount.toString()} (bet_size * price / 1000)`,
+        `Computed deposit amount: ${amount.toString()} (bet_size * price / 1000)`
       );
     } catch (e: any) {
       addLog(`Amount computation error: ${e.message}`);
@@ -331,12 +328,12 @@ export default function DepositCollateral() {
 
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC);
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+      const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("batch"), batchIdBuffer],
-        programId,
+        programId
       );
       setBatchPda(pda);
       addLog(`Batch PDA: ${pda.toBase58()}`);
@@ -358,7 +355,7 @@ export default function DepositCollateral() {
         const mapData = await mapRes.json();
         setSlotsMapping(mapData.slotsMapping || {});
         addLog(
-          `Redis mapping loaded for ${Object.keys(mapData.slotsMapping || {}).length} slots.`,
+          `Redis mapping loaded for ${Object.keys(mapData.slotsMapping || {}).length} slots.`
         );
       } else {
         addLog("Warning: No Redis mapping found for this batch.");
@@ -378,7 +375,7 @@ export default function DepositCollateral() {
       const slotData = slotsMapping[selectedSlot];
       if (!slotData) throw new Error("No slot data for the selected slot.");
       const res = await fetch(
-        `/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`,
+        `/api/odds/validation?messageId=${encodeURIComponent(slotData.messageId)}&ts=${slotData.ts}`
       );
       if (!res.ok) {
         const errText = await res.text();
@@ -402,23 +399,23 @@ export default function DepositCollateral() {
     setResult(null);
 
     try {
-      const connection = new Connection(DEVNET_RPC);
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+      const programId = UNDEGEN_PROGRAM_ID;
       const operator = getOperatorKeypair();
       const mint = batchData.mint;
       const operatorTokenAccount = await getAssociatedTokenAddress(
         mint,
-        operator.publicKey,
+        operator.publicKey
       );
       const batchTokenAccount = await getAssociatedTokenAddress(
         mint,
         batchPda,
-        true,
+        true
       );
 
       const [collateralPda] = PublicKey.findProgramAddressSync(
         [Buffer.from(COLLATERAL_SEED), batchPda.toBuffer()],
-        programId,
+        programId
       );
 
       const useRealProof = validationData !== null;
@@ -430,37 +427,38 @@ export default function DepositCollateral() {
         : serializeEmptySummary();
       const subTreeProofBuf = useRealProof
         ? serializeProofVec(
-            validationData.subTreeProof ?? validationData.sub_tree_proof,
+            validationData.subTreeProof ?? validationData.sub_tree_proof
           )
         : serializeEmptyProofVec();
       const mainTreeProofBuf = useRealProof
         ? serializeProofVec(
-            validationData.mainTreeProof ?? validationData.main_tree_proof,
+            validationData.mainTreeProof ?? validationData.main_tree_proof
           )
         : serializeEmptyProofVec();
 
       const oraclePriceIndex = useRealProof
-        ? slotsMapping?.[selectedSlot!]?.outcomeIndex ?? 0
-        : 0; 
+        ? (slotsMapping?.[selectedSlot!]?.outcomeIndex ?? 0)
+        : 0;
 
       const amountBigInt = (() => {
         const raw = depositAmount.trim();
-        if (raw === "") return BigInt(0); 
+        if (raw === "") return BigInt(0);
         return BigInt(raw);
       })();
 
       const TXODDS_PROGRAM_ID = new PublicKey(
-        "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J",
+        "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
       );
       const epochDay = Math.floor(
-        Number(useRealProof ? (validationData.odds.Ts ?? validationData.odds.ts) : 0) /
-          86400000,
+        Number(
+          useRealProof ? (validationData.odds.Ts ?? validationData.odds.ts) : 0
+        ) / 86400000
       );
       const bufLE = Buffer.alloc(2);
       bufLE.writeUInt16LE(epochDay);
       const [dailyOddsMerkleRoots] = PublicKey.findProgramAddressSync(
         [Buffer.from("daily_batch_roots"), bufLE],
-        TXODDS_PROGRAM_ID,
+        TXODDS_PROGRAM_ID
       );
 
       const data = Buffer.concat([
@@ -474,7 +472,10 @@ export default function DepositCollateral() {
       ]);
 
       console.log("========== TRANSACTION SIZE BREAKDOWN ==========");
-      console.log("Discriminator bytes:", DEPOSIT_COLLATERAL_DISCRIMINATOR.length);
+      console.log(
+        "Discriminator bytes:",
+        DEPOSIT_COLLATERAL_DISCRIMINATOR.length
+      );
       console.log("Amount bytes:", 8);
       console.log("Oracle Price Index bytes:", 1);
       console.log("Odds Data bytes:", oddsBuf.length);
@@ -482,7 +483,7 @@ export default function DepositCollateral() {
       console.log("SubTree Proof bytes:", subTreeProofBuf.length);
       console.log("MainTree Proof bytes:", mainTreeProofBuf.length);
       console.log("Total Instruction Data bytes:", data.length);
-      
+
       const keys = [
         { pubkey: operator.publicKey, isSigner: true, isWritable: true },
         { pubkey: mint, isSigner: false, isWritable: false },
@@ -493,20 +494,36 @@ export default function DepositCollateral() {
         { pubkey: dailyOddsMerkleRoots, isSigner: false, isWritable: false },
         { pubkey: TXODDS_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        {
+          pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,
+          isSigner: false,
+          isWritable: false,
+        },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ];
 
-      console.log("--- ACCOUNT KEYS BREAKDOWN (32 bytes each uncompressed) ---");
+      console.log(
+        "--- ACCOUNT KEYS BREAKDOWN (32 bytes each uncompressed) ---"
+      );
       keys.forEach((k, i) => {
-        console.log(`Key ${i} [${k.pubkey.toBase58()}]: 32 bytes (Signer: ${k.isSigner}, Writable: ${k.isWritable})`);
+        console.log(
+          `Key ${i} [${k.pubkey.toBase58()}]: 32 bytes (Signer: ${k.isSigner}, Writable: ${k.isWritable})`
+        );
       });
-      console.log(`Total Keys: ${keys.length} (${keys.length * 32} bytes uncompressed)`);
-      console.log("Note: Any non-signer key above can be added to an ALT to save 31 bytes each. Signer keys cannot benefit from ALT compression.");
+      console.log(
+        `Total Keys: ${keys.length} (${keys.length * 32} bytes uncompressed)`
+      );
+      console.log(
+        "Note: Any non-signer key above can be added to an ALT to save 31 bytes each. Signer keys cannot benefit from ALT compression."
+      );
       console.log("================================================");
 
-      addLog(`Data Payload Size: ${data.length} bytes (Odds: ${oddsBuf.length}, Summary: ${summaryBuf.length}, SubTree: ${subTreeProofBuf.length}, MainTree: ${mainTreeProofBuf.length})`);
-      addLog(`Accounts Size: ${keys.length * 32} bytes (${keys.length} keys total before compression)`);
+      addLog(
+        `Data Payload Size: ${data.length} bytes (Odds: ${oddsBuf.length}, Summary: ${summaryBuf.length}, SubTree: ${subTreeProofBuf.length}, MainTree: ${mainTreeProofBuf.length})`
+      );
+      addLog(
+        `Accounts Size: ${keys.length * 32} bytes (${keys.length} keys total before compression)`
+      );
 
       console.log("--- DYNAMIC ACCOUNTS TO ADD TO ALT ---");
       console.log("Batch PDA:", batchPda.toBase58());
@@ -514,25 +531,98 @@ export default function DepositCollateral() {
       console.log("Batch Token:", batchTokenAccount.toBase58());
       console.log("Daily Roots:", dailyOddsMerkleRoots.toBase58());
       const ix = new TransactionInstruction({ programId, keys, data });
-      
-      const { blockhash } = await connection.getLatestBlockhash();
 
-      const lookupTables: AddressLookupTableAccount[] = [];
-      if (process.env.NEXT_PUBLIC_ALT_ADDRESS) {
-        const altAddress = new PublicKey(process.env.NEXT_PUBLIC_ALT_ADDRESS);
-        const lookupTableAccount = (await connection.getAddressLookupTable(altAddress)).value;
-        if (lookupTableAccount) {
-          lookupTables.push(lookupTableAccount);
-          
-          // NEW LOGGING HERE
-          const activeAddresses = lookupTableAccount.state.addresses.length;
-          addLog(`Loaded ALT: ${altAddress.toBase58()}`);
-          addLog(`🔍 Next.js sees ${activeAddresses} addresses in this ALT.`);
-          
-        } else {
-          addLog(`Warning: Failed to load ALT at ${altAddress.toBase58()}`);
-        }
+      const altAddress = new PublicKey(ALT_ADDRESS_STR);
+      let lookupTableAccount = (
+        await connection.getAddressLookupTable(altAddress, {
+          commitment: "confirmed",
+        })
+      ).value;
+      if (!lookupTableAccount) {
+        throw new Error(`Lookup table ${altAddress.toBase58()} not found`);
       }
+
+      const candidateAddresses = [
+        programId,
+        ComputeBudgetProgram.programId,
+        ...keys.filter((k) => !k.isSigner).map((k) => k.pubkey),
+      ];
+      const uniqueCandidates = Array.from(
+        new Set(candidateAddresses.map((p) => p.toBase58()))
+      ).map((s) => new PublicKey(s));
+
+      const existingAddressesSet = new Set(
+        lookupTableAccount.state.addresses.map((a) => a.toBase58())
+      );
+      const missingAddresses = uniqueCandidates.filter(
+        (addr) => !existingAddressesSet.has(addr.toBase58())
+      );
+
+      if (missingAddresses.length > 0) {
+        addLog(
+          `ALT is missing ${missingAddresses.length} addresses. Extending ALT...`
+        );
+        const extendInstruction = AddressLookupTableProgram.extendLookupTable({
+          payer: operator.publicKey,
+          authority: operator.publicKey,
+          lookupTable: altAddress,
+          addresses: missingAddresses,
+        });
+
+        const { blockhash: extendBlockhash } =
+          await connection.getLatestBlockhash("confirmed");
+        const extendMessage = new TransactionMessage({
+          payerKey: operator.publicKey,
+          recentBlockhash: extendBlockhash,
+          instructions: [extendInstruction],
+        }).compileToV0Message();
+
+        const extendTx = new VersionedTransaction(extendMessage);
+        extendTx.sign([operator]);
+
+        const extendSig = await connection.sendRawTransaction(
+          extendTx.serialize(),
+          {
+            skipPreflight: false,
+          }
+        );
+        addLog(`ALT extend tx sent: ${extendSig}. Waiting for confirmation...`);
+
+        const latestBlockHash =
+          await connection.getLatestBlockhash("confirmed");
+        await connection.confirmTransaction(
+          {
+            blockhash: latestBlockHash.blockhash,
+            lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+            signature: extendSig,
+          },
+          "confirmed"
+        );
+
+        addLog(
+          "ALT extended successfully. Waiting 2 seconds for lookup table activation slot..."
+        );
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        const updatedLut = (
+          await connection.getAddressLookupTable(altAddress, {
+            commitment: "confirmed",
+          })
+        ).value;
+        if (updatedLut) {
+          lookupTableAccount = updatedLut;
+          addLog(
+            `Re-loaded ALT. Now contains ${lookupTableAccount.state.addresses.length} addresses.`
+          );
+        } else {
+          throw new Error("Failed to re-fetch extended ALT");
+        }
+      } else {
+        addLog("All required addresses already present in ALT.");
+      }
+
+      const lookupTables = [lookupTableAccount];
+      const { blockhash } = await connection.getLatestBlockhash("confirmed");
 
       const messageV0 = new TransactionMessage({
         payerKey: operator.publicKey,
@@ -543,7 +633,9 @@ export default function DepositCollateral() {
         ],
       }).compileToV0Message(lookupTables);
 
-      addLog(`Compiled V0 Message Size Estimate: ~${messageV0.serialize().length} bytes / 1232 limit`);
+      addLog(
+        `Compiled V0 Message Size Estimate: ~${messageV0.serialize().length} bytes / 1232 limit`
+      );
 
       const tx = new VersionedTransaction(messageV0);
       tx.sign([operator]);
@@ -623,7 +715,8 @@ export default function DepositCollateral() {
                   </span>
                 </span>
                 <span className="block">
-                  <strong>Bet Size:</strong> {batchData.bet_size.toString()}
+                  <strong>Prediction Size:</strong>{" "}
+                  {batchData.bet_size.toString()}
                 </span>
                 <span className="block">
                   <strong>Collateral Required:</strong>{" "}
@@ -770,5 +863,19 @@ export default function DepositCollateral() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function DepositCollateral() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-bg1 text-white flex items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
+      <DepositCollateralContent />
+    </Suspense>
   );
 }

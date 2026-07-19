@@ -7,8 +7,8 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-lottery = "6rFkLr16EYdTUF8fxKvg8M664RjC7RK9JNgzn4UaGiGe"
-undegen_core = "2DBPJLkzrUpgxLGwn73NQmxv7r7D5e6zTdYcKXMu8EWq"
+lottery = "BkMhRmJCsnZ2bW9RkjK3mPQTEbtY6gpnX8H7AJQRrmbh"
+undegen_core = "7HqLyczSoYYkru9xQ2QwiAN3kp156h2fr4z8EMeNJs3X"
 undegen_protocol = "2icvBp1n9eyB9nKeC5vp6tXj6UJjZHvAJcvBiyGjqvLT"
 
 [provider]

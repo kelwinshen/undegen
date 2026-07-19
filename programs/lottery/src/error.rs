@@ -18,4 +18,14 @@ pub enum LotteryError {
     MathOverflow,
     #[msg("Unauthorized")]
     Unauthorized,
+    #[msg("Round cannot be drawn until its 7-day duration has elapsed")]
+    RoundNotExpired,
+    #[msg("Round is not waiting on randomness")]
+    RandomnessNotRequested,
+    #[msg("Randomness account does not match the one committed for this round")]
+    RandomnessAccountMismatch,
+    #[msg("Switchboard randomness has not been revealed in this slot yet")]
+    RandomnessNotResolved,
+    #[msg("Failed to commit the Switchboard randomness request")]
+    RandomnessCommitFailed,
 }

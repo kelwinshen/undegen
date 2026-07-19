@@ -2,38 +2,40 @@
 
 :root {
   --background: #ffffff;
-  --foreground: oklch(0.145 0 0); /* deep neutral */
-  --border-strong: oklch(0.839 0.0187 78.23);
-  --border-low: oklch(0.927 0.0122 96.43);
-  --accent: oklch(0 0 0);
+  --foreground: #0a0a0a; /* deep neutral */
+  --border-strong: #d9d4c7;
+  --border-low: #ede9d9;
+  --accent: #000000;
   --muted: #3a3a3a; /* darker for better light-mode contrast */
-  --cream: oklch(0.9553 0.0029 84.56);
+  --font-montserrat: "Montserrat", sans-serif;
+
   --card: #ffffff;
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: #0a0a0a;
   --radius: 0.625rem;
-  --font-sans: var(--font-inter), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-montserrat);
+  --font-mono: var(--font-montserrat);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --border-strong: oklch(1 0 0 / 0.12);
-    --border-low: oklch(1 0 0 / 0.08);
-    --accent: oklch(0.922 0 0);
-    --muted: oklch(0.75 0.01 260); /* brighten muted text in dark mode */
-    --cream: oklch(0.22 0.009 70.82);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --border-low: rgba(255, 255, 255, 0.08);
+    --accent: #e5e5e5;
+    --muted: #b8bccc; /* brighten muted text in dark mode */
+
+    --card: #171717;
+    --card-foreground: #fafafa;
   }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-bg1: var(--background);
+
   --color-foreground: var(--foreground);
-  --color-cream: var(--cream);
+
   --color-border: var(--border-strong);
   --color-border-strong: var(--border-strong);
   --color-border-low: var(--border-low);
@@ -57,5 +59,18 @@
     @apply bg-bg1 text-foreground antialiased;
     font-family: var(--font-sans);
     color-scheme: light dark;
+  }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"]:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
   }
 }

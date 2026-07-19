@@ -5,14 +5,8 @@ use anchor_lang::prelude::*;
 
 pub fn propose_match_handler(
     ctx: Context<ProposeMatch>,
-    fixture_id: i64,
+    bet_terms_array: [BetTerms; 4], // Accepts the 4 specific bets as an array natively formatted for TxOdds
     kickoff_timestamp: i64,
-    period: u16,
-    stat_a_key: u32,
-    stat_b_key: Option<u32>,
-    predicate_threshold: i32,
-    predicate_comparison: u8,
-    negation: bool,
 ) -> Result<()> {
     let batch = &mut ctx.accounts.batch;
     require!(batch.operator == ctx.accounts.operator.key(), CoreError::Unauthorized);
@@ -21,25 +15,28 @@ pub fn propose_match_handler(
     require!(batch.bet_size > 0, CoreError::InvalidAmount);
     require!(batch.bets_completed < MAX_BETS, CoreError::AlreadyFinished);
 
-    batch.bet_terms = BetTerms {
-        fixture_id,
-        period,
-        stat_a_key,
-        stat_b_key,
-        predicate_threshold,
-        predicate_comparison,
-        negation,
-    };
+    // NEW: Ensure at least one valid bet is proposed (fixture_id != 0)
+    let has_valid_bet = bet_terms_array.iter().any(|term| term.fixture_id != 0);
+    require!(has_valid_bet, CoreError::InvalidAmount); // Or create a specific CoreError::EmptyProposal
+
+    // 1. Assign the 4 proposed bets to the state
+    batch.bet_terms = bet_terms_array;
     batch.kickoff_timestamp = kickoff_timestamp;
     batch.win_prize = batch.bet_size;
-    batch.collateral_required = batch.bet_size;
+
+    // 2. Explicitly reset consensus and collateral tracking for this new match
+    batch.vote_weights = [0; 5];
+    batch.winning_vote_index = None;
+    batch.collateral_required = 0; // Will be determined dynamically in deposit_collateral
+    batch.collateral_deposited = 0;
+    batch.outcome = None;
+
     batch.proof_deadline = kickoff_timestamp
         .checked_add(PROOF_DEADLINE_SECONDS)
         .ok_or(CoreError::MathOverflow)?;
 
     msg!(
-        "Match proposed: fixture_id={} bet_size={} bets_completed={}/{} kickoff={}",
-        fixture_id,
+        "Match proposed with up to 4 options: bet_size={} bets_completed={}/{} kickoff={}",
         batch.bet_size,
         batch.bets_completed,
         MAX_BETS,

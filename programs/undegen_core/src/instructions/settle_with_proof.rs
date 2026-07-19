@@ -4,35 +4,10 @@ use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Tran
 use yield_vault::cpi::accounts::Deposit;
 use yield_vault::program::YieldVault;
 
-use crate::constants::{BATCH_SEED, COLLATERAL_SEED, MAX_BETS};
+use crate::constants::{BATCH_SEED, COLLATERAL_SEED, MAX_BETS, TXODDS_PROGRAM_ID};
 use crate::error::CoreError;
 use crate::state::{Batch, BatchStatus, BetTerms};
 use crate::txodds_types::*;
-
-pub const TXODDS_PROGRAM_ID: Pubkey =
-    anchor_lang::solana_program::pubkey::pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
-
-pub const AUDIT_TRADE_RESULT_DISCRIMINATOR: [u8; 8] = [50, 242, 243, 5, 209, 75, 76, 91];
-
-fn bet_terms_to_market_params(terms: &BetTerms) -> MarketIntentParams {
-    let comparison = match terms.predicate_comparison {
-        0 => Comparison::GreaterThan,
-        1 => Comparison::LessThan,
-        _ => Comparison::EqualTo,
-    };
-    MarketIntentParams {
-        fixture_id: terms.fixture_id,
-        period: terms.period,
-        stat_a_key: terms.stat_a_key,
-        stat_b_key: terms.stat_b_key,
-        predicate: TraderPredicate {
-            threshold: terms.predicate_threshold,
-            comparison,
-        },
-        op: None,
-        negation: terms.negation,
-    }
-}
 
 pub fn settle_with_proof_handler(
     ctx: Context<SettleWithProof>,
@@ -42,34 +17,71 @@ pub fn settle_with_proof_handler(
     stat_a: StatTerm,
     stat_b: Option<StatTerm>,
     ts: i64,
-    outcome: bool,
 ) -> Result<()> {
+    // Outcome is derived from the Oracle's return data, not passed in as an argument
     let batch = &mut ctx.accounts.batch;
+    require!(batch.operator == ctx.accounts.operator.key(), CoreError::Unauthorized);
     require!(batch.status == BatchStatus::Active, CoreError::NotActive);
 
     let clock = Clock::get()?;
     require!(clock.unix_timestamp >= batch.kickoff_timestamp, CoreError::KickoffNotReached);
     require!(clock.unix_timestamp < batch.proof_deadline, CoreError::ProofDeadlineNotPassed);
-    require!(fixture_summary.fixture_id == batch.bet_terms.fixture_id, CoreError::MatchIdMismatch);
 
-    // --- TxOdds proof verification CPI ---
-    let terms = bet_terms_to_market_params(&batch.bet_terms);
-    let args = AuditTradeResultArgs {
-        terms,
+    let winning_index = batch.winning_vote_index.expect("Consensus not finalized");
+    
+    // Skip option (4) never reaches this instruction because deposit_collateral 
+    // bypasses the Active state entirely for skips.
+    require!(winning_index < 4, CoreError::Unauthorized); 
+
+    let active_term = batch.bet_terms[winning_index as usize];
+    require!(fixture_summary.fixture_id == active_term.fixture_id, CoreError::MatchIdMismatch);
+
+
+    require!(
+        stat_a.stat_to_prove.key == active_term.stat_a_key,
+        CoreError::StatKeyMismatch
+    );
+    match (&stat_b, active_term.stat_b_key) {
+        (Some(sb), Some(expected_key)) => require!(
+            sb.stat_to_prove.key == expected_key,
+            CoreError::StatKeyMismatch
+        ),
+        (None, None) => {}
+        _ => return err!(CoreError::StatKeyMismatch),
+    }
+
+    // --- 1. PDA SECURITY CHECK FOR SCORES MERKLE ROOT ---
+    // TxOdds Docs: For scores, use validation.summary.updateStats.minTimestamp
+    let proof_ts_ms = fixture_summary.update_stats.min_timestamp;
+    let epoch_day: u16 = (proof_ts_ms / 86400000) as u16;
+    
+    let (expected_pda, _) = Pubkey::find_program_address(
+        &[b"daily_scores_roots", &epoch_day.to_le_bytes()],
+        &TXODDS_PROGRAM_ID,
+    );
+
+    require!(
+        ctx.accounts.daily_scores_merkle_roots.key() == expected_pda,
+        CoreError::InvalidOracleAccount
+    );
+
+    // --- 2. EXECUTE THE CPI TO TXODDS ---
+    let args = ValidateStatArgs {
+        ts,
         fixture_summary,
-        main_tree_proof,
         fixture_proof,
+        main_tree_proof,
+        predicate: active_term.predicate, 
         stat_a,
         stat_b,
-        ts,
+        op: active_term.op,               
     };
 
-    let mut ix_data = AUDIT_TRADE_RESULT_DISCRIMINATOR.to_vec();
+    let mut ix_data = VALIDATE_STAT_DISCRIMINATOR.to_vec();
     args.serialize(&mut ix_data)
         .map_err(|_| CoreError::InvalidOracleSignature)?;
 
     let txodds_accounts = vec![
-        AccountMeta::new(ctx.accounts.operator.key(), true),
         AccountMeta::new_readonly(ctx.accounts.daily_scores_merkle_roots.key(), false),
     ];
 
@@ -79,27 +91,30 @@ pub fn settle_with_proof_handler(
             accounts: txodds_accounts,
             data: ix_data,
         },
-        &[
-            ctx.accounts.operator.to_account_info(),
-            ctx.accounts.daily_scores_merkle_roots.to_account_info(),
-        ],
+        &[ctx.accounts.daily_scores_merkle_roots.to_account_info()],
     ).map_err(|_| CoreError::InvalidOracleSignature)?;
 
-    // Operator submitted proof on time — operator_yield_bps unchanged
-    // Operator claims vault yield via claim_operator_yield after batch settles
-    // No commission transfer here
+    // --- 3. GET THE OUTCOME FROM THE ORACLE RETURN DATA ---
+    // Added explicit (Pubkey, Vec<u8>) type annotation here to fix the compiler error!
+    let (_program_id, return_data): (Pubkey, Vec<u8>) = anchor_lang::solana_program::program::get_return_data()
+        .ok_or(CoreError::OracleReturnDataMissing)?;
+
+    // Anchor serializes a boolean as a single byte: [1] for true, [0] for false
+    let outcome = return_data.first() == Some(&1);
+
 
     let batch_id_bytes = batch.batch_id.to_le_bytes();
     let signer_seeds: &[&[&[u8]]] = &[&[BATCH_SEED, batch_id_bytes.as_ref(), &[batch.bump]]];
 
-    // --- Handle bet outcome ---
+    // --- 4. HANDLE PAYOUT BASED ON ORACLE OUTCOME ---
     batch.bets_completed = batch.bets_completed.saturating_add(1);
 
     if outcome {
-        // Users won — compound operator collateral into vault
-        // Increases vault position value → users get more when they claim shares
-        msg!("Users won — compounding collateral into vault");
+        // TRUE = Predicate Met (Users won)
+        batch.wins_count = batch.wins_count.saturating_add(1);
+        msg!("Oracle says Users won — compounding collateral into vault");
         let collateral_amount = ctx.accounts.collateral_token_account.amount;
+          batch.accumulated_winnings = batch.accumulated_winnings.saturating_add(collateral_amount);
         if collateral_amount > 0 {
             yield_vault::cpi::deposit(
                 CpiContext::new_with_signer(
@@ -121,8 +136,9 @@ pub fn settle_with_proof_handler(
             )?;
         }
     } else {
-        // Operator won — return collateral to operator
-        msg!("Operator won — returning collateral");
+        // FALSE = Predicate Failed (Operator won) — the user lost this bet.
+        batch.losses_count = batch.losses_count.saturating_add(1);
+        msg!("Oracle says Operator won — returning collateral to operator");
         let collateral_amount = ctx.accounts.collateral_token_account.amount;
         if collateral_amount > 0 {
             token_interface::transfer_checked(
@@ -142,30 +158,23 @@ pub fn settle_with_proof_handler(
         }
     }
 
-    // --- Reset current bet state ---
-    batch.bet_terms = BetTerms::default();
+    // --- 5. RESET STATE FOR NEXT ROUND ---
+    batch.bet_terms = [BetTerms::default(); 4];
+    batch.vote_weights = [0; 5];
+    batch.winning_vote_index = None;
     batch.kickoff_timestamp = 0;
     batch.win_prize = 0;
     batch.collateral_required = 0;
     batch.collateral_deposited = 0;
     batch.proof_deadline = 0;
     batch.outcome = None;
-    batch.yes_weight = 0;
-    batch.no_weight = 0;
 
-    // Move to Settled if all bets done, otherwise back to Locked
     if batch.bets_completed >= MAX_BETS {
         batch.status = BatchStatus::Settled;
-        msg!(
-            "Batch {} fully settled after {} bets — operator_yield_bps={}",
-            batch.batch_id, MAX_BETS, batch.operator_yield_bps
-        );
+        msg!("Batch {} fully settled after {} bets.", batch.batch_id, MAX_BETS);
     } else {
         batch.status = BatchStatus::Locked;
-        msg!(
-            "Batch {} bet {}/{} settled outcome={} — back to Locked",
-            batch.batch_id, batch.bets_completed, MAX_BETS, outcome,
-        );
+        msg!("Batch {} round settled (outcome={}) — back to Locked", batch.batch_id, outcome);
     }
 
     Ok(())

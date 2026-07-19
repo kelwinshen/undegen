@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
+use crate::txodds_types::{BinaryExpression, TraderPredicate}; // Imports strict IDL types
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug, Default)]
 pub enum BatchStatus {
+    #[default]
     Lobby,
     Locked,
     AwaitingCollateral,
@@ -11,15 +13,16 @@ pub enum BatchStatus {
 }
 
 // Mirrors TxOdds MarketIntentParams — stored on Batch at propose_match time
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, Default)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, Default, Debug)]
+//pakai timestamp pas propose match dipresent sama MessageId
 pub struct BetTerms {
     pub fixture_id: i64,
     pub period: u16,
     pub stat_a_key: u32,
     pub stat_b_key: Option<u32>,
-    pub predicate_threshold: i32,
-    pub predicate_comparison: u8, // 0=GreaterThan, 1=LessThan, 2=EqualTo
-    pub negation: bool,
+    pub op: Option<BinaryExpression>,   // Uses exact IDL Enum (Add/Subtract)
+    pub predicate: TraderPredicate,     // Uses exact IDL Struct (threshold & comparison)
+    pub negation: bool,                 // Currently tracked, but TxOdds validates without negation natively
 }
 
 #[account]
@@ -44,19 +47,45 @@ pub struct Batch {
     pub bets_completed: u8,        // how many bets have been settled
     pub accumulated_winnings: u64, // total winnings users have earned across all bets
 
+    pub operator_yield_bps: u16,
 
-  pub operator_yield_bps: u16,
-
-    // Current bet proposal (reset after each bet)
-    pub bet_terms: BetTerms,
+    // Current bet proposals (reset after each bet)
+    // Holds exactly 4 bet options natively formatted for TxOdds validation
+    pub bet_terms: [BetTerms; 4],
     pub kickoff_timestamp: i64,
     pub win_prize: u64,            // = bet_size for current bet
-    pub yes_weight: u64,
-    pub no_weight: u64,
+
+    // Consensus tracking: [Bet 0, Bet 1, Bet 2, Bet 3, Skip (Index 4)]
+    pub vote_weights: [u64; 5],
+    pub winning_vote_index: Option<u8>,
+
     pub collateral_required: u64,
     pub collateral_deposited: u64,
     pub proof_deadline: i64,
     pub outcome: Option<bool>,     // result of current bet
+
+    // Appended field — only batches initialized after this field was added
+    // will have it; batches from before this change are not migrated, and
+    // will fail to deserialize under this program build. Keep this last.
+    pub participant_count: u32,    // unique depositors currently in this batch
+
+    // Appended field, same caveat as participant_count above — only batches
+    // initialized after this was added will have it. Unix timestamp set once
+    // at initialize_batch; start_batch/join_batch reject once
+    // now > created_at + LOBBY_EXPIRY_SECONDS (see constants.rs).
+    pub created_at: i64,
+
+    // Appended fields, same caveat as participant_count/created_at above.
+    // Unlike bets_completed (which counts every settled bet regardless of
+    // outcome and is the only per-batch tally that existed before these),
+    // these three break that total down by real result — bet_terms/
+    // vote_weights/winning_vote_index/outcome all reset after each round, so
+    // without a running tally here the individual outcome of bets 1..N-1
+    // is unrecoverable once bet N is in progress. wins + losses + skipped
+    // always sums to bets_completed.
+    pub wins_count: u8,
+    pub losses_count: u8,
+    pub skips_count: u8,
 }
 
 #[account]
@@ -67,9 +96,23 @@ pub struct UserPosition {
     pub deposited_amount: u64,
     pub vault_shares: u64,
     pub has_voted: bool,
-    pub vote_yes: bool,
+    // Expects a value 0 through 4 (0-3 for bets, 4 for skip)
+    pub vote_index: u8,
     pub claimed: bool,
     pub bump: u8,
+
+    // Appended field — only positions created/voted-on after this field was
+    // added will have it (same un-migrated-old-account caveat as Batch's
+    // appended fields above). Stamped with batch.bets_completed at the moment
+    // of cast_vote — every settlement path resets the Batch's own
+    // vote_weights/bet_terms for the next round, but has no way to reach into
+    // every voter's UserPosition and reset has_voted/vote_index too. Without
+    // this, a vote from round N reads as "already voted" on round N+1's
+    // fresh match. has_voted/vote_index are only meaningful for the current
+    // round if voted_at_round == batch.bets_completed; otherwise the vote is
+    // stale (belongs to an already-settled round) and should be treated as
+    // not-yet-voted.
+    pub voted_at_round: u8,
 }
 
 #[account]

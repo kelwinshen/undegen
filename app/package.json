@@ -30,9 +30,12 @@
     "bn.js": "^5.2.4",
     "bs58": "^6.0.0",
     "ioredis": "^5.11.1",
+    "motion": "^12.42.2",
     "next": "16.2.6",
+    "postprocessing": "^6.39.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "three": "^0.185.1",
     "ws": "^8.18.3"
   },
   "devDependencies": {
@@ -41,6 +44,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.180.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
     "prettier": "^3.6.2",

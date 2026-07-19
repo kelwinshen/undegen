@@ -12,15 +12,22 @@ import {
 } from "@solana/web3.js";
 import bs58 from "bs58";
 import * as borsh from "@coral-xyz/borsh";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/Header";
 
-const YIELD_VAULT_PROGRAM_ID_STR = "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
-const DEVNET_RPC = "https://api.devnet.solana.com";
+const YIELD_VAULT_PROGRAM_ID_STR =
+  "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
-const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+);
 
-const INIT_VAULT_DISCRIMINATOR = Buffer.from([48, 191, 163, 44, 71, 129, 63, 164]);
+const INIT_VAULT_DISCRIMINATOR = Buffer.from([
+  48, 191, 163, 44, 71, 129, 63, 164,
+]);
 
 // ATA seed constant from the IDL
 const ATA_SEED = Buffer.from([
@@ -47,7 +54,10 @@ type LogEntry = {
 
 export default function InitializeYieldVaultTest() {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const addLog = (type: LogEntry["type"], message: string) => {
@@ -58,7 +68,10 @@ export default function InitializeYieldVaultTest() {
     setLogs([]);
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
     if (!secretKeyEnv) {
-      setResult({ type: "error", message: "NEXT_PUBLIC_OPERATOR_SECRET_KEY not set." });
+      setResult({
+        type: "error",
+        message: "NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.",
+      });
       return;
     }
 
@@ -69,13 +82,15 @@ export default function InitializeYieldVaultTest() {
       let adminKeypair: Keypair;
       addLog("info", "Loading admin keypair...");
       if (secretKeyEnv.startsWith("[")) {
-        adminKeypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
+        adminKeypair = Keypair.fromSecretKey(
+          Uint8Array.from(JSON.parse(secretKeyEnv))
+        );
       } else {
         adminKeypair = Keypair.fromSecretKey(bs58.decode(secretKeyEnv));
       }
       addLog("success", `Admin: ${adminKeypair.publicKey.toBase58()}`);
 
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const programId = new PublicKey(YIELD_VAULT_PROGRAM_ID_STR);
       const mint = new PublicKey(DEVNET_USDC_MINT);
 
@@ -91,14 +106,20 @@ export default function InitializeYieldVaultTest() {
         [vaultConfigPda.toBuffer(), ATA_SEED, mint.toBuffer()],
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
-      addLog("info", `Vault token account PDA: ${vaultTokenAccountPda.toBase58()}`);
+      addLog(
+        "info",
+        `Vault token account PDA: ${vaultTokenAccountPda.toBase58()}`
+      );
 
       // Derive reserve token account PDA
       const [reserveTokenAccountPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("reserve"), mint.toBuffer()],
         programId
       );
-      addLog("info", `Reserve token account PDA: ${reserveTokenAccountPda.toBase58()}`);
+      addLog(
+        "info",
+        `Reserve token account PDA: ${reserveTokenAccountPda.toBase58()}`
+      );
 
       // Build instruction
       const keys = [
@@ -108,7 +129,11 @@ export default function InitializeYieldVaultTest() {
         { pubkey: vaultTokenAccountPda, isSigner: false, isWritable: true },
         { pubkey: reserveTokenAccountPda, isSigner: false, isWritable: true },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        {
+          pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,
+          isSigner: false,
+          isWritable: false,
+        },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ];
 
@@ -124,10 +149,15 @@ export default function InitializeYieldVaultTest() {
       tx.feePayer = adminKeypair.publicKey;
       tx.sign(adminKeypair);
       addLog("info", "Sending transaction...");
-      const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+      const sig = await connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+      });
       await connection.confirmTransaction(sig);
       addLog("success", "Confirmed");
-      setResult({ type: "success", message: `Yield vault initialized! Tx: ${sig}` });
+      setResult({
+        type: "success",
+        message: `Yield vault initialized! Tx: ${sig}`,
+      });
     } catch (err: any) {
       addLog("error", err.message);
       setResult({ type: "error", message: err.message });
@@ -140,20 +170,29 @@ export default function InitializeYieldVaultTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Initialize Yield Vault (Test)</h2>
           <p className="text-sm text-gray-400">
-            Creates the vault config account for the USDC yield vault. Required before joining any batch.
+            Creates the vault config account for the USDC yield vault. Required
+            before joining any batch.
           </p>
-          <button onClick={handleInit} disabled={loading}
-            className="px-6 py-2 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50">
+          <button
+            onClick={handleInit}
+            disabled={loading}
+            className="px-6 py-2 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50"
+          >
             {loading ? "Initializing..." : "Initialize Vault"}
           </button>
           {result && (
-            <div className={`p-3 rounded-lg text-sm ${result.type === "success" ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}>
+            <div
+              className={`p-3 rounded-lg text-sm ${result.type === "success" ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}
+            >
               {result.message}
             </div>
           )}
@@ -162,8 +201,12 @@ export default function InitializeYieldVaultTest() {
               <h3 className="text-sm font-semibold mb-2">Execution Log</h3>
               <div className="bg-black/30 rounded-lg p-4 max-h-64 overflow-y-auto space-y-1 text-xs font-mono">
                 {logs.map((entry, i) => (
-                  <div key={i} className={`${entry.type === "error" ? "text-red-400" : entry.type === "success" ? "text-emerald-300" : entry.type === "warning" ? "text-yellow-300" : "text-gray-300"}`}>
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                  <div
+                    key={i}
+                    className={`${entry.type === "error" ? "text-red-400" : entry.type === "success" ? "text-emerald-300" : entry.type === "warning" ? "text-yellow-300" : "text-gray-300"}`}
+                  >
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

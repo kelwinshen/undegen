@@ -11,12 +11,16 @@ import {
 } from "@solana/web3.js";
 import bs58 from "bs58";
 import * as borsh from "@coral-xyz/borsh";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/Header";
 
-const UNDEGEN_PROGRAM_ID_STR = "BgAM2mzfbFhcA1F3AfjfnV1nzyTJXb6bSz5BX7Wufwma";
-const DEVNET_RPC = "https://api.devnet.solana.com";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
 
-const FINALIZE_CONSENSUS_DISCRIMINATOR = Buffer.from([158, 21, 141, 117, 251, 129, 243, 22]);
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
+
+const FINALIZE_CONSENSUS_DISCRIMINATOR = Buffer.from([
+  158, 21, 141, 117, 251, 129, 243, 22,
+]);
 const BATCH_DISCRIMINATOR = Buffer.from([156, 194, 70, 44, 22, 88, 137, 44]);
 
 type LogEntry = {
@@ -67,7 +71,14 @@ const BatchLayout = borsh.struct([
   borsh.option(borsh.bool(), "outcome"),
 ]);
 
-const BATCH_STATUS_NAMES = ["Lobby", "Locked", "AwaitingCollateral", "Active", "Settled", "Cancelled"];
+const BATCH_STATUS_NAMES = [
+  "Lobby",
+  "Locked",
+  "AwaitingCollateral",
+  "Active",
+  "Settled",
+  "Cancelled",
+];
 
 function writeUInt64LE(value: bigint): Buffer {
   const buffer = Buffer.alloc(8);
@@ -78,7 +89,10 @@ function writeUInt64LE(value: bigint): Buffer {
 export default function FinalizeConsensusTest() {
   const [batchId, setBatchId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [batchPda, setBatchPda] = useState<PublicKey | null>(null);
   const [batchStatus, setBatchStatus] = useState<string>("");
@@ -90,7 +104,8 @@ export default function FinalizeConsensusTest() {
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
-    if (!secretKeyEnv) throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
+    if (!secretKeyEnv)
+      throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
       return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
@@ -98,14 +113,16 @@ export default function FinalizeConsensusTest() {
   };
 
   const sendTx = async (ix: TransactionInstruction): Promise<string> => {
-    const connection = new Connection(DEVNET_RPC, "confirmed");
+    const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
     const signer = getOperatorKeypair();
     const tx = new Transaction().add(ix);
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
     tx.feePayer = signer.publicKey;
     tx.sign(signer);
-    const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+    });
     await connection.confirmTransaction(sig);
     return sig;
   };
@@ -126,8 +143,8 @@ export default function FinalizeConsensusTest() {
     setLoading(true);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+      const programId = UNDEGEN_PROGRAM_ID;
 
       const batchIdBuffer = writeUInt64LE(BigInt(id));
       const [pda] = PublicKey.findProgramAddressSync(
@@ -136,7 +153,10 @@ export default function FinalizeConsensusTest() {
       );
 
       const accountInfo = await connection.getAccountInfo(pda);
-      if (!accountInfo || !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)) {
+      if (
+        !accountInfo ||
+        !accountInfo.data.slice(0, 8).equals(BATCH_DISCRIMINATOR)
+      ) {
         throw new Error("Batch not found or not initialized.");
       }
 
@@ -148,8 +168,14 @@ export default function FinalizeConsensusTest() {
       setWinningVoteIndex(batch.winning_vote_index ?? null);
 
       addLog("info", `Batch status: ${statusName}`);
-      addLog("info", `Winning vote index: ${batch.winning_vote_index ?? "none"}`);
-      addLog("info", `Collateral required: ${batch.collateral_required.toString()}`);
+      addLog(
+        "info",
+        `Winning vote index: ${batch.winning_vote_index ?? "none"}`
+      );
+      addLog(
+        "info",
+        `Collateral required: ${batch.collateral_required.toString()}`
+      );
       setResult({ type: "success", message: "Batch loaded." });
     } catch (err: any) {
       addLog("error", err.message);
@@ -169,19 +195,20 @@ export default function FinalizeConsensusTest() {
     setResult(null);
 
     try {
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const programId = UNDEGEN_PROGRAM_ID;
 
       const ix = new TransactionInstruction({
         programId,
-        keys: [
-          { pubkey: batchPda, isSigner: false, isWritable: true },
-        ],
+        keys: [{ pubkey: batchPda, isSigner: false, isWritable: true }],
         data: FINALIZE_CONSENSUS_DISCRIMINATOR,
       });
 
       const sig = await sendTx(ix);
       addLog("success", `Consensus finalized. Tx: ${sig}`);
-      setResult({ type: "success", message: `Consensus finalized. Tx: ${sig}` });
+      setResult({
+        type: "success",
+        message: `Consensus finalized. Tx: ${sig}`,
+      });
     } catch (err: any) {
       addLog("error", err.message);
       setResult({ type: "error", message: err.message });
@@ -194,14 +221,17 @@ export default function FinalizeConsensusTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Finalize Consensus (Test)</h2>
           <p className="text-sm text-gray-400">
-            Load a batch, check its status, and finalize the consensus. This triggers the
-            determination of the winning vote index.
+            Load a batch, check its status, and finalize the consensus. This
+            triggers the determination of the winning vote index.
           </p>
           <div className="flex gap-2">
             <input
@@ -257,13 +287,14 @@ export default function FinalizeConsensusTest() {
                       entry.type === "error"
                         ? "text-red-400"
                         : entry.type === "success"
-                        ? "text-emerald-300"
-                        : entry.type === "warning"
-                        ? "text-yellow-300"
-                        : "text-gray-300"
+                          ? "text-emerald-300"
+                          : entry.type === "warning"
+                            ? "text-yellow-300"
+                            : "text-gray-300"
                     }`}
                   >
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

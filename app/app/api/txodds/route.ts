@@ -1,31 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
-const API_BASE = 'https://txline-dev.txodds.com';
+const API_BASE = "https://txline-dev.txodds.com";
 const TRUSTED_BOOKMAKER_ID = 10021;
-
-function getUTCDateString(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getBatchEndTime(): number {
-  const now = new Date();
-  const dayOfWeek = now.getUTCDay();
-  const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
-  const nextMonday = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilMonday)
-  );
-  return nextMonday.getTime();
-}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const fetchAll = searchParams.get('all') === '1';
-  const fetchPast = searchParams.get('past') === '1';
+  const fetchAll = searchParams.get("all") === "1";
+  const fetchPast = searchParams.get("past") === "1";
   const fetchYesterday = true;
 
   const headers = {
     Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
-    'X-Api-Token': process.env.API_TOKEN || '',
+    "X-Api-Token": process.env.API_TOKEN || "",
   };
 
   const now = Date.now();
@@ -35,14 +21,16 @@ export async function GET(request: Request) {
     let allFixtures: any[] = [];
 
     if (fetchYesterday) {
-      const startEpochDay = currentEpochDay - 1;
+      const startEpochDay = currentEpochDay - 7;
       const url = `${API_BASE}/api/fixtures/snapshot?startEpochDay=${startEpochDay}`;
       const res = await fetch(url, { headers, cache: "no-store" });
       if (res.ok) {
         allFixtures = await res.json();
       }
     } else if (fetchPast) {
-      const targetDays = [1, 2, 3, 4, 5].map((offset) => currentEpochDay - offset);
+      const targetDays = [1, 2, 3, 4, 5].map(
+        (offset) => currentEpochDay - offset
+      );
       const fetchPromises = targetDays.map((epochDay) =>
         fetch(`${API_BASE}/api/fixtures/snapshot?startEpochDay=${epochDay}`, {
           headers,
@@ -61,12 +49,13 @@ export async function GET(request: Request) {
       allFixtures = await fixtureRes.json();
     }
 
-    if (!Array.isArray(allFixtures)) throw new Error("Invalid fixtures data received");
+    if (!Array.isArray(allFixtures))
+      throw new Error("Invalid fixtures data received");
 
     const uniqueFixturesMap = new Map<number, any>();
     for (const f of allFixtures) {
       if (!f.FixtureId || !f.StartTime) continue;
-      
+
       const startTime = Number(f.StartTime);
       if (startTime > now) {
         uniqueFixturesMap.set(f.FixtureId, f);
@@ -74,32 +63,46 @@ export async function GET(request: Request) {
     }
 
     const batchFixtures = Array.from(uniqueFixturesMap.values());
-
-    batchFixtures.sort((a: any, b: any) => Number(a.StartTime) - Number(b.StartTime));
+    batchFixtures.sort(
+      (a: any, b: any) => Number(a.StartTime) - Number(b.StartTime)
+    );
 
     const options: any[] = [];
 
     for (const f of batchFixtures) {
       const startTime = Number(f.StartTime);
-      const oddsUrl = fetchYesterday 
+      const oddsUrl = fetchYesterday
         ? `${API_BASE}/api/odds/snapshot/${f.FixtureId}?asOf=${startTime}`
         : `${API_BASE}/api/odds/snapshot/${f.FixtureId}`;
 
       const oddsRes = await fetch(oddsUrl, { headers, cache: "no-store" });
       const rawOddsData = await oddsRes.json();
-      const oddsMarkets = Array.isArray(rawOddsData) ? rawOddsData : [rawOddsData];
+      const oddsMarkets = Array.isArray(rawOddsData)
+        ? rawOddsData
+        : [rawOddsData];
 
       const seen = new Set<string>();
 
       for (const market of oddsMarkets) {
         if (market.BookmakerId !== TRUSTED_BOOKMAKER_ID) continue;
-        const messageId: string = market.MessageId || '';
+        const messageId: string = market.MessageId || "";
         const ts: number = market.Ts || 0;
         if (!market.PriceNames || !market.Prices) continue;
 
-        const period = market.MarketPeriod ?? 'ft';
-        const isFirstHalf = period === 'half=1';
-        const periodLabel = isFirstHalf ? '1st Half' : 'Full Time';
+        const period = market.MarketPeriod ?? "ft";
+        const isFirstHalf = period === "half=1";
+        const isSecondHalf = period === "half=2"; // Adding explicit support for H2-only markets
+
+        let periodLabel = "Full Time";
+        let periodPrefix = 0; // Default to 0 for Full Time / Total
+
+        if (isFirstHalf) {
+          periodLabel = "1st Half";
+          periodPrefix = 1000;
+        } else if (isSecondHalf) {
+          periodLabel = "2nd Half";
+          periodPrefix = 3000;
+        }
 
         for (let j = 0; j < market.PriceNames.length; j++) {
           const rawOdds = Number(market.Prices[j]);
@@ -107,7 +110,7 @@ export async function GET(request: Request) {
 
           const odds = rawOdds / 1000;
           const outcome = market.PriceNames[j];
-          const parameters = market.MarketParameters ?? '';
+          const parameters = market.MarketParameters ?? "";
 
           const key = `${market.SuperOddsType}|${outcome}|${parameters}|${period}`;
           if (seen.has(key)) continue;
@@ -125,14 +128,15 @@ export async function GET(request: Request) {
             startTime: f.StartTime,
             marketType: market.SuperOddsType,
             outcome,
-            period: isFirstHalf ? 1 : 0,
+            period: periodPrefix,
+            competition: f.Competition,
             label: buildReadableLabel(
               f.Participant1,
               f.Participant2,
               market.SuperOddsType,
               outcome,
               parameters,
-              periodLabel,
+              periodLabel
             ),
           });
         }
@@ -151,24 +155,24 @@ function buildReadableLabel(
   type: string,
   outcome: string,
   params: string,
-  period: string,
+  period: string
 ): string {
   const match = `${p1} vs ${p2}`;
 
-  if (type === '1X2_PARTICIPANT_RESULT') {
-    if (outcome === 'part1') return `${p1} to win (${period})`;
-    if (outcome === 'part2') return `${p2} to win (${period})`;
-    if (outcome === 'draw')   return `Draw – ${match} (${period})`;
+  if (type === "1X2_PARTICIPANT_RESULT") {
+    if (outcome === "part1") return `${p1} to win (${period})`;
+    if (outcome === "part2") return `${p2} to win (${period})`;
+    if (outcome === "draw") return `Draw – ${match} (${period})`;
   }
-  if (type === 'ASIANHANDICAP_PARTICIPANT_GOALS') {
-    const line = params.replace('line=', '');
-    const team = outcome === 'part1' ? p1 : p2;
+  if (type === "ASIANHANDICAP_PARTICIPANT_GOALS") {
+    const line = params.replace("line=", "");
+    const team = outcome === "part1" ? p1 : p2;
     return `${team} Asian Handicap ${line} (${period})`;
   }
-  if (type === 'OVERUNDER_PARTICIPANT_GOALS') {
-    const line = params.replace('line=', '');
-    const side = outcome === 'over' ? 'Over' : 'Under';
+  if (type === "OVERUNDER_PARTICIPANT_GOALS") {
+    const line = params.replace("line=", "");
+    const side = outcome === "over" ? "Over" : "Under";
     return `Total Goals ${side} ${line} – ${match} (${period})`;
   }
-  return `${type.replace(/_/g, ' ')} ${outcome} – ${match} (${period})`;
+  return `${type.replace(/_/g, " ")} ${outcome} – ${match} (${period})`;
 }

@@ -1,0 +1,107 @@
+[tools]
+node = "20.19.0"
+pnpm = "10.5.2"
+
+[env]
+_.file = "app/.env"
+
+[settings]
+npm.package_manager = "pnpm"
+
+# ==============================================================================
+# Frontend Tasks (app/ directory)
+# ==============================================================================
+
+[tasks.dev]
+description = "Run Next.js dev server"
+dir = "app"
+run = "pnpm dev"
+
+[tasks.build]
+description = "Build Next.js application"
+dir = "app"
+run = "pnpm build"
+
+[tasks.start]
+description = "Prepare assets and start standalone production server"
+dir = "app"
+run = """
+cp -r .next/static .next/standalone/.next/static 2>/dev/null || true
+cp -r public .next/standalone/public 2>/dev/null || true
+node .next/standalone/server.js
+"""
+
+[tasks.lint]
+description = "Run ESLint on frontend code"
+dir = "app"
+run = "pnpm lint"
+
+[tasks.format]
+description = "Format frontend code with Prettier"
+dir = "app"
+run = "pnpm format"
+
+[tasks."format:check"]
+description = "Check frontend code formatting with Prettier"
+dir = "app"
+run = "pnpm format:check"
+
+[tasks.ci]
+description = "Run frontend CI checks (build, lint, format check)"
+dir = "app"
+run = "pnpm ci"
+
+[tasks.install]
+description = "Install frontend dependencies using pnpm"
+dir = "app"
+run = "pnpm install"
+
+# ==============================================================================
+# Operator Service Tasks (operator/ directory)
+# ==============================================================================
+
+[tasks."operator:run"]
+description = "Run the Undegen Operator Rust daemon service"
+dir = "operator"
+run = "cargo run"
+
+[tasks."operator:build"]
+description = "Build the Undegen Operator Rust service in release mode"
+dir = "operator"
+run = "cargo build --release"
+
+[tasks."operator:check"]
+description = "Run cargo check on the Operator Rust codebase"
+dir = "operator"
+run = "cargo check"
+
+# ==============================================================================
+# Docker Tasks (Local Redis)
+# ==============================================================================
+
+[tasks.redis]
+description = "Start local Redis container via Docker Compose"
+dir = "app"
+run = "docker compose up -d redis"
+
+[tasks."redis:down"]
+description = "Stop local Redis container"
+dir = "app"
+run = "docker compose down"
+
+[tasks."redis:logs"]
+description = "Tail local Redis container logs"
+dir = "app"
+run = "docker compose logs -f redis"
+
+# ==============================================================================
+# Anchor / Solana Program Tasks
+# ==============================================================================
+
+[tasks."anchor:build"]
+description = "Build Anchor Solana programs"
+run = "anchor build"
+
+[tasks."anchor:test"]
+description = "Run Rust tests for Anchor programs"
+run = "cargo test"

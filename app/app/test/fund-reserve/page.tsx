@@ -9,21 +9,23 @@ import {
   TransactionInstruction,
   Keypair,
 } from "@solana/web3.js";
-import {
-  getAssociatedTokenAddress,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import * as borsh from "@coral-xyz/borsh";
 import bs58 from "bs58";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/Header";
 
-const YIELD_VAULT_PROGRAM_ID_STR = "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
-const DEVNET_RPC = "https://api.devnet.solana.com";
+const YIELD_VAULT_PROGRAM_ID_STR =
+  "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 const DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
-const FUND_RESERVE_DISCRIMINATOR = Buffer.from([17, 82, 71, 222, 117, 210, 58, 12]);
+const FUND_RESERVE_DISCRIMINATOR = Buffer.from([
+  17, 82, 71, 222, 117, 210, 58, 12,
+]);
 
-const VAULT_CONFIG_DISCRIMINATOR = Buffer.from([99, 86, 43, 216, 184, 102, 119, 77]);
+const VAULT_CONFIG_DISCRIMINATOR = Buffer.from([
+  99, 86, 43, 216, 184, 102, 119, 77,
+]);
 
 const VaultConfigLayout = borsh.struct([
   borsh.publicKey("admin"),
@@ -49,7 +51,10 @@ function writeUInt64LE(value: bigint): Buffer {
 
 export default function FundReserveTest() {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [vaultConfigPda, setVaultConfigPda] = useState<PublicKey | null>(null);
   const [vaultData, setVaultData] = useState<any>(null);
@@ -61,7 +66,8 @@ export default function FundReserveTest() {
 
   const getOperatorKeypair = (): Keypair => {
     const secretKeyEnv = process.env.NEXT_PUBLIC_OPERATOR_SECRET_KEY;
-    if (!secretKeyEnv) throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
+    if (!secretKeyEnv)
+      throw new Error("NEXT_PUBLIC_OPERATOR_SECRET_KEY not set.");
     if (secretKeyEnv.startsWith("[")) {
       return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyEnv)));
     }
@@ -76,20 +82,22 @@ export default function FundReserveTest() {
 
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL);
       const yieldVaultProgramId = new PublicKey(YIELD_VAULT_PROGRAM_ID_STR);
       const mint = new PublicKey(DEVNET_USDC_MINT);
 
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("vault_config"), mint.toBuffer()],
-        yieldVaultProgramId,
+        yieldVaultProgramId
       );
       setVaultConfigPda(pda);
       addLog("info", `Vault Config PDA: ${pda.toBase58()}`);
 
       const accountInfo = await connection.getAccountInfo(pda);
       if (!accountInfo) {
-        throw new Error("Vault config account not found. Has the vault been initialized?");
+        throw new Error(
+          "Vault config account not found. Has the vault been initialized?"
+        );
       }
 
       if (!accountInfo.data.slice(0, 8).equals(VAULT_CONFIG_DISCRIMINATOR)) {
@@ -130,12 +138,15 @@ export default function FundReserveTest() {
       const operator = getOperatorKeypair();
       addLog("info", `Operator: ${operator.publicKey.toBase58()}`);
 
-      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
       const yieldVaultProgramId = new PublicKey(YIELD_VAULT_PROGRAM_ID_STR);
       const mint = new PublicKey(DEVNET_USDC_MINT);
 
       const reserveTokenAccount = vaultData.reserve_token_account;
-      const adminTokenAccount = await getAssociatedTokenAddress(mint, operator.publicKey);
+      const adminTokenAccount = await getAssociatedTokenAddress(
+        mint,
+        operator.publicKey
+      );
 
       const rawAmount = BigInt(Math.floor(parsedAmount * 1e6));
       addLog("info", `Amount: ${rawAmount} (base units)`);
@@ -167,7 +178,9 @@ export default function FundReserveTest() {
       tx.sign(operator);
 
       addLog("info", "Sending fund_reserve transaction...");
-      const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+      const sig = await connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+      });
       await connection.confirmTransaction(sig);
       addLog("success", "Confirmed");
       setResult({ type: "success", message: `Reserve funded! Tx: ${sig}` });
@@ -183,14 +196,17 @@ export default function FundReserveTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-3xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
           <h2 className="text-xl font-bold">Fund Reserve (Test)</h2>
           <p className="text-sm text-gray-400">
-            Deposit USDC into the yield vault's reserve from the operator (admin)
-            wallet. Only the vault admin can call this.
+            Deposit USDC into the yield vault's reserve from the operator
+            (admin) wallet. Only the vault admin can call this.
           </p>
 
           <div className="flex gap-2">
@@ -262,13 +278,14 @@ export default function FundReserveTest() {
                       entry.type === "error"
                         ? "text-red-400"
                         : entry.type === "success"
-                        ? "text-emerald-300"
-                        : entry.type === "warning"
-                        ? "text-yellow-300"
-                        : "text-gray-300"
+                          ? "text-emerald-300"
+                          : entry.type === "warning"
+                            ? "text-yellow-300"
+                            : "text-gray-300"
                     }`}
                   >
-                    [{new Date(entry.time).toLocaleTimeString()}] {entry.message}
+                    [{new Date(entry.time).toLocaleTimeString()}]{" "}
+                    {entry.message}
                   </div>
                 ))}
               </div>

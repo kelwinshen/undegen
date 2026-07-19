@@ -8,7 +8,7 @@ use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Tran
 /// Defaults to user wins — operator yield entitlement slashed 20%.
 pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     let batch = &mut ctx.accounts.batch;
-    require!(batch.status == BatchStatus::Active, CoreError::NotActive);
+    require!(batch.status == BatchStatus::Active || batch.status == BatchStatus::AwaitingCollateral , CoreError::NotActiveOrNotWaitingCollateral);
 
     let clock = Clock::get()?;
     require!(
@@ -20,17 +20,19 @@ pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     batch.operator_yield_bps = batch.operator_yield_bps.saturating_sub(2000);
     batch.outcome = Some(true);
     batch.bets_completed = batch.bets_completed.saturating_add(1);
+    batch.wins_count = batch.wins_count.saturating_add(1);
 
-    // Reset current bet state
-    batch.bet_terms = BetTerms::default();
+    // Reset bet state so the batch is ready for the next match
+    batch.bet_terms = [BetTerms::default(); 4];
+    batch.vote_weights = [0; 5];
+    batch.winning_vote_index = None;
+    
     batch.kickoff_timestamp = 0;
     batch.win_prize = 0;
     batch.collateral_required = 0;
     batch.collateral_deposited = 0;
     batch.proof_deadline = 0;
     batch.outcome = None;
-    batch.yes_weight = 0;
-    batch.no_weight = 0;
 
     // Move to Settled if all bets done, otherwise back to Locked for next bet
     if batch.bets_completed >= MAX_BETS {
@@ -50,6 +52,10 @@ pub fn settle_default_handler(ctx: Context<SettleDefault>) -> Result<()> {
     // Transfer forfeited collateral into batch_token_account for users to claim
     let collateral_amount = ctx.accounts.collateral_token_account.amount;
     if collateral_amount > 0 {
+        // Operator ghosted on proof past the deadline — the seized collateral
+        // is a real win for users, same as settle_with_proof's true branch.
+        batch.accumulated_winnings = batch.accumulated_winnings.saturating_add(collateral_amount);
+
         let batch_id_bytes = batch.batch_id.to_le_bytes();
         let signer_seeds: &[&[&[u8]]] = &[&[
             BATCH_SEED,

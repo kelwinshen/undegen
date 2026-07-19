@@ -13,22 +13,26 @@ import {
   ComputeBudgetProgram,
 } from "@solana/web3.js";
 import * as borsh from "@coral-xyz/borsh";
-import Header from "@/app/components/home/Header";
+import Header from "@/app/components/Header";
+import undegenCoreIdl from "@/app/lib/idl/undegen_core.json";
+import yieldVaultIdl from "@/app/lib/idl/yield_vault.json";
 
-const UNDEGEN_PROGRAM_ID_STR = "BgAM2mzfbFhcA1F3AfjfnV1nzyTJXb6bSz5BX7Wufwma";
-const YIELD_VAULT_PROGRAM_ID_STR = "EBYBucMwfqYEXc9Hh56TpjwqxvgZDoJjWJoVc8sbFqPS";
-const DEVNET_RPC = "https://api.devnet.solana.com";
+const UNDEGEN_PROGRAM_ID = new PublicKey(undegenCoreIdl.address);
+const YIELD_VAULT_PROGRAM_ID = new PublicKey(yieldVaultIdl.address);
+import { SOLANA_CONFIG } from "@/app/lib/solanaConfig";
 
-const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+);
 
 const CLAIM_DISCRIMINATOR = new Uint8Array([
   62, 198, 214, 193, 213, 159, 108, 210,
 ]);
 
-const BATCH_DISCRIMINATOR = new Uint8Array([
-  156, 194, 70, 44, 22, 88, 137, 44,
-]);
+const BATCH_DISCRIMINATOR = new Uint8Array([156, 194, 70, 44, 22, 88, 137, 44]);
 
 function uint8ArrayEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
@@ -41,11 +45,8 @@ const BetTermLayout = borsh.struct([
   borsh.u32("stat_a_key"),
   borsh.option(borsh.u32(), "stat_b_key"),
   borsh.option(
-    borsh.rustEnum([
-      borsh.struct([], "Add"),
-      borsh.struct([], "Subtract"),
-    ]),
-    "op",
+    borsh.rustEnum([borsh.struct([], "Add"), borsh.struct([], "Subtract")]),
+    "op"
   ),
   borsh.i32("predicate_threshold"),
   borsh.u8("predicate_comparison"),
@@ -87,18 +88,21 @@ const STATUS_NAMES = [
 
 function writeUInt64LE(value: number | bigint | string): Buffer {
   const buffer = Buffer.alloc(8);
-  new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).setBigUint64(
-    0,
-    BigInt(value),
-    true,
-  );
+  new DataView(
+    buffer.buffer,
+    buffer.byteOffset,
+    buffer.byteLength
+  ).setBigUint64(0, BigInt(value), true);
   return buffer;
 }
 
-function getAssociatedTokenAddress(owner: PublicKey, mint: PublicKey): PublicKey {
+function getAssociatedTokenAddress(
+  owner: PublicKey,
+  mint: PublicKey
+): PublicKey {
   const [ata] = PublicKey.findProgramAddressSync(
     [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-    ASSOCIATED_TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
   );
   return ata;
 }
@@ -130,11 +134,16 @@ export default function ClaimTest() {
 
   const [batchId, setBatchId] = useState(batchIdParam);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [result, setResult] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [batchPda, setBatchPda] = useState<PublicKey | null>(null);
   const [batchData, setBatchData] = useState<any>(null);
-  const [userPositionExists, setUserPositionExists] = useState<boolean | null>(null);
+  const [userPositionExists, setUserPositionExists] = useState<boolean | null>(
+    null
+  );
 
   const addLog = (msg: string) =>
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -154,48 +163,54 @@ export default function ClaimTest() {
 
     setLoading(true);
     try {
-      const connection = new Connection(DEVNET_RPC);
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL);
+      const programId = UNDEGEN_PROGRAM_ID;
       const batchIdBuffer = writeUInt64LE(id);
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("batch"), Buffer.from(batchIdBuffer)],
-        programId,
+        programId
       );
       setBatchPda(pda);
       addLog(`Batch PDA: ${pda.toBase58()}`);
 
       const accountInfo = await connection.getAccountInfo(pda);
-      if (!accountInfo) throw new Error("Account not found. Check batch ID and network.");
+      if (!accountInfo)
+        throw new Error("Account not found. Check batch ID and network.");
 
       if (!uint8ArrayEqual(accountInfo.data.slice(0, 8), BATCH_DISCRIMINATOR))
         throw new Error("Account is not a batch.");
 
       const MIN_BATCH_DATA_LEN = 8 + 256;
       if (accountInfo.data.length < MIN_BATCH_DATA_LEN)
-        throw new Error(`Batch account data too short (${accountInfo.data.length} bytes).`);
+        throw new Error(
+          `Batch account data too short (${accountInfo.data.length} bytes).`
+        );
 
       const dataBuffer = Buffer.from(accountInfo.data.slice(8));
       let decoded;
       try {
         decoded = BatchLayout.decode(dataBuffer);
       } catch (decodeErr: any) {
-        throw new Error(`Failed to decode batch: ${decodeErr.message}. Data length: ${dataBuffer.length}.`);
+        throw new Error(
+          `Failed to decode batch: ${decodeErr.message}. Data length: ${dataBuffer.length}.`
+        );
       }
 
       setBatchData(decoded);
       addLog("Batch loaded successfully.");
 
-      // Check if the connected user has a position account
       if (connected && wallet?.account?.address) {
         const user = new PublicKey(wallet.account.address);
         const [userPosPda] = PublicKey.findProgramAddressSync(
           [Buffer.from("user_position"), pda.toBuffer(), user.toBuffer()],
-          programId,
+          programId
         );
         const posInfo = await connection.getAccountInfo(userPosPda);
         setUserPositionExists(posInfo !== null && posInfo.data.length > 0);
         if (!posInfo) {
-          addLog("Warning: You haven't joined this batch yet. Claim will fail without a UserPosition account.");
+          addLog(
+            "Warning: You haven't joined this batch yet. Claim will fail without a UserPosition account."
+          );
         }
       }
     } catch (err: any) {
@@ -218,7 +233,10 @@ export default function ClaimTest() {
     }
 
     if (userPositionExists === false) {
-      setResult({ type: "error", message: "You have not joined this batch. No position to claim from." });
+      setResult({
+        type: "error",
+        message: "You have not joined this batch. No position to claim from.",
+      });
       return;
     }
 
@@ -226,16 +244,16 @@ export default function ClaimTest() {
     setResult(null);
 
     try {
-      const connection = new Connection(DEVNET_RPC, "confirmed");
-      const programId = new PublicKey(UNDEGEN_PROGRAM_ID_STR);
-      const yieldVaultProgramId = new PublicKey(YIELD_VAULT_PROGRAM_ID_STR);
+      const connection = new Connection(SOLANA_CONFIG.RPC_URL, SOLANA_CONFIG.COMMITMENT);
+      const programId = UNDEGEN_PROGRAM_ID;
+      const yieldVaultProgramId = YIELD_VAULT_PROGRAM_ID;
       const user = new PublicKey(wallet.account.address);
       const mint = new PublicKey(batchData.mint);
 
       // Derive PDAs – must match the seeds used in the protocol
       const [userPositionPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_position"), batchPda.toBuffer(), user.toBuffer()],
-        programId,
+        programId
       );
       const userTokenAccount = getAssociatedTokenAddress(user, mint);
       const batchTokenAccount = getAssociatedTokenAddress(batchPda, mint);
@@ -243,7 +261,7 @@ export default function ClaimTest() {
       // CORRECT vault_config derivation: ["vault_config", mint]
       const [vaultConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("vault_config"), mint.toBuffer()],
-        yieldVaultProgramId,
+        yieldVaultProgramId
       );
       const vaultTokenAccount = getAssociatedTokenAddress(vaultConfigPda, mint);
       const vaultPosition = batchData.vault_position;
@@ -268,7 +286,11 @@ export default function ClaimTest() {
         { pubkey: vaultPosition, isSigner: false, isWritable: true },
         { pubkey: yieldVaultProgramId, isSigner: false, isWritable: false },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        {
+          pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,
+          isSigner: false,
+          isWritable: false,
+        },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ];
 
@@ -285,17 +307,30 @@ export default function ClaimTest() {
       const provider = (window as any).solana;
       if (provider) {
         const signedTx = await provider.signTransaction(tx);
-        const sig = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
+        const sig = await connection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: false,
+        });
         addLog(`Sent. Signature: ${sig}`);
         await connection.confirmTransaction(sig);
-        setResult({ type: "success", message: `Claimed successfully! Tx: ${sig}` });
+        setResult({
+          type: "success",
+          message: `Claimed successfully! Tx: ${sig}`,
+        });
       } else if (wallet.signTransaction) {
         const signed = await wallet.signTransaction(tx as any);
-        const rawTx = signed instanceof Uint8Array ? signed : (signed as any).serialize?.() ?? signed;
-        const sig = await connection.sendRawTransaction(rawTx, { skipPreflight: false });
+        const rawTx =
+          signed instanceof Uint8Array
+            ? signed
+            : ((signed as any).serialize?.() ?? signed);
+        const sig = await connection.sendRawTransaction(rawTx, {
+          skipPreflight: false,
+        });
         addLog(`Sent. Signature: ${sig}`);
         await connection.confirmTransaction(sig);
-        setResult({ type: "success", message: `Claimed successfully! Tx: ${sig}` });
+        setResult({
+          type: "success",
+          message: `Claimed successfully! Tx: ${sig}`,
+        });
       } else {
         throw new Error("Wallet does not support signTransaction");
       }
@@ -315,7 +350,10 @@ export default function ClaimTest() {
     <div className="relative min-h-screen overflow-x-clip bg-bg1 text-foreground">
       <main className="relative z-10 mx-auto flex min-h-screen max-w-3xl flex-col gap-8 border-x border-border-low px-6 py-12">
         <Header />
-        <Link href="/test" className="text-xs text-gray-400 hover:text-gray-200 -mb-4">
+        <Link
+          href="/test"
+          className="text-xs text-gray-400 hover:text-gray-200 -mb-4"
+        >
           ← Back to Test Hub
         </Link>
         <div className="p-6 bg-bg2 rounded-xl border border-border-low space-y-6">
@@ -387,7 +425,8 @@ export default function ClaimTest() {
                         className={`p-3 bg-bg1 rounded-lg border border-border-low ${isEmpty ? "opacity-50" : ""}`}
                       >
                         <span className="text-sm font-semibold text-gray-200">
-                          Slot {idx + 1} {isEmpty ? "(empty)" : `– Fixture ${term.fixture_id}`}
+                          Slot {idx + 1}{" "}
+                          {isEmpty ? "(empty)" : `– Fixture ${term.fixture_id}`}
                         </span>
                         {!isEmpty && (
                           <p className="text-xs text-gray-400 mt-1">
@@ -415,7 +454,12 @@ export default function ClaimTest() {
 
               <button
                 onClick={handleClaim}
-                disabled={!batchData || !connected || loading || userPositionExists === false}
+                disabled={
+                  !batchData ||
+                  !connected ||
+                  loading ||
+                  userPositionExists === false
+                }
                 className="w-full mt-4 px-6 py-3 bg-emerald-500 text-black font-semibold rounded-lg hover:bg-emerald-400 transition disabled:opacity-50"
               >
                 {loading ? "Claiming..." : "Claim"}
@@ -437,7 +481,9 @@ export default function ClaimTest() {
 
           {logs.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-sm font-semibold mb-2 text-gray-400">Execution Log</h3>
+              <h3 className="text-sm font-semibold mb-2 text-gray-400">
+                Execution Log
+              </h3>
               <div className="bg-black/40 rounded-lg p-4 max-h-64 overflow-y-auto space-y-1 text-xs font-mono border border-border-low">
                 {logs.map((msg, i) => (
                   <div

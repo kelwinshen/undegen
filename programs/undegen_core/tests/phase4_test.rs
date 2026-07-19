@@ -1,22 +1,15 @@
 use {
     anchor_lang::{
-        prelude::Pubkey,
-        solana_program::{instruction::Instruction, system_program},
-        AccountDeserialize, AnchorSerialize, InstructionData, ToAccountMetas,
-    },
-    anchor_spl::associated_token::ID as ASSOCIATED_TOKEN_PROGRAM_ID,
-    anchor_spl::token::ID as TOKEN_PROGRAM_ID,
-    litesvm::LiteSVM,
-    litesvm_token::{CreateAccount, CreateMint, MintTo},
-    solana_clock::Clock,
-    solana_keypair::Keypair,
-    solana_message::{Message, VersionedMessage},
-    solana_signer::Signer,
-    solana_transaction::versioned::VersionedTransaction,
+        AccountDeserialize, AnchorSerialize, InstructionData, ToAccountMetas, prelude::Pubkey, solana_program::{instruction::Instruction, system_program},
+    }, anchor_spl::{associated_token::ID as ASSOCIATED_TOKEN_PROGRAM_ID, token::ID as TOKEN_PROGRAM_ID}, litesvm::LiteSVM, litesvm_token::{CreateAccount, CreateMint, MintTo}, solana_clock::Clock, solana_keypair::Keypair, solana_message::{Message, VersionedMessage}, solana_signer::Signer, solana_transaction::versioned::VersionedTransaction, undegen_core::txodds_types::{Odds, OddsBatchSummary, OddsUpdateStats, TraderPredicate},
 };
 
 use anchor_lang::solana_program::program_pack::Pack;
 use litesvm_token::spl_token::state::Account as SplTokenAccount;
+
+// TXODDS Program ID for DepositCollateral constraints
+const TXODDS_PROGRAM_ID: Pubkey =
+    anchor_lang::solana_program::pubkey::pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
 
 fn send_ix(svm: &mut LiteSVM, ix: Instruction, payer: &Keypair, extra_signers: &[&Keypair]) {
     let blockhash = svm.latest_blockhash();
@@ -86,6 +79,42 @@ struct TestSetup {
     bet_size: u64,
 }
 
+fn generate_mock_bet_terms() -> [undegen_core::state::BetTerms; 4] {
+    [
+        undegen_core::state::BetTerms { fixture_id: 999_i64, period: 0, stat_a_key: 1, stat_b_key: None, predicate: TraderPredicate::default(), negation: false,  op: None },
+        undegen_core::state::BetTerms { fixture_id: 999_i64, period: 0, stat_a_key: 2, stat_b_key: None,predicate: TraderPredicate::default(),  negation: false,  op: None },
+        undegen_core::state::BetTerms { fixture_id: 999_i64, period: 0, stat_a_key: 3, stat_b_key: None, predicate: TraderPredicate::default(),  negation: false,  op: None },
+        undegen_core::state::BetTerms { fixture_id: 999_i64, period: 0, stat_a_key: 4, stat_b_key: None, predicate: TraderPredicate::default(),  negation: false,  op: None },
+    ]
+}
+
+fn generate_dummy_odds() -> Odds {
+    Odds {
+        fixture_id: 999,
+        message_id: "mock".to_string(),
+        ts: KICKOFF_TS,
+        bookmaker: "mock".to_string(),
+        bookmaker_id: 1,
+        super_odds_type: "none".to_string(),
+        game_state: None,
+        in_running: false,
+        market_parameters: None,
+        market_period: None,
+        price_names: vec!["1X2_1".to_string()],
+        prices: vec![25000],
+    }
+}
+
+fn generate_dummy_summary() -> OddsBatchSummary {
+    OddsBatchSummary {
+        fixture_id: 999,
+        update_stats: OddsUpdateStats { update_count: 1, min_timestamp: 0, max_timestamp: 0 },
+        odds_sub_tree_root: [0; 32],
+    }
+}
+
+/// Builds a batch through the Skip-vote path — deposit_collateral auto-settles
+/// this immediately (bets_completed=1, back to Locked). No TxOdds CPI needed.
 fn setup_active() -> TestSetup {
     let core_program_id = undegen_core::id();
     let vault_program_id = yield_vault::id();
@@ -227,19 +256,20 @@ fn setup_active() -> TestSetup {
     send_ix(&mut svm, Instruction::new_with_bytes(
         core_program_id,
         &undegen_core::instruction::ProposeMatch {
-            fixture_id: 999_i64, kickoff_timestamp: KICKOFF_TS,
-            period: 0, stat_a_key: 1, stat_b_key: None,
-            predicate_threshold: 0, predicate_comparison: 0, negation: false,
+            bet_terms_array: generate_mock_bet_terms(),
+            kickoff_timestamp: KICKOFF_TS,
         }.data(),
         undegen_core::accounts::ProposeMatch {
             operator: operator.pubkey(), batch,
         }.to_account_metas(None),
     ), &operator, &[]);
 
+    // Both users vote Skip (index 4) — bypasses TxOdds CPI in LiteSVM.
+    // deposit_collateral auto-settles this as a user win immediately.
     for (voter, position) in [(&user_a, user_position_a), (&user_b, user_position_b)] {
         send_ix(&mut svm, Instruction::new_with_bytes(
             core_program_id,
-            &undegen_core::instruction::CastVote { vote_yes: true }.data(),
+            &undegen_core::instruction::CastVote { vote_index: 4 }.data(),
             undegen_core::accounts::CastVote {
                 voter: voter.pubkey(), batch, user_position: position,
             }.to_account_metas(None),
@@ -257,21 +287,36 @@ fn setup_active() -> TestSetup {
         &[undegen_core::constants::COLLATERAL_SEED, batch.as_ref()],
         &core_program_id,
     );
+
     send_ix(&mut svm, Instruction::new_with_bytes(
         core_program_id,
-        &undegen_core::instruction::DepositCollateral { amount: bet_size }.data(),
+        &undegen_core::instruction::DepositCollateral {
+            amount: bet_size,
+            oracle_price_index: 0,
+            odds_snapshot: generate_dummy_odds(),
+            summary: generate_dummy_summary(),
+            sub_tree_proof: vec![],
+            main_tree_proof: vec![]
+        }.data(),
         undegen_core::accounts::DepositCollateral {
             operator: operator.pubkey(), mint, batch,
             operator_token_account: operator_ata,
             collateral_token_account,
-            token_program: TOKEN_PROGRAM_ID, system_program: system_program::ID,
+            batch_token_account,
+            daily_odds_merkle_roots: Pubkey::new_unique(),
+            txodds_program: TXODDS_PROGRAM_ID,
+            token_program: TOKEN_PROGRAM_ID,
+            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+            system_program: system_program::ID,
         }.to_account_metas(None),
     ), &operator, &[]);
 
+    // Skip auto-settles as a user win — bets_completed=1, back to Locked (not Active)
     let batch_account = svm.get_account(&batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Active);
+    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
+    assert_eq!(batch_state.bets_completed, 1);
 
     TestSetup {
         svm, operator, user_a, user_b, mint, batch,
@@ -324,42 +369,16 @@ fn force_settle(svm: &mut LiteSVM, batch: Pubkey) {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+/// setup_active() already runs one bet through the Skip path (settle_default-equivalent
+/// behavior — auto-settled as a user win). This test forces the remaining 4 bets to
+/// Settled and verifies claim distributes proportionally.
 #[test]
-fn test_claim_after_settle_default() {
+fn test_claim_after_skip_settle() {
     let mut setup = setup_active();
 
-    setup.svm.warp_to_slot(500);
-    setup.svm.set_sysvar(&Clock {
-        slot: 500,
-        epoch_start_timestamp: 0,
-        epoch: 0,
-        leader_schedule_epoch: 0,
-        unix_timestamp: KICKOFF_TS + 3600 + 1,
-    });
-
-    let batch_ata = derive_ata(&setup.batch, &setup.mint);
-    send_ix(&mut setup.svm, Instruction::new_with_bytes(
-        undegen_core::id(),
-        &undegen_core::instruction::SettleDefault {}.data(),
-        undegen_core::accounts::SettleDefault {
-            mint: setup.mint,
-            batch: setup.batch,
-            collateral_token_account: setup.collateral_token_account,
-            batch_token_account: batch_ata,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-        }.to_account_metas(None),
-    ), &setup.operator, &[]);
-
-    let batch_account = setup.svm.get_account(&setup.batch).unwrap();
-    let mut data: &[u8] = &batch_account.data;
-    let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-
-    assert_eq!(batch_state.bets_completed, 1);
-    assert_eq!(batch_state.operator_yield_bps, 8000); // slashed 20%
-    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
-
-    // Force to Settled so we can test claim
+    // setup_active() already confirmed bets_completed=1, operator_yield_bps unaffected
+    // (skip is not a penalty — only settle_default via silence slashes yield).
+    // Force remaining bets to Settled so we can test claim.
     force_settle(&mut setup.svm, setup.batch);
 
     let user_a_before = token_balance(&setup.svm, &setup.user_a_ata);
@@ -400,44 +419,29 @@ fn test_claim_double_claim_fails() {
 #[test]
 fn test_claim_before_settled_fails() {
     let mut setup = setup_active();
+    // Batch is Locked (1/5 bets done via setup skip), not Settled — claim must fail
     let ix = claim_ix(&setup, &setup.user_a, setup.user_a_ata, setup.user_position_a);
     send_ix_should_fail(&mut setup.svm, ix, &setup.user_a);
 }
 
+/// Verifies setup_active()'s implicit skip-settlement behavior directly:
+/// bets_completed incremented, bet state reset, status back to Locked.
 #[test]
-fn test_settle_default_increments_bets_completed() {
-    let mut setup = setup_active();
-
-    setup.svm.warp_to_slot(500);
-    setup.svm.set_sysvar(&Clock {
-        slot: 500,
-        epoch_start_timestamp: 0,
-        epoch: 0,
-        leader_schedule_epoch: 0,
-        unix_timestamp: KICKOFF_TS + 3600 + 1,
-    });
-
-    let batch_ata = derive_ata(&setup.batch, &setup.mint);
-    send_ix(&mut setup.svm, Instruction::new_with_bytes(
-        undegen_core::id(),
-        &undegen_core::instruction::SettleDefault {}.data(),
-        undegen_core::accounts::SettleDefault {
-            mint: setup.mint,
-            batch: setup.batch,
-            collateral_token_account: setup.collateral_token_account,
-            batch_token_account: batch_ata,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-        }.to_account_metas(None),
-    ), &setup.operator, &[]);
+fn test_skip_settlement_resets_bet_state() {
+    let setup = setup_active();
 
     let batch_account = setup.svm.get_account(&setup.batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
 
     assert_eq!(batch_state.bets_completed, 1);
-    assert_eq!(batch_state.operator_yield_bps, 8000); // slashed 20%
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
     assert_eq!(batch_state.kickoff_timestamp, 0);
     assert_eq!(batch_state.win_prize, 0);
+    assert_eq!(batch_state.vote_weights, [0; 5]);
+    assert_eq!(batch_state.winning_vote_index, None);
+    assert_eq!(batch_state.collateral_required, 0);
+    assert_eq!(batch_state.collateral_deposited, 0);
+    // Skip is not a penalty — operator_yield_bps unaffected
+    assert_eq!(batch_state.operator_yield_bps, 10000);
 }

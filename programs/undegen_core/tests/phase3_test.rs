@@ -1,22 +1,15 @@
 use {
     anchor_lang::{
-        prelude::Pubkey,
-        solana_program::{instruction::Instruction, system_program},
-        AccountDeserialize, InstructionData, ToAccountMetas,
-    },
-    anchor_spl::associated_token::ID as ASSOCIATED_TOKEN_PROGRAM_ID,
-    anchor_spl::token::ID as TOKEN_PROGRAM_ID,
-    litesvm::LiteSVM,
-    litesvm_token::{CreateAccount, CreateMint, MintTo},
-    solana_clock::Clock,
-    solana_keypair::Keypair,
-    solana_message::{Message, VersionedMessage},
-    solana_signer::Signer,
-    solana_transaction::versioned::VersionedTransaction,
+        AccountDeserialize, InstructionData, ToAccountMetas, prelude::Pubkey, solana_program::{instruction::Instruction, system_program},
+    }, anchor_spl::{associated_token::ID as ASSOCIATED_TOKEN_PROGRAM_ID, token::ID as TOKEN_PROGRAM_ID}, litesvm::LiteSVM, litesvm_token::{CreateAccount, CreateMint, MintTo}, solana_clock::Clock, solana_keypair::Keypair, solana_message::{Message, VersionedMessage}, solana_signer::Signer, solana_transaction::versioned::VersionedTransaction, undegen_core::txodds_types::{Odds, OddsBatchSummary, OddsUpdateStats, TraderPredicate},
 };
 
 use anchor_lang::solana_program::program_pack::Pack;
 use litesvm_token::spl_token::state::Account as SplTokenAccount;
+
+// Define the TxOdds Program ID constant here for the address constraint
+const TXODDS_PROGRAM_ID: Pubkey = 
+    anchor_lang::solana_program::pubkey::pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
 
 fn send_ix(svm: &mut LiteSVM, ix: Instruction, payer: &Keypair, extra_signers: &[&Keypair]) {
     let blockhash = svm.latest_blockhash();
@@ -88,6 +81,42 @@ struct TestSetup {
     bet_size: u64,
 }
 
+// Helper to generate the 4-item BetTerms array
+fn generate_mock_bet_terms() -> [undegen_core::state::BetTerms; 4] {
+    [
+        undegen_core::state::BetTerms { fixture_id: 999_i64, period: 0, stat_a_key: 1, stat_b_key: None, predicate: TraderPredicate::default(), negation: false, op: None },
+        undegen_core::state::BetTerms { fixture_id: 999_i64, period: 0, stat_a_key: 2, stat_b_key: None,predicate: TraderPredicate::default(), negation: false,  op: None },
+        undegen_core::state::BetTerms { fixture_id: 999_i64, period: 0, stat_a_key: 3, stat_b_key: None, predicate: TraderPredicate::default(), negation: false,  op: None },
+        undegen_core::state::BetTerms { fixture_id: 999_i64, period: 0, stat_a_key: 4, stat_b_key: None, predicate: TraderPredicate::default(), negation: false,  op: None },
+    ]
+}
+
+// Helper to generate dummy TxOdds payloads
+fn generate_dummy_odds() -> Odds {
+    Odds {
+        fixture_id: 999,
+        message_id: "mock".to_string(),
+        ts: KICKOFF_TS,
+        bookmaker: "mock".to_string(),
+        bookmaker_id: 1,
+        super_odds_type: "none".to_string(),
+        game_state: None,
+        in_running: false,
+        market_parameters: None,
+        market_period: None,
+        price_names: vec!["1X2_1".to_string()],
+        prices: vec![25000], // 2.50 odds scaled by 10,000
+    }
+}
+
+fn generate_dummy_summary() -> OddsBatchSummary {
+    OddsBatchSummary {
+        fixture_id: 999,
+        update_stats: OddsUpdateStats { update_count: 1, min_timestamp: 0, max_timestamp: 0 },
+        odds_sub_tree_root: [0; 32],
+    }
+}
+
 fn setup_awaiting_collateral() -> TestSetup {
     let core_program_id = undegen_core::id();
     let vault_program_id = yield_vault::id();
@@ -131,19 +160,9 @@ fn setup_awaiting_collateral() -> TestSetup {
         .send()
         .unwrap();
 
-    // Operator gets extra for collateral
-    MintTo::new(&mut svm, &operator, &mint, &operator_ata, 2_000_000_000)
-        .owner(&operator)
-        .send()
-        .unwrap();
-    MintTo::new(&mut svm, &operator, &mint, &user_a_ata, 1_000_000_000)
-        .owner(&operator)
-        .send()
-        .unwrap();
-    MintTo::new(&mut svm, &operator, &mint, &user_b_ata, 1_000_000_000)
-        .owner(&operator)
-        .send()
-        .unwrap();
+    MintTo::new(&mut svm, &operator, &mint, &operator_ata, 2_000_000_000).owner(&operator).send().unwrap();
+    MintTo::new(&mut svm, &operator, &mint, &user_a_ata, 1_000_000_000).owner(&operator).send().unwrap();
+    MintTo::new(&mut svm, &operator, &mint, &user_b_ata, 1_000_000_000).owner(&operator).send().unwrap();
 
     let (vault_config, _) = Pubkey::find_program_address(
         &[yield_vault::constants::VAULT_CONFIG_SEED, mint.as_ref()],
@@ -155,7 +174,6 @@ fn setup_awaiting_collateral() -> TestSetup {
         &vault_program_id,
     );
 
-    // Initialize vault
     send_ix(&mut svm, Instruction::new_with_bytes(
         vault_program_id,
         &yield_vault::instruction::InitializeVault {}.data(),
@@ -167,7 +185,6 @@ fn setup_awaiting_collateral() -> TestSetup {
         }.to_account_metas(None),
     ), &operator, &[]);
 
-    // Initialize protocol
     let (protocol_config, _) = Pubkey::find_program_address(
         &[undegen_core::constants::PROTOCOL_CONFIG_SEED],
         &core_program_id,
@@ -182,7 +199,6 @@ fn setup_awaiting_collateral() -> TestSetup {
         }.to_account_metas(None),
     ), &operator, &[]);
 
-    // Initialize batch with 5% APY
     let batch_id: u64 = 1;
     let (batch, _) = Pubkey::find_program_address(
         &[undegen_core::constants::BATCH_SEED, &batch_id.to_le_bytes()],
@@ -211,7 +227,6 @@ fn setup_awaiting_collateral() -> TestSetup {
         &core_program_id,
     );
 
-    // Both users join
     for (user, user_ata, user_position) in [
         (&user_a, user_a_ata, user_position_a),
         (&user_b, user_b_ata, user_position_b),
@@ -231,7 +246,6 @@ fn setup_awaiting_collateral() -> TestSetup {
         ), user, &[]);
     }
 
-    // Start batch → Locked + bet_size computed
     send_ix(&mut svm, Instruction::new_with_bytes(
         core_program_id,
         &undegen_core::instruction::StartBatch {}.data(),
@@ -239,37 +253,34 @@ fn setup_awaiting_collateral() -> TestSetup {
             .to_account_metas(None),
     ), &operator, &[]);
 
-    // Read bet_size
     let batch_account = svm.get_account(&batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
     let bet_size = batch_state.bet_size;
 
-    // Propose match
+    // Use Array format for propose_match
     send_ix(&mut svm, Instruction::new_with_bytes(
         core_program_id,
         &undegen_core::instruction::ProposeMatch {
-            fixture_id: 999_i64, kickoff_timestamp: KICKOFF_TS,
-            period: 0, stat_a_key: 1, stat_b_key: None,
-            predicate_threshold: 0, predicate_comparison: 0, negation: false,
+            bet_terms_array: generate_mock_bet_terms(), 
+            kickoff_timestamp: KICKOFF_TS,
         }.data(),
         undegen_core::accounts::ProposeMatch {
             operator: operator.pubkey(), batch,
         }.to_account_metas(None),
     ), &operator, &[]);
 
-    // Both vote yes at clock=0
+    // Both users vote for Index 4 (Skip Match) to bypass TxOdds CPI in LiteSVM
     for (voter, position) in [(&user_a, user_position_a), (&user_b, user_position_b)] {
         send_ix(&mut svm, Instruction::new_with_bytes(
             core_program_id,
-            &undegen_core::instruction::CastVote { vote_yes: true }.data(),
+            &undegen_core::instruction::CastVote { vote_index: 4 }.data(),
             undegen_core::accounts::CastVote {
                 voter: voter.pubkey(), batch, user_position: position,
             }.to_account_metas(None),
         ), voter, &[]);
     }
 
-    // Finalize consensus
     set_clock(&mut svm, 3600);
     send_ix(&mut svm, Instruction::new_with_bytes(
         core_program_id,
@@ -280,8 +291,7 @@ fn setup_awaiting_collateral() -> TestSetup {
     let batch_account = svm.get_account(&batch).unwrap();
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
-    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::AwaitingCollateral,
-        "setup failed: expected AwaitingCollateral");
+    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::AwaitingCollateral, "setup failed");
 
     let (collateral_token_account, _) = Pubkey::find_program_address(
         &[undegen_core::constants::COLLATERAL_SEED, batch.as_ref()],
@@ -300,12 +310,24 @@ fn setup_awaiting_collateral() -> TestSetup {
 fn deposit_collateral_ix(setup: &TestSetup) -> Instruction {
     Instruction::new_with_bytes(
         undegen_core::id(),
-        &undegen_core::instruction::DepositCollateral { amount: setup.bet_size }.data(),
+        &undegen_core::instruction::DepositCollateral {
+            amount: setup.bet_size,
+            oracle_price_index: 0,
+            odds_snapshot: generate_dummy_odds(),
+            summary: generate_dummy_summary(),
+            sub_tree_proof: vec![],
+            main_tree_proof: vec![]
+        }.data(),
         undegen_core::accounts::DepositCollateral {
             operator: setup.operator.pubkey(), mint: setup.mint, batch: setup.batch,
             operator_token_account: setup.operator_ata,
             collateral_token_account: setup.collateral_token_account,
-            token_program: TOKEN_PROGRAM_ID, system_program: system_program::ID,
+            batch_token_account: setup.batch_token_account,
+            daily_odds_merkle_roots: Pubkey::new_unique(), // Dummy since CPI is bypassed for Skip
+            txodds_program: TXODDS_PROGRAM_ID,
+            token_program: TOKEN_PROGRAM_ID,
+            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+            system_program: system_program::ID,
         }.to_account_metas(None),
     )
 }
@@ -324,14 +346,19 @@ fn test_deposit_collateral_success() {
     let mut data: &[u8] = &batch_account.data;
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
 
-    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Active);
-    assert_eq!(batch_state.collateral_deposited, setup.bet_size);
-    assert_eq!(batch_state.proof_deadline, KICKOFF_TS + 3600);
-    assert_eq!(token_balance(&setup.svm, &setup.collateral_token_account), setup.bet_size);
+    // Skip auto-settles inside deposit_collateral — collateral moves through
+    // to batch_token_account for user claim, batch returns to Locked for next bet
+    assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
+    assert_eq!(batch_state.bets_completed, 1);
     assert_eq!(
         operator_balance_before - token_balance(&setup.svm, &setup.operator_ata),
         setup.bet_size
     );
+    assert_eq!(
+        token_balance(&setup.svm, &setup.batch_token_account),
+        setup.bet_size
+    );
+    assert_eq!(token_balance(&setup.svm, &setup.collateral_token_account), 0);
 }
 
 #[test]
@@ -342,6 +369,7 @@ fn test_deposit_collateral_double_deposit_fails() {
     let ix = deposit_collateral_ix(&setup);
     send_ix_should_fail(&mut setup.svm, ix, &setup.operator);
 }
+
 
 #[test]
 fn test_deposit_collateral_non_operator_fails() {
@@ -355,12 +383,24 @@ fn test_deposit_collateral_non_operator_fails() {
 
     send_ix_should_fail(&mut setup.svm, Instruction::new_with_bytes(
         undegen_core::id(),
-        &undegen_core::instruction::DepositCollateral { amount: setup.bet_size }.data(),
+        &undegen_core::instruction::DepositCollateral {
+            amount: setup.bet_size,
+            oracle_price_index: 0,
+            odds_snapshot: generate_dummy_odds(),
+            summary: generate_dummy_summary(),
+            sub_tree_proof: vec![],
+            main_tree_proof: vec![]
+        }.data(),
         undegen_core::accounts::DepositCollateral {
             operator: impostor.pubkey(), mint: setup.mint, batch: setup.batch,
             operator_token_account: impostor_ata,
             collateral_token_account: setup.collateral_token_account,
-            token_program: TOKEN_PROGRAM_ID, system_program: system_program::ID,
+            batch_token_account: setup.batch_token_account,
+            daily_odds_merkle_roots: Pubkey::new_unique(),
+            txodds_program: TXODDS_PROGRAM_ID,
+            token_program: TOKEN_PROGRAM_ID,
+            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+            system_program: system_program::ID,
         }.to_account_metas(None),
     ), &impostor);
 }
@@ -382,13 +422,15 @@ fn test_penalize_missed_collateral() {
     let batch_state = undegen_core::state::Batch::try_deserialize(&mut data).unwrap();
 
     assert_eq!(batch_state.status, undegen_core::state::BatchStatus::Locked);
-   assert_eq!(batch_state.operator_yield_bps, 8000); 
+    assert_eq!(batch_state.operator_yield_bps, 8000); 
     assert_eq!(batch_state.kickoff_timestamp, 0);
     assert_eq!(batch_state.win_prize, 0);
-    assert_eq!(batch_state.yes_weight, 0);
-    assert_eq!(batch_state.no_weight, 0);
+    
+    // Multi-option vote tracking should be reset
+    assert_eq!(batch_state.vote_weights, [0; 5]);
+    assert_eq!(batch_state.winning_vote_index, None);
+    
     assert_eq!(batch_state.collateral_required, 0);
-    // bets_completed unchanged — missed collateral doesn't count as a bet
     assert_eq!(batch_state.bets_completed, 0);
 }
 

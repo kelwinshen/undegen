@@ -4,10 +4,11 @@ pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
+pub mod switchboard;
 
 use instructions::*;
 
-declare_id!("AH9Uibbi3vvUq3PkdTZTz3revx4GoPEN3bJeXh8A57HL");
+declare_id!("BkMhRmJCsnZ2bW9RkjK3mPQTEbtY6gpnX8H7AJQRrmbh");
 
 #[program]
 pub mod lottery {
@@ -25,8 +26,12 @@ pub mod lottery {
         instructions::buy_ticket::buy_ticket_handler(ctx, amount)
     }
 
-    pub fn draw_winner(ctx: Context<DrawWinner>) -> Result<()> {
-        instructions::draw_winner::draw_winner_handler(ctx)
+    pub fn request_randomness(ctx: Context<RequestRandomness>) -> Result<()> {
+        instructions::request_randomness::request_randomness_handler(ctx)
+    }
+
+    pub fn reveal_winner(ctx: Context<RevealWinner>) -> Result<()> {
+        instructions::reveal_winner::reveal_winner_handler(ctx)
     }
 
     pub fn claim_prize(ctx: Context<ClaimPrize>) -> Result<()> {

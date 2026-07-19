@@ -7,28 +7,42 @@ use crate::constants::{BATCH_SEED, USER_POSITION_SEED};
 use crate::error::CoreError;
 use crate::state::{Batch, BatchStatus, UserPosition};
 
-pub fn leave_batch_handler(ctx: Context<LeaveBatch>) -> Result<()> {
+pub fn leave_batch_handler(ctx: Context<LeaveBatch>, amount: u64) -> Result<()> {
     require!(
         ctx.accounts.batch.status == BatchStatus::Lobby,
         CoreError::NotInLobby
     );
 
-    let position = &ctx.accounts.user_position;
-    require!(position.deposited_amount > 0, CoreError::InvalidAmount);
+    let position_deposited = ctx.accounts.user_position.deposited_amount;
+    let position_vault_shares = ctx.accounts.user_position.vault_shares;
+    require!(position_deposited > 0, CoreError::InvalidAmount);
+    require!(
+        amount > 0 && amount <= position_deposited,
+        CoreError::InvalidAmount
+    );
+
+    let is_full_exit = amount == position_deposited;
+
+    // Redeem this depositor's own tracked share of the batch's pooled vault
+    // position (set in join_batch) — not a fresh amount->shares conversion
+    // off the vault's current exchange rate. On a full exit this correctly
+    // hands back their exact remaining shares (including any pro-rata yield
+    // accrued since they joined); on a partial leave, it redeems the same
+    // fraction of their shares as the USDC fraction they're withdrawing.
+    let shares_to_withdraw: u64 = if is_full_exit {
+        position_vault_shares
+    } else {
+        ((position_vault_shares as u128)
+            .checked_mul(amount as u128)
+            .ok_or(CoreError::MathOverflow)?
+            .checked_div(position_deposited as u128)
+            .ok_or(CoreError::MathOverflow)?) as u64
+    };
+    require!(shares_to_withdraw > 0, CoreError::InvalidAmount);
 
     let batch = &mut ctx.accounts.batch;
     let batch_id_bytes = batch.batch_id.to_le_bytes();
     let signer_seeds: &[&[&[u8]]] = &[&[BATCH_SEED, batch_id_bytes.as_ref(), &[batch.bump]]];
-
-    // Read current shares from the vault_position account
-    // We withdraw all shares this batch holds
-    let vault_position_data = ctx.accounts.vault_position.try_borrow_data()?;
-    let mut data_slice: &[u8] = &vault_position_data;
-    let vault_pos = yield_vault::state::Position::try_deserialize(&mut data_slice)?;
-    let shares_to_withdraw = vault_pos.shares;
-    drop(vault_position_data);
-
-    require!(shares_to_withdraw > 0, CoreError::InvalidAmount);
 
     let cpi_accounts = Withdraw {
         depositor: batch.to_account_info(),
@@ -46,10 +60,12 @@ pub fn leave_batch_handler(ctx: Context<LeaveBatch>) -> Result<()> {
     );
     yield_vault::cpi::withdraw(cpi_ctx, shares_to_withdraw)?;
 
-    // Transfer from batch_token_account back to user
-    // (after yield_vault CPI, funds land in batch_token_account,
-    //  then we forward to user — only supports single-user leave for now;
-    //  multi-user leave partial withdrawal is handled in Phase 4 settlement)
+    // Transfer from batch_token_account back to user. After the yield_vault
+    // CPI above, only this withdrawal's proceeds land in batch_token_account
+    // (it's emptied into the vault on every join and refilled fresh on every
+    // leave, so it never holds other users' funds at rest between calls) —
+    // safe to forward its whole post-CPI balance for this partial or full
+    // withdrawal.
     ctx.accounts.batch_token_account.reload()?;
     let withdrawn = ctx.accounts.batch_token_account.amount;
     if withdrawn > 0 {
@@ -71,17 +87,26 @@ pub fn leave_batch_handler(ctx: Context<LeaveBatch>) -> Result<()> {
         )?;
     }
 
-    batch.total_deposited = batch
-        .total_deposited
-        .saturating_sub(position.deposited_amount);
+    batch.total_deposited = batch.total_deposited.saturating_sub(amount);
 
     let position = &mut ctx.accounts.user_position;
-    position.deposited_amount = 0;
+    position.deposited_amount = position_deposited.saturating_sub(amount);
+    position.vault_shares = position_vault_shares.saturating_sub(shares_to_withdraw);
+
+    // Only decrement once this depositor has fully exited — mirrors
+    // join_batch's "only increment when deposited_amount was 0 before this
+    // call", so repeated partial leaves down to zero count as one exit.
+    if position.deposited_amount == 0 {
+        batch.participant_count = batch.participant_count.saturating_sub(1);
+    }
 
     msg!(
-        "User {} left batch {}",
+        "User {} left batch {} with {} ({} shares){}",
         ctx.accounts.user.key(),
-        batch.batch_id
+        batch.batch_id,
+        amount,
+        shares_to_withdraw,
+        if is_full_exit { " — full exit" } else { " — partial" }
     );
     Ok(())
 }

@@ -31,18 +31,21 @@ pub fn initialize_batch_handler(ctx: Context<InitializeBatch>, apy_bps: u16) -> 
     batch.bets_completed = 0;
     batch.accumulated_winnings = 0;
 
-batch.operator_yield_bps = 10000; 
+    batch.operator_yield_bps = 10000; 
 
     // Current bet — all zeroed until propose_match
-    batch.bet_terms = BetTerms::default();
+    // Updated to reflect the new multi-option array state
+    batch.bet_terms = [BetTerms::default(); 4];
     batch.kickoff_timestamp = 0;
     batch.win_prize = 0;
-    batch.yes_weight = 0;
-    batch.no_weight = 0;
+    batch.vote_weights = [0; 5];
+    batch.winning_vote_index = None;
     batch.collateral_required = 0;
     batch.collateral_deposited = 0;
     batch.proof_deadline = 0;
     batch.outcome = None;
+    batch.participant_count = 0;
+    batch.created_at = Clock::get()?.unix_timestamp;
 
     msg!(
         "Batch {} initialized by {} with apy_bps={}",

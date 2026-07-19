@@ -27,6 +27,8 @@ pub fn start_round_handler(ctx: Context<StartRound>) -> Result<()> {
     round.total_pool = 0;
     round.status = RoundStatus::Open;
     round.winning_number = 0;
+    round.start_time = Clock::get()?.unix_timestamp;
+    round.randomness_account = Pubkey::default();
     round.bump = ctx.bumps.round;
 
     msg!("Round {} started", round.round_id);
